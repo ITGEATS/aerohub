@@ -1,0 +1,61 @@
+schema_version: "1.0"
+id: planner.super-single
+version: "0.1.0"
+type: tool
+name: SUPER single-vehicle navigation
+description: Accepts a single-vehicle navigation goal and executes SUPER polynomial plans through the existing FollowTimedPath execution chain.
+
+implementation:
+  component_id: aerohub.planner.super-single
+  manifest: deployment/airsim/demos/super_forest/component.yaml
+  shared_runtime: super-navigation-stack
+  coupled_capabilities: []
+
+inputs:
+  - id: local_odometry
+    capability_type: state/local/odometry/3d
+  - id: navigation_obstacle_points
+    capability_type: perception/navigation/obstacle-points/3d
+  - id: controller_status
+    capability_type: control/controller/status
+
+outputs: []
+
+interfaces:
+  - id: navigate
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/NavigateToPose
+    parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/lidar/3d
+  - hardware_type: flight-controller/px4
+
+resource_access:
+  reads:
+    - vehicle/local-odometry
+    - vehicle/environment-points
+    - vehicle/controller-status
+  shared_writes: []
+  exclusive_writes:
+    - vehicle/motion
+
+demo:
+  representations:
+    - id: occupied_voxels
+      stage: intermediate
+      description: Occupied voxels maintained by the map inside the deployed SUPER process.
+      interface: {protocol: ros2_topic, schema: sensor_msgs/msg/PointCloud2}
+      renderer: point_cloud_3d
+    - id: inflated_occupied_voxels
+      stage: intermediate
+      description: Inflated occupied voxels used by SUPER for planning.
+      interface: {protocol: ros2_topic, schema: sensor_msgs/msg/PointCloud2}
+      renderer: point_cloud_3d

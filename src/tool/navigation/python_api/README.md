@@ -116,3 +116,32 @@ YOPO 原始5m到达触发与最终停稳误差的区别仍保留；统一结果�
 - [ ] 提取共用任务管理：接纳、互斥、超时、取消、反馈与结果。
 - [ ] 保留算法专属适配：目标转换、规划调用、轨迹生成与滚动更新。
 - [ ] 使用SUPER、YOPO回归细化后的成功、取消和异常路径。
+
+
+## Card v1 静态对接
+
+| 实现 | Tool Card | 部署清单 | 公共操作 |
+| --- | --- | --- | --- |
+| SUPER | [super-single.yaml](../../../../cards/planner/super-single.yaml) | [component.yaml](../../../../deployment/airsim/demos/super_forest/component.yaml) | `navigate` |
+| YOPO | [yopo-single.yaml](../../../../cards/planner/yopo-single.yaml) | [component.yaml](../../../../deployment/airsim/demos/yopo_single/component.yaml) | `navigate` |
+
+两张Card均使用v1 `type: tool`，操作引用
+`uav_planner_interfaces/action/NavigateToPose` 与同一 `.action` 参数Schema。
+标准Action取消属于该任务协议，不另行声明旧的取消Service。
+`lifecycle: system_managed` 指进程启停权限，不限制调用方取消自己提交的任务。
+Card不复制参数值、动态就绪/停稳阈值或具体Action地址；部署清单
+`runtime.public_interfaces.navigate` 保存当前Demo的地址与Schema绑定。
+
+YOPO保留已有Card ID，因公共操作契约从Topic/Service改为Action，将Card及组件版本
+更新为0.2.0；SUPER新增Card及清单为0.1.0。
+SUPER卡片复用已有里程计、导航障碍点、控制器状态类型；YOPO沿用既有类型，
+本次未新增能力类型或硬件类型。SUPER内部地图仅声明为Demo表示，
+不冒充独立ROG-Map能力或查询接口。
+
+当前仍由部署显式选择其中一个实现；同一UAV公共地址不能同时启动两个提供者。
+此处只是静态契约对齐，没有新增自动发现、参数Schema加载器、运行时选择或跨进程资源锁。
+原有Planner约束差异继续以实现、组件说明与验证记录为准。
+
+对齐检查日志在 `log/navigation-card-v1/`。两张目标Card和部署绑定检查通过；
+全仓校验仍因DiffPhys、YOLO26n-seg、GCOPTER、Object Detection四张旧卡未迁移到v1而失败，
+本次检查与修改前错误集合一致，不表示全仓卡片已全部通过。
