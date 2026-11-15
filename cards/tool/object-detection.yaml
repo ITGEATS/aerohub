@@ -47,5 +47,5 @@ type_specific:
   state_estimator: consumed through TF; this component is not own-state estimation
 validation:
   stage: partial
-  evidence: [src/inference/models/yolo26n_seg/validation.json]
+  evidence: [src/basic_function/inference/models/yolo26n_seg/validation.json]
   limitations: [no-generic-Mission-framework, no-target-KF, no-validated-live-position-accuracy]

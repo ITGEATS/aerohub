@@ -2,7 +2,7 @@ schema_version: '0.1'
 id: aerohub.tool.object-detection
 version: 0.1.0
 source:
-  directory: src/perception/object_detection
+  directory: src/basic_function/perception/object_detection
   license: GPL-3.0-or-later
 provides: [tool.object-detection]
 cards: [cards/tool/object-detection.yaml]
@@ -27,4 +27,4 @@ resources:
   enforcement: local single-call lock and latest-only stream queue; no global task arbiter
 validation:
   stage: partial
-  evidence: src/inference/models/yolo26n_seg/validation.json
+  evidence: src/basic_function/inference/models/yolo26n_seg/validation.json

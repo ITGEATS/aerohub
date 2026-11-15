@@ -39,11 +39,11 @@ lifecycle:
   failure: BUSY, invalid image/mask, timeout, changed worker/model identity
   recovery: explicit restart and caller generation invalidation
 type_specific:
-  inference_module: src/inference/models/yolo26n_seg
-  artifacts: src/inference/models/yolo26n_seg/artifacts.json
+  inference_module: src/basic_function/inference/models/yolo26n_seg
+  artifacts: src/basic_function/inference/models/yolo26n_seg/artifacts.json
   weights_license: Ultralytics AGPL-3.0 or applicable Enterprise license
   public_runtime: unchanged Aerohub FastAPI/TorchBackend/ModelClient
 validation:
   stage: partial
-  evidence: [src/inference/models/yolo26n_seg/validation.json]
+  evidence: [src/basic_function/inference/models/yolo26n_seg/validation.json]
   limitations: [no-physical-camera-validation, no-live-RGBD-accuracy-or-flight-acceptance]

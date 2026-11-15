@@ -44,7 +44,7 @@ def main():
     try:
         run(['docker','network','create','--label','aerohub.yolo-check='+token,network]);created_network=True
         worker=start('worker',args.worker_image,
-            'export YOLO_CONFIG_DIR=/repo/src/inference/models/yolo26n_seg/artifacts/ultralytics; '
+            'export YOLO_CONFIG_DIR=/repo/src/basic_function/inference/models/yolo26n_seg/artifacts/ultralytics; '
             'INFERENCE_HOST=0.0.0.0 bash /repo/deployment/inference/start_yolo26n_seg.sh',gpu=True)
         deadline=time.monotonic()+60;metadata=None
         while time.monotonic()<deadline:
