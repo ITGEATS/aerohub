@@ -1,0 +1,25 @@
+# Single-UAV navigation, independent of the deployed planner.
+# Ignored orientation fields impose no constraint. No sentinel numeric values.
+uint8 UNCONSTRAINED=0
+uint8 KEEP_YAW=1
+uint8 TARGET_YAW=2
+uint8 TARGET_ORIENTATION=3
+geometry_msgs/PoseStamped target
+uint8 orientation_mode
+bool use_max_speed
+float64 max_speed
+bool use_position_tolerance
+float64 position_tolerance
+bool use_timeout
+float64 timeout
+---
+bool success
+string code
+string reason
+geometry_msgs/PoseStamped final_pose
+bool stop_confirmed
+---
+string phase
+geometry_msgs/PoseStamped current_pose
+float64 distance_remaining
+uint64 revision

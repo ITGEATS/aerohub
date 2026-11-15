@@ -24,7 +24,7 @@ cd /repo/log/yopo-single/ros_ws
 colcon build --base-paths /repo/src/behavior/follow_path --packages-select uav_follow_path_execution
 ```
 
-运行时加载同一 install overlay。工作站仅从 onboard 规范定义重新生成 Takeoff/Land/PlatformInfo 所需的最小 AS2 接口集合，不复制 AS2 二进制。YOPO 接口变化后同时重建 Adapter/Planner 和调用方 overlay。
+运行时加载同一 install overlay。工作站仅从 onboard 规范定义重新生成 Takeoff/Land/PlatformInfo及Python Module 所需的最小 AS2 接口集合，不复制 AS2 二进制。YOPO 接口变化后同时重建 Adapter/Planner 和调用方 overlay。
 
 ## 分角色运行
 
@@ -91,3 +91,26 @@ PYTHONPATH=src/basic_function/inference/ros2_adapter python3 -m unittest discove
 ```
 
 在已加载匹配AS2和本项目overlay的固定ROS镜像中，运行`python3 deployment/airsim/demos/yopo_single/test_ros_planner.py`验证真实ROS传输与测试替身生命周期；使用独立网络/domain，该测试不执行SITL飞行。`guid_probe.py`仅作只读DDS身份诊断，不参与正常部署。
+
+## 共享导航接口对照
+
+本 Demo 的 compute 显式开启 `navigation_action:=true`，工作站通过
+`drone.navigation.to_point(...)` 发目标、`cancel_async()` 取消、`result` 核对结果；不再向 `yopo/goal`
+发目标。工作站 overlay 同时构建 `uav_planner_interfaces`、AS2 Python API 和共享 Module，
+准备校验过的 Python 依赖，并设置 AS2_MODULES_PATH；更新后重新执行
+`prepare-workstation`。恢复入口通过公共 Action cancel 服务取消现存任务。
+
+公共 Python 调用仍为 `drone.load_module('navigation')` 后
+`drone.navigation.to_point(x, y, z, wait=False)`；使用完整 AS2 Python API、
+`uav_planner_python_api` 及其依赖，并将其 `share/.../modules` 加到 AS2_MODULES_PATH。
+实际 Module 对接由 `test_navigation_interface.py` 验证，工作站 Demo 也使用这一 Module。
+两个客户端消费同一服务端，没有算法专属 Python Module。
+
+SUPER/YOPO 的支持约束对照见 [公共接口说明](../../../../src/tool/navigation/python_api/README.md)。
+YOPO 的到达阈值仍为5m，`--timeout` 同时传入公共 Action 作为任务超时，
+不改变算法与执行停止门槛。验证见 [本轮记录](VALIDATION-navigation-20261115.md)。
+
+公共 `NavigateToPose` 入口已补做一次上述长目标有屏复核：243.1m采样航迹、
+126.7 ROS秒、343次接受的轨迹更新，成功停稳、降落并解除武装，无碰撞。
+进入5m范围触发停止后，最终停稳误差为5.46m；因此不能解读为最终5m内保持。
+证据与限制见 [公共导航长程记录](VALIDATION-navigation-20261115.md#公共导航入口的长程-forest-复核)。

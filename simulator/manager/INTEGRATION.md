@@ -5,7 +5,8 @@
 
 ## 本次集成
 
-2026-11-15：接入 origin/dev `cfb685c`，保留其能力目录重组、推理/检测及其他功能变化。
+2026-11-15：先接入 origin/dev `cfb685c`，随后同步本轮更新的 `f72800b`；
+保留其能力目录重组、导航接口和检测 Tool 等功能变化。
 dev 曾在 `b9dc353` 合入 scene-player，并在 `1b338a5` 回退；本次明确恢复场景 manager、
 ProjectAirSim、场景配置、基础场景检查及 pairsim-build，不将回退视作仍应删除这些功能。
 恢复的 ProjectAirSim Demo 引用随 dev 迁移到 `src/tool/navigation/planner/` 和

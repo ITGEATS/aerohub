@@ -103,6 +103,10 @@ class YopoPlanner(Node):
         self.action = ActionClient(self, FollowTimedPath, 'follow_timed_path')
         self.modify = self.create_client(FollowTimedPath_SendGoal, 'follow_timed_path/_behavior/modify')
         self.stopper = self.create_client(Trigger, 'follow_timed_path/_behavior/stop')
+        self.navigation = None
+        if param('navigation_action', False):
+            from .navigation import YopoNavigation
+            self.navigation = YopoNavigation(self)
         self.create_timer(.02, self.tick)
 
     def now_s(self):
@@ -220,6 +224,9 @@ class YopoPlanner(Node):
         return self.inputs_fresh(now) and self.observation_pair() is not None
 
     def on_goal(self, msg):
+        if self.navigation is not None:
+            self.get_logger().error('Use navigate_to_pose in public navigation mode')
+            return
         if msg.header.frame_id != self.frame or not np.isfinite(vector(msg.pose.position)).all():
             self.get_logger().error('Goal requires finite fixed ENU coordinates')
             return
@@ -256,6 +263,10 @@ class YopoPlanner(Node):
         self.reason = ''
 
     def cancel(self, request, response):
+        if self.navigation is not None:
+            response.success = False
+            response.message = 'Use navigate_to_pose cancellation in public navigation mode'
+            return response
         self.queued_goal = None
         self.stop('CANCELED')
         response.success = self.state != 'FAULT'

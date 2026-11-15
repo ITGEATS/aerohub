@@ -1,0 +1,13 @@
+# One observation using the first RGB frame received after request acceptance.
+string category
+# False: RGB-only detection. True: additionally attempt RGB-D/TF positioning.
+bool estimate_position
+# Total wall-clock budget: fresh RGB, inference and optional positioning.
+float64 timeout
+---
+# True when 2D detection completed, including no detections or unavailable 3D.
+bool success
+string code
+string reason
+# Position is usable only where position_valid=true; source stamps are preserved.
+uav_object_detection_interfaces/ObjectObservation result

@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 import time
+import zipfile
 from urllib.request import build_opener, ProxyHandler
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -38,8 +39,13 @@ def prepare_ground():
     source = output/'ws/src/as2_msgs'
     source.mkdir(parents=True, exist_ok=True)
     manifest = {}
+    run([sys.executable, ROOT/'deployment/airsim/demos/super_forest/prepare_navigation_dependencies.py', output])
+    for wheel in (output/'wheels').glob('*.whl'):
+        with zipfile.ZipFile(wheel) as archive:
+            archive.extractall(output/'python_deps')
     # Only canonical interfaces consumed by the task, generated in its own environment.
     for name in ['msg/PlatformInfo.msg', 'msg/PlatformStatus.msg', 'msg/ControlMode.msg',
+                 'msg/AlertEvent.msg', 'msg/BehaviorStatus.msg',
                  'action/Takeoff.action', 'action/Land.action']:
         text = capture(['docker','run','--rm','--network','none','--entrypoint','cat',ONBOARD,
                         '/root/aerostack2_ws/src/aerostack2/as2_msgs/'+name])
@@ -52,7 +58,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME} "msg/PlatformInfo.msg" "msg/PlatformStatus.msg"
-  "msg/ControlMode.msg" "action/Takeoff.action" "action/Land.action" DEPENDENCIES std_msgs action_msgs)
+  "msg/ControlMode.msg" "msg/AlertEvent.msg" "msg/BehaviorStatus.msg" "action/Takeoff.action" "action/Land.action" DEPENDENCIES std_msgs action_msgs)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
 ''')
@@ -66,7 +72,7 @@ ament_package()
     manifest['onboard_image'] = capture(['docker','image','inspect',ONBOARD,'--format','{{.Id}}']).strip()
     (output/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     run(['docker','run','--rm','--network','none','-v',str(ROOT)+':/repo','-w','/repo/log/yopo-single/workstation/ws',
-         '--entrypoint','bash',GROUND,'-lc','source /opt/ros/humble/setup.bash && colcon build --event-handlers console_direct+'])
+         '--entrypoint','bash',GROUND,'-lc','source /opt/ros/humble/setup.bash && colcon build --base-paths src /repo/src/tool/navigation/interfaces /repo/src/tool/navigation/python_api /repo/as2/aerostack2/as2_python_api --event-handlers console_direct+'])
 
 
 def domain(output):
@@ -145,7 +151,7 @@ def start(output, scene):
     (output/'images.json').write_text(json.dumps(images,indent=2)+'\n')
     source_manifest = {'files': {}, 'as2_checkout': capture(['git','-C',ROOT/'as2/aerostack2','rev-parse','HEAD']).strip(),
                        'as2_gitlink': capture(['git','-C',ROOT,'ls-files','-s','as2/aerostack2']).strip()}
-    for folder in [APP, ROOT/'src/tool/navigation/planner/yopo/ros2_adapter', ROOT/'src/basic_function/inference/interfaces',
+    for folder in [APP, ROOT/'src/tool/navigation/planner/yopo/ros2_adapter', ROOT/'src/tool/navigation/interfaces', ROOT/'src/tool/navigation/python_api', ROOT/'src/basic_function/inference/interfaces',
                    ROOT/'src/basic_function/inference/ros2_adapter', ROOT/'src/behavior/follow_path']:
         for path in folder.rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts:
@@ -192,7 +198,8 @@ def mission(output, args):
         raise RuntimeError('use a fresh case name; evidence must not be overwritten')
     case_path.mkdir(parents=True)
     command=['docker','run','--rm',*common(output),
-             '-e','PYTHONPATH=/repo/simulator/airsim/sensors:/repo/deployment/robopi/vendor',
+             '-e','PYTHONPATH=/repo/log/yopo-single/workstation/python_deps:/repo/simulator/airsim/sensors:/repo/deployment/robopi/vendor',
+             '-e','AS2_MODULES_PATH=/repo/log/yopo-single/workstation/ws/install/uav_planner_python_api/share/uav_planner_python_api/modules',
              '--entrypoint','bash',GROUND,'-lc',
              'source /opt/ros/humble/setup.bash && source /repo/log/yopo-single/workstation/ws/install/setup.bash && '
              'exec python3 /repo/deployment/airsim/demos/yopo_single/mission.py --output /evidence/'+args.case+

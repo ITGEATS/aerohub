@@ -2,7 +2,7 @@
 
 YOLO26n-seg is available as an isolated segmentation worker and typed ROS service:
 see [model preparation and validation](models/yolo26n_seg/README.md). Its separate
-[Object Detection Tool](../perception/object_detection/README.md) adds registered
+[Object Detection Tool](../../tool/object_detection/README.md) adds registered
 ROS depth/CameraInfo and historical TF for measured 3D positions; target KF and
 motion execution remain outside Inference. Select only `yolo26n-seg` with
 `config/inference.yolo26n-seg.example.yaml`; existing model selections are retained.

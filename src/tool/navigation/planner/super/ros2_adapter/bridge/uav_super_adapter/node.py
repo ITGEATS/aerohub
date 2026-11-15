@@ -19,13 +19,14 @@ from uav_planner_interfaces.msg import TimedTrajectorySegment, VehicleTrajectory
 from uav_planner_framework.follow_path_client import FleetFollowPathClient
 from uav_planner_framework.ros_conversions import seconds_to_time, time_to_seconds
 from .polynomial import Polynomial, InsufficientCoverage
+from .navigation import SuperNavigation
 
 
 class SuperAdapter(Node):
     def __init__(self):
         super().__init__('super_timed_path_adapter')
         for key,value in [('vehicle_id','drone0'),('frame_id','drone0/odom'),
-                          ('goal',[0.,0.,2.]),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
+                          ('goal',[0.,0.,2.]),('navigation_action',False),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
             self.declare_parameter(key,value)
         self.vehicle = self.get_parameter('vehicle_id').value
         self.frame = self.get_parameter('frame_id').value
@@ -57,13 +58,15 @@ class SuperAdapter(Node):
         self.create_subscription(PositionCommand,'/planning/pos_cmd',self.on_command,qos_profile_sensor_data)
         self.create_service(SetBool,'super_adapter/enable',self.enable)
         self.publisher = self.create_publisher(String,'super_adapter/state',10)
+        self.navigation_tolerance = self.get_parameter('goal_tolerance').value
+        self.navigation = SuperNavigation(self) if self.get_parameter('navigation_action').value else None
         self.create_timer(.02,self.tick)
 
     def update_task_parameters(self,parameters):
         for parameter in parameters:
             if parameter.name!='goal':continue
             value=parameter.value
-            if self.enabled or (self.client and not self.client.quiescent):
+            if (self.navigation and self.navigation.reserved) or self.enabled or (self.client and not self.client.quiescent):
                 return SetParametersResult(successful=False,reason='Stop the current execution before changing goal')
             if parameter.type_!=Parameter.Type.DOUBLE_ARRAY or len(value)!=3 or not all(math.isfinite(x) for x in value):
                 return SetParametersResult(successful=False,reason='Goal must contain three finite ENU coordinates')
@@ -119,7 +122,11 @@ class SuperAdapter(Node):
         self.last_plan = stamp
         self.queued = copy.deepcopy(msg)
 
-    def enable(self,request,response):
+    def enable(self,request,response,internal=False):
+        if self.navigation and not internal:
+            response.success = False
+            response.message = 'Use navigate_to_pose while navigation_action is enabled'
+            return response
         if not request.data:
             self.enabled = False
             self.queued = None
@@ -166,7 +173,7 @@ class SuperAdapter(Node):
         segment.generated_at = copy.deepcopy(msg.header.stamp)
         seconds_to_time(start,segment.valid_from)
         endpoint,velocity,_ = curve.sample(curve.end)
-        segment.is_final = math.dist(endpoint,self.goal) <= self.get_parameter('goal_tolerance').value and math.sqrt(sum(v*v for v in velocity)) <= .3
+        segment.is_final = math.dist(endpoint,self.goal) <= (self.navigation_tolerance if self.navigation and self.navigation.reserved else self.get_parameter('goal_tolerance').value) and math.sqrt(sum(v*v for v in velocity)) <= .3
         self.last_curve = {'source_start':curve.start,'source_end':curve.end,
                            'submitted_from':start,'endpoint':endpoint,'end_velocity':velocity,
                            'is_final':segment.is_final,'pieces':len(curve.durations)}
@@ -202,6 +209,8 @@ class SuperAdapter(Node):
                     self.late_updates += 1
                 except (ValueError,OverflowError) as exc:
                     self.fail('Invalid committed polynomial',str(exc))
+        if self.navigation:
+            self.navigation.tick()
         self.publisher.publish(String(data=json.dumps({
             'enabled':self.enabled,'error':self.error,'task_id':self.task,
             'revision':self.client.revision if self.client else 0,

@@ -32,12 +32,15 @@ class Mission(Node):
     def __init__(self):
         super().__init__('super_forest_migration',parameter_overrides=[Parameter('use_sim_time',value=True)])
         self.root=Path(os.environ.get('SUPER_APP_ROOT','/opt/super_app'));self.out=Path(os.environ.get('SUPER_EVIDENCE_ROOT','/evidence'))
+        self.navigation_config=Path(os.environ.get('SUPER_NAVIGATION_CONFIG',str(self.root/'navigation.yaml')))
         self.task=json.loads((self.root/'task.json').read_text())
         self.case=os.environ.get('SUPER_CASE','forest8')
         if self.case.startswith('short'):
             self.task['waypoints_enu_m']=[[0.,4.,2.]]
             self.task['leg_timeout_s']=60
         self.rpc=Rpc(os.environ.get('AIRSIM_RPC_HOST','127.0.0.1'),43472,timeout=5)
+        self.navigation_drone=None
+        self.use_navigation=os.environ.get('SUPER_EXECUTION_LOCATION','pc')=='pc'
         self.runtime={};self.four_part=os.environ.get('SUPER_EXECUTION_LOCATION')=='four-part'
         self.phase='initializing';self.odom=None;self.platform=None;self.controller=None
         self.state={};self.acks={};self.counts=collections.Counter();self.flags=collections.Counter()
@@ -60,7 +63,7 @@ class Mission(Node):
         for key,topic in [('cloud','/drone0/navigation/points'),('map','/rog_map/occ'),('inflated','/rog_map/inf_occ')]:
             self.create_subscription(PointCloud2,topic,lambda m,k=key:self.on_cloud(k,m),qos_profile_sensor_data)
         self.create_subscription(String,'/drone0/super_runtime/state',self.on_runtime,10)
-        self.goal_pub=self.create_publisher(PoseStamped,'/goal_pose',1)
+        self.goal_pub=None if self.use_navigation else self.create_publisher(PoseStamped,'/goal_pose',1)
         self.create_timer(.1,self.record)
 
     def on_runtime(self,msg):
@@ -144,7 +147,7 @@ class Mission(Node):
                 raise RuntimeError('controller feedback timeout')
             if any(time.monotonic()-self.received.get(k,0)>.5 for k in ('clock','odom')):
                 raise RuntimeError('state/clock timeout')
-            if (self.phase=='route' and self.controller.input_control_mode.control_mode!=ControlMode.TRAJECTORY and not self.state.get('complete')
+            if (not self.use_navigation and self.phase=='route' and self.controller.input_control_mode.control_mode!=ControlMode.TRAJECTORY and not self.state.get('complete')
                 and not (self.state.get('settling') and self.controller.input_control_mode.control_mode==ControlMode.POSITION)):
                 if self.mode_lost_at is None:self.mode_lost_at=time.monotonic()
                 if time.monotonic()-self.mode_lost_at>.3:raise RuntimeError('Behavior trajectory mode lost')
@@ -247,7 +250,7 @@ class Mission(Node):
         if os.environ.get('SUPER_EXECUTION_LOCATION', 'pc') == 'pc':
             self.start('as2',['python3','/opt/onboard_computer/run.py'])
         self.start('navigation',['ros2','run','as2_navigation_inputs','navigation_inputs_node','--ros-args',
-            '-r','__ns:=/drone0','--params-file',str(self.root/'navigation.yaml')])
+            '-r','__ns:=/drone0','--params-file',str(self.navigation_config)])
         self.wait(lambda:self.odom is not None and self.platform is not None and self.controller is not None and self.counts['cloud']>=3,90)
         settled=self.now_seconds();self.wait(lambda:self.now_seconds()-settled>=10,30)
         self.origin=self.position()
@@ -261,9 +264,19 @@ class Mission(Node):
         (self.out/'origin-measured.json').write_text(json.dumps({'task_to_odom_translation_m':self.origin,'target':target},indent=2)+'\n')
         self.start('super',['ros2','run','super_planner','fsm_node','--ros-args','-p','use_sim_time:=true','-p','config_name:='+str(self.out/'planner.yaml')])
         self.start('adapter',['ros2','run','uav_super_adapter','super_timed_path_adapter','--ros-args',
-            '-r','__ns:=/drone0','-p','use_sim_time:=true','-p','goal:='+str(target),
-            '-p','goal_tolerance:='+str(float(self.task['goal_tolerance_m']))])
+            '-r','__ns:=/drone0','-p','use_sim_time:=true',
+            *([] if self.use_navigation else ['-p','goal:='+str(target)]),
+            '-p','goal_tolerance:='+str(float(self.task['goal_tolerance_m'])),
+            '-p','navigation_action:='+str(self.use_navigation).lower()])
         self.wait(lambda:self.counts['map']>=3 and self.counts['inflated']>=3,60)
+        if self.use_navigation:
+            from as2_python_api.drone_interface_base import DroneInterfaceBase
+            self.navigation_drone=DroneInterfaceBase('drone0',use_sim_time=True)
+            self.navigation_drone.load_module('navigation')
+            self.wait(lambda:self.navigation_drone.navigation.ready,30)
+            observed_after=time.monotonic()
+            self.wait(lambda:all(self.received.get(k,0)>observed_after for k in ('clock','odom','cloud')),10)
+            self.result['task_protocol']='AS2 NavigationModule + NavigateToPose Action'
         return target
 
     def run(self):
@@ -298,12 +311,17 @@ class Mission(Node):
             self.wait(lambda:self.platform.status.state==PlatformStatus.FLYING)
             self.phase='holding';hold=self.now_seconds();self.wait(lambda:self.now_seconds()-hold>=6,20)
             self.collision_stamp=self.rpc.call('simGetCollisionInfo','PX4')['time_stamp']
-            self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=True))
-            self.wait(lambda:self.goal_pub.get_subscription_count()>0)
-            goal=PoseStamped();goal.header.frame_id='drone0/odom';goal.header.stamp=self.get_clock().now().to_msg()
-            goal.pose.position.x,goal.pose.position.y,goal.pose.position.z=target
-            goal.pose.orientation=self.odom.pose.pose.orientation
-            self.goal_pub.publish(goal)
+            if self.use_navigation:
+                self.navigation_drone.navigation.to_point(*target, wait=False,
+                    position_tolerance=float(self.task['goal_tolerance_m']),
+                    timeout=float(self.task['leg_timeout_s']))
+            else:
+                self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=True))
+                self.wait(lambda:self.goal_pub.get_subscription_count()>0)
+                goal=PoseStamped();goal.header.frame_id='drone0/odom';goal.header.stamp=self.get_clock().now().to_msg()
+                goal.pose.position.x,goal.pose.position.y,goal.pose.position.z=target
+                goal.pose.orientation=self.odom.pose.pose.orientation
+                self.goal_pub.publish(goal)
             def executing():
                 if self.state.get('error'):raise RuntimeError(self.state['error'])
                 return self.state.get('revision',0)>0 and self.controller.input_control_mode.control_mode==ControlMode.TRAJECTORY
@@ -314,7 +332,10 @@ class Mission(Node):
                 self.phase='fault'
                 self.result['fault_injected']=self.case
                 if self.case=='short-cancel':
-                    self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=False))
+                    if self.use_navigation:
+                        self.navigation_drone.navigation.cancel_async()
+                    else:
+                        self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=False))
                 elif self.case=='short-input-loss':
                     child=next(p for name,p,_ in self.children if name=='super')
                     os.killpg(child.pid,signal.SIGTERM)
@@ -323,6 +344,10 @@ class Mission(Node):
                     request.control_mode.yaw_mode=ControlMode.YAW_ANGLE
                     self.service(SetControlMode,'/drone0/controller/set_control_mode',request)
                 self.wait(lambda:not self.state.get('enabled') and self.state.get('stop_confirmed'),15)
+                if self.use_navigation:
+                    self.wait(lambda:self.navigation_drone.navigation.done,10)
+                    if not self.navigation_drone.navigation.result.stop_confirmed:
+                        raise RuntimeError('Navigation result did not confirm stop')
                 if self.case=='short-input-loss' and 'stream expired' not in self.state.get('error',''):
                     raise RuntimeError('Input loss did not trigger stream expiry protection')
                 drain=self.now_seconds();self.wait(lambda:self.now_seconds()-drain>=.3,10)
@@ -346,9 +371,15 @@ class Mission(Node):
                 if math.dist(self.position(),target)<=self.task['goal_tolerance_m'] and speed<.3:
                     if stable is None:stable=self.now_seconds()
                 else:stable=None
-                return stable is not None and self.now_seconds()-stable>=2 and self.state.get('complete',False)
+                if self.use_navigation:
+                    navigation=self.navigation_drone.navigation
+                    if navigation.done and not navigation.result.success:
+                        raise RuntimeError(navigation.result.code+': '+navigation.result.reason)
+                    completed=navigation.done and navigation.result.success
+                else:completed=self.state.get('complete',False)
+                return stable is not None and self.now_seconds()-stable>=2 and completed
             self.wait(arrived,self.task['leg_timeout_s'])
-            self.result.update(arrived=True,execution_completed=bool(self.state.get('complete')),arrival_error_m=math.dist(self.position(),target),
+            self.result.update(arrived=True,execution_completed=bool(self.navigation_drone.navigation.result.success if self.use_navigation else self.state.get('complete')),arrival_error_m=math.dist(self.position(),target),
                 route_sim_seconds=self.now_seconds()-self.started,final_task_enu_m=self.local())
         except BaseException as exc:
             self.result.update(error=str(exc),failed_phase=self.phase)
@@ -357,7 +388,11 @@ class Mission(Node):
             self.phase='stopping'
             if self.platform is not None and self.platform.armed:
                 try:
-                    self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=False))
+                    if self.use_navigation:
+                        if self.navigation_drone is not None:
+                            self.navigation_drone.navigation.cancel()
+                    else:
+                        self.service(SetBool,'/drone0/super_adapter/enable',SetBool.Request(data=False))
                     if self.state.get('task_id'):
                         self.wait(lambda:self.state.get('stop_confirmed'),10)
                         self.result['behavior_stop_confirmed']=True
@@ -380,6 +415,10 @@ class Mission(Node):
                     self.result['recovery_error']=str(exc)
                     try:self.emergency_land()
                     except BaseException as failure:self.result['emergency_recovery_error']=str(failure)
+            if self.navigation_drone is not None and self.navigation_drone.navigation.done:
+                outcome=self.navigation_drone.navigation.result
+                self.result['navigation_result']={'success':outcome.success,'code':outcome.code,
+                    'reason':outcome.reason,'stop_confirmed':outcome.stop_confirmed}
             self.result.update(success=bool(self.result.get('ground_ready') or ((self.result.get('arrived') or self.result.get('fault_validated')) and self.result.get('behavior_stop_confirmed') and
                  self.result.get('landed_and_disarmed') and not self.result.get('error') and not self.result.get('recovery_error'))),
                  max_speed_m_s=self.max_speed,bounds_observation_count=self.bound_violations,
@@ -389,6 +428,9 @@ class Mission(Node):
             print(json.dumps(self.result,indent=2),flush=True)
 
     def close(self):
+        if self.navigation_drone is not None:
+            self.navigation_drone.shutdown()
+            self.navigation_drone.destroy_node()
         for _,child,_ in self.children:
             if child.poll() is None:
                 try:os.killpg(child.pid,signal.SIGTERM)

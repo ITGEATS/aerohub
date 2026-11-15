@@ -4,7 +4,9 @@
     registered_depth: true
     depth_is_perspective: false
     depth_scale_16u: 0.001
-    stream_enabled: true
+    stream_enabled: false
+    # Both camera publisher and subscribers must offer reliable QoS to enable this.
+    camera_reliable: false
     image_topic: sensor_measurements/FrontCamera/rgb/image
     depth_topic: sensor_measurements/FrontCamera/depth_planar/image
     rgb_info_topic: sensor_measurements/FrontCamera/rgb/camera_info

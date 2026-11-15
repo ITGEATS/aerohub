@@ -83,12 +83,15 @@ def main():
     parser.add_argument('action',choices=['build','run','stop','status'])
     parser.add_argument('--case', choices=['ground','short','short-cancel','short-input-loss','short-takeover','forest8'], default='forest8')
     parser.add_argument('--execution-location', choices=['pc','robopi','robopi-all','four-part'], default='pc')
+    parser.add_argument('--overlay',type=Path,default=ROOT/'log/super-navigation/workspace')
     parser.add_argument('--workstation-workspace',type=Path,default=ROOT/'log/airsim/super-four-part/workstation')
     parser.add_argument('--output',type=Path,default=ROOT/'log/airsim/super-migration-pc')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
     if args.action=='build' and args.execution_location=='four-part':
         from workstation import prepare
         prepare(args.workstation_workspace.resolve());return
+    if args.action=='build' and args.execution_location=='pc':
+        run(['bash',APP/'build_navigation_overlay.sh',args.overlay.resolve()]);return
     if args.action=='build':
         run(['docker','build','--network','none','--pull=false','-f',APP/'Dockerfile','-t',IMAGE,ROOT]);return
     if args.action=='stop':
@@ -132,6 +135,8 @@ def main():
         if not subprocess.run(['docker','container','inspect',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:
             raise RuntimeError('Reserved container already exists: '+name)
     for image in ((BOARD,WORKSTATION_IMAGE) if args.execution_location=='four-part' else ((BOARD,) if args.execution_location=='robopi-all' else (IMAGE,BOARD))):run(['docker','image','inspect',image],stdout=subprocess.DEVNULL)
+    if args.execution_location=='pc' and not (args.overlay/'install/setup.bash').is_file():
+        raise RuntimeError('Build the navigation overlay first: run.py build --overlay '+str(args.overlay))
     execution = BoardExecution(out) if args.execution_location != 'pc' else None
     settings=json.loads((ROOT/'simulator/airsim/scenarios/super_forest/settings.json').read_text())
     if args.execution_location=='robopi-all':settings['LocalHostIp']=execution.link.required('PC_IP')
@@ -146,7 +151,7 @@ def main():
     (out/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     (out/'fleet.yaml').write_text(yaml.safe_dump({'vehicles':{'drone0':{'fmu_prefix':'/drone0','target_system_id':61}}}))
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for directory in
-            (APP,ROOT/'src/tool/navigation/planner/super/ros2_adapter',ROOT/'src/behavior/follow_path',
+            (APP,ROOT/'src/tool/navigation/interfaces',ROOT/'src/tool/navigation/python_api',ROOT/'src/tool/navigation/planner/super/ros2_adapter',ROOT/'src/behavior/follow_path',
              ROOT/'src/tool/navigation/framework',ROOT/'deployment/airsim/as2',ROOT/'deployment/airsim/config/as2',ROOT/'deployment/platform/patches') for p in directory.rglob('*')
             if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ('.png','.log')}
     (out/'source-manifest.json').write_text(json.dumps({'commit':subprocess.check_output(['git','-C',ROOT,'rev-parse','HEAD'],text=True).strip(),
@@ -214,7 +219,16 @@ def main():
                 command=['docker','run','--rm','--init','--network','host','--name',PREFIX+'app','--label','aerohub.super.output='+str(out),
                      '-e','ROS_DOMAIN_ID=94','-e','SUPER_EXECUTION_LOCATION='+args.execution_location,'-e','SUPER_CASE='+args.case,
                      *(['-e','FASTRTPS_DEFAULT_PROFILES_FILE=/evidence/pc-dds.xml','-e','ROS_LOCALHOST_ONLY=0'] if execution else []),
-                     '-v',str(out)+':/evidence',IMAGE]
+                     '-v',str(out)+':/evidence',
+                     *(['-e','SUPER_APP_ROOT=/repo/deployment/airsim/demos/super_forest',
+                        '-e','SUPER_NAVIGATION_CONFIG=/repo/src/basic_function/perception/navigation_inputs/config/drone0.yaml',
+                        '-v',str(ROOT)+':/repo:ro','-v',str(args.overlay.resolve())+':/work:ro',
+                        '--entrypoint','/bin/bash',IMAGE,'-lc',
+                        'source /opt/super_ws/install/setup.bash && source /opt/super_app_ws/install/setup.bash && '
+                        'source /work/install/setup.bash && '
+                        'export PYTHONPATH="/work/python_deps:/opt/super_app${PYTHONPATH:+:$PYTHONPATH}" && '
+                        'export AS2_MODULES_PATH="/work/install/share/uav_planner_python_api/modules${AS2_MODULES_PATH:+:$AS2_MODULES_PATH}" && '
+                        'exec python3 /repo/deployment/airsim/demos/super_forest/mission.py'] if args.execution_location=='pc' else [IMAGE])]
             app=subprocess.Popen(list(map(str,command)))
             try:
                 while app.poll() is None:

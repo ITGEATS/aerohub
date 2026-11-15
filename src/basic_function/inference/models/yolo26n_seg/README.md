@@ -3,7 +3,7 @@
 This component migrates only YOLO26n-seg. It returns original-image pixel boxes,
 categories, confidence and binary instance masks. It does not calculate depth,
 track target identities, publish TF, or command a vehicle. The separate
-[Object Detection Tool](../../../perception/object_detection/README.md) combines
+[Object Detection Tool](../../../../tool/object_detection/README.md) combines
 these results with ROS depth, CameraInfo and capture-time TF to report positions.
 
 ## Environment and preparation
