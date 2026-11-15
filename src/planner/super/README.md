@@ -49,3 +49,17 @@ Yaw polynomial 约束适配，不宣称支持要求跟随航向轨迹的任务�
 须在新镜像中验证。C++ interpolation_test.cpp 使用实际Behavior采样器对照
 七次测试曲线。真实Behavior终点模式及外部接管测试位于
 `src/behavior/follow_path/tests/terminal_mode_test.py`。
+
+
+## 公共导航调用层
+
+PC Demo 通过 AS2 `NavigationModule` 调用统一 `NavigateToPose` Action，地址为
+`/drone0/navigate_to_pose`。SUPER Adapter 在 `navigation_action:=true` 时提供该入口，
+内部继续配置目标、调用原目标 Topic 并复用现有执行链；规划核心和多项式转换不变。
+
+此模式下 `super_adapter/enable` 拒绝外部请求，目标参数也不能在活跃 Action 中修改。
+`super_adapter/state` 继续作为诊断与 Demo 独立观测，不作为公共调用协议。
+开关默认 false，保留旧部署的调用方式；这不代表板端已验证新接口。
+
+公共 Python API、约束和结果语义见 [Navigation Module](../python_api/README.md)。
+PC 构建、运行与回归入口见 Demo README 的“公共导航接口 overlay”。

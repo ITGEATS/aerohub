@@ -1,0 +1,12 @@
+[
+  {
+    "filename": "pydantic-1.10.24-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/70/73/fde9af3a76cc5714880828eee50c0f7f1b263d2c77a74c65ba19325b4706/pydantic-1.10.24-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    "sha256": "c626596c1b95dc6d45f7129f10b6743fbb50f29d942d25a22b2ceead670c067d"
+  },
+  {
+    "filename": "typing_extensions-4.12.2-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl",
+    "sha256": "04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"
+  }
+]

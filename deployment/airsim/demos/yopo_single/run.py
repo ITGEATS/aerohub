@@ -66,7 +66,7 @@ ament_package()
     manifest['onboard_image'] = capture(['docker','image','inspect',ONBOARD,'--format','{{.Id}}']).strip()
     (output/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     run(['docker','run','--rm','--network','none','-v',str(ROOT)+':/repo','-w','/repo/log/yopo-single/workstation/ws',
-         '--entrypoint','bash',GROUND,'-lc','source /opt/ros/humble/setup.bash && colcon build --event-handlers console_direct+'])
+         '--entrypoint','bash',GROUND,'-lc','source /opt/ros/humble/setup.bash && colcon build --base-paths src /repo/src/planner/interfaces --event-handlers console_direct+'])
 
 
 def domain(output):
@@ -145,7 +145,7 @@ def start(output, scene):
     (output/'images.json').write_text(json.dumps(images,indent=2)+'\n')
     source_manifest = {'files': {}, 'as2_checkout': capture(['git','-C',ROOT/'as2/aerostack2','rev-parse','HEAD']).strip(),
                        'as2_gitlink': capture(['git','-C',ROOT,'ls-files','-s','as2/aerostack2']).strip()}
-    for folder in [APP, ROOT/'src/planner/yopo/ros2_adapter', ROOT/'src/inference/interfaces',
+    for folder in [APP, ROOT/'src/planner/yopo/ros2_adapter', ROOT/'src/planner/interfaces', ROOT/'src/inference/interfaces',
                    ROOT/'src/inference/ros2_adapter', ROOT/'src/behavior/follow_path']:
         for path in folder.rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts:

@@ -11,12 +11,14 @@ from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
 from rclpy.qos import qos_profile_sensor_data
 from as2_msgs.action import Takeoff, Land
+from action_msgs.srv import CancelGoal
 from rosgraph_msgs.msg import Clock
 from as2_msgs.msg import PlatformInfo
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from std_msgs.msg import String
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import SetBool
 from uav_as2_sensor_adapter.rpc import Rpc
+from uav_planner_interfaces.action import NavigateToPose
 
 
 class Mission(Node):
@@ -37,7 +39,8 @@ class Mission(Node):
         self.create_subscription(TwistStamped, '/drone0/self_localization/twist', lambda m: setattr(self, 'twist', m), qos_profile_sensor_data)
         self.create_subscription(String, '/drone0/yopo/status', self.on_status, 10)
         self.create_subscription(String, '/drone0/yopo/events', self.on_event, 100)
-        self.goal_pub = self.create_publisher(PoseStamped, '/drone0/yopo/goal', 1)
+        self.navigation = ActionClient(self, NavigateToPose, '/drone0/navigate_to_pose')
+        self.navigation_handle = self.navigation_result = None
         self.task_clients = []
         self.last_clock_ns = None
         self.clock_samples = 0
@@ -94,6 +97,17 @@ class Mission(Node):
         response = future.result()
         if not response.success:
             raise RuntimeError(name+' rejected: '+str(response))
+
+    def cancel_navigation(self):
+        if self.navigation_handle is not None:
+            future = self.navigation_handle.cancel_goal_async()
+        else:
+            # Recovery is explicit: cancel any previous task owned by this UAV.
+            client = self.create_client(CancelGoal, '/drone0/navigate_to_pose/_action/cancel_goal')
+            self.task_clients.append(client)
+            self.wait(client.service_is_ready, 3)
+            future = client.call_async(CancelGoal.Request())
+        self.wait(future.done, 5)
 
     def action(self, kind, name, goal):
         client = ActionClient(self, kind, name); self.task_clients.append(client)
@@ -157,16 +171,30 @@ class Mission(Node):
             if require_obstacle and not obstacle_pixels:
                 raise RuntimeError('forest task has no confirmed horizon obstacles in 15m depth')
             previous_task = self.status.get('task_id')
-            self.goal_pub.publish(goal)
+            self.wait(self.navigation.server_is_ready)
+            request = NavigateToPose.Goal(target=goal, orientation_mode=NavigateToPose.Goal.UNCONSTRAINED,
+                                          use_timeout=True, timeout=float(timeout_s))
+            accepted = self.navigation.send_goal_async(request)
+            self.wait(accepted.done)
+            self.navigation_handle = accepted.result()
+            if not self.navigation_handle.accepted:
+                raise RuntimeError('navigation goal rejected')
+            self.navigation_result = self.navigation_handle.get_result_async()
             self.wait(lambda: self.status.get('task_id') != previous_task and self.status.get('state') == 'RUNNING', 5, score=True)
             if fault != 'none':
                 self.wait(lambda: self.status.get('revision', 0) >= 3, 15, score=True)
                 self.result['fault'] = fault
                 if fault == 'cancel':
-                    self.service(Trigger, '/drone0/yopo/cancel', Trigger.Request())
+                    self.navigation_handle.cancel_goal_async()
                 else:
                     (self.output/'fault-request.json').write_text(json.dumps(dict(fault=fault, wall=time.time()))+'\n')
             self.wait(lambda: self.status.get('state') in ('STOPPED', 'FAULT'), timeout_s, score=True)
+            self.wait(self.navigation_result.done, 12, score=True)
+            nav = self.navigation_result.result().result
+            self.result['navigation_result'] = dict(success=nav.success, code=nav.code, reason=nav.reason, stop_confirmed=nav.stop_confirmed)
+            expected_code = {'none':'SUCCEEDED', 'cancel':'CANCELED', 'stale':'EXECUTION_FAILED', 'worker-exit':'EXECUTION_FAILED'}[fault]
+            if nav.code != expected_code or not nav.stop_confirmed:
+                raise RuntimeError('unexpected navigation result: ' + str(nav))
             self.result['arrived_5m'] = 'ARRIVED_5M' in self.status.get('reason', '')
             self.result['stopped'] = self.status.get('state') == 'STOPPED'
             expected_reason = {'none':'ARRIVED_5M','cancel':'CANCELED','stale':'STALE_OR_INVALID_INPUT',
@@ -182,7 +210,7 @@ class Mission(Node):
                 try:
                     try:
                         if self.status.get('state') != 'STOPPED':
-                            self.service(Trigger, '/drone0/yopo/cancel', Trigger.Request())
+                            self.cancel_navigation()
                     except Exception as error:
                         self.result['cancel_error'] = str(error)
                     try:

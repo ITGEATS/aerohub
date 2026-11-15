@@ -353,3 +353,36 @@ python3 deployment/airsim/demos/super_forest/run.py stop \
 all-board-short-04 单次通过，到点误差约 0.205 m、执行 revision 28，完成停止确认和
 降落解除解锁。前三轮失败分别涉及 RPC 回环监听、PX4/relay 地址及启动更新抢跑，
 均保留证据；未将成功轮当作原 forest8 长任务或长期可靠性通过。
+
+
+## 公共导航接口 overlay
+
+PC 模式新增统一导航入口。`mission.py` 仍是负责起降、任务和仿真验收的应用；
+导航调用通过 `drone.navigation`，不再由应用设置 Adapter 目标或发布 `/goal_pose`。
+SUPER 的规划算法、轨迹转换和 FollowTimedPath 执行沿用现有逻辑。
+
+```bash
+python3 deployment/airsim/demos/super_forest/run.py build
+python3 deployment/airsim/demos/super_forest/run.py run --case ground --output log/super-navigation/ground
+python3 deployment/airsim/demos/super_forest/run.py run --case short --output log/super-navigation/short
+```
+
+宿主 Python 需要 `deployment/swarm/requirements.txt` 中的 PyYAML 和 msgpack，
+用于场景管理及动态俯视相机。飞行验收使用 `AIRSIM_RENDER_MODE=windowed` 与可用 DISPLAY。
+
+`pc` 的 build 现在复用 `SUPER_APP_IMAGE` 指定的既有镜像（默认
+`uav/apps-super-forest:migration-main-behavior`），只构建外部 colcon overlay。
+`--overlay` 可指定工作区，默认 `log/super-navigation/workspace`。
+公共接口、执行消费者、AS2 Python API、NavigationModule 与 SUPER Adapter 一起补编译。
+镜像缺少的 pydantic/typing_extensions 使用本目录 navigation_dependencies.json 固定的
+CPython3.10 wheels，下载和校验后仅解包到该工作区；Docker 构建容器离线运行。
+
+run 挂载本仓库源码及 overlay，显式加载 install 与 Python 依赖；不替换共享镜像。
+镜像必须已有 `/opt/super_ws`、`/opt/super_app_ws` 和兼容 AS2 运行环境。
+其他 execution-location 仍使用原路径，本轮不验证其公共导航接口。
+
+build 包含真实 ROS Action/AS2 Module 的协议测试，执行端使用受控替身，不能替代
+真实 SUPER 或仿真闭环。完整回归仍为 ground、short、short-cancel、short-input-loss、
+short-takeover、forest8；每轮使用新的 output 目录，查看 result.json 与导航结果。
+
+本轮执行结果、限制和失败重试见 [公共导航验证](VALIDATION-navigation-20261114.md)。
