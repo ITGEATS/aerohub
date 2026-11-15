@@ -1,3 +1,4 @@
-# Client dependency version used with the locked upstream source.
-# The scene loader imports SDK code from projectairsim.source/client/python/projectairsim/src.
-projectairsim==1.0.1
+# Registry-only fallback, not the development installation entry.
+# For the configured native source SDK use:
+# python3 simulator/projectairsim/setup_client.py
+projectairsim==1.1.0

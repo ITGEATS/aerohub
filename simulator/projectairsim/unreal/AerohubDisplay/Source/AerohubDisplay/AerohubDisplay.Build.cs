@@ -5,7 +5,7 @@ public class AerohubDisplay : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine" });
-        PrivateDependencyModuleNames.AddRange(new[] { "HTTPServer", "Json", "JsonUtilities", "SlateCore", "Projects", "RenderCore" });
+        PrivateDependencyModuleNames.AddRange(new[] { "InputCore", "HTTPServer", "Json", "JsonUtilities", "SlateCore", "Projects", "RenderCore" });
         RuntimeDependencies.Add("$(PluginDir)/Resources/Fonts/...", StagedFileType.NonUFS);
     }
 }

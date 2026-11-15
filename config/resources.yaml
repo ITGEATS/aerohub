@@ -13,6 +13,8 @@ resources:
     path: ~/AirSim
   airsim_nh:
     path: ~/AirSim/scenes/nh/AirSimNH/Binaries/Linux/AirSimNH
+  # Development entry: upstream docs, Python APIs, core and UE implementation.
+  # Resolve this resource before browsing; see config/README.md (开发资源导航).
   projectairsim_source:
     path: ~/ProjectAirSim
   projectairsim_blocks:

@@ -14,9 +14,10 @@ FONT_DIR = Path(__file__).resolve().parents[1] / "unreal/AerohubDisplay/Resource
 FONT_MONO = FONT_DIR / "NimbusMonoPS-Regular.otf"
 FONT_MONO_BOLD = FONT_DIR / "NimbusMonoPS-Bold.otf"
 STATES = {
-    "idle": {"speed": 0.0, "peak": 0.0, "elapsed": 0.0, "accent": "#768494"},
+    "idle": {"speed": 0.0, "peak": 0.0, "elapsed": 0.0, "accent": "#a4b8cd"},
     "running": {"speed": 12.4, "peak": 16.8, "elapsed": 21.3, "accent": "#35e2c2"},
     "finished": {"speed": 0.0, "peak": 17.6, "elapsed": 48.7, "accent": "#62a9ff"},
+    "stale": {"speed": 12.4, "peak": 16.8, "elapsed": 21.3, "accent": "#35e2c2"},
 }
 
 
@@ -83,7 +84,7 @@ def render(config: dict, state_name: str, width: int, height: int) -> Image.Imag
     draw = ImageDraw.Draw(overlay)
     scale = min(width / 1280, height / 720)
     primary = "#edf4fa"
-    secondary = "#91a3b4"
+    secondary = "#cdddeb"
     panel = (28, 33, 41, 136)
     accent = state["accent"]
 
@@ -99,20 +100,38 @@ def render(config: dict, state_name: str, width: int, height: int) -> Image.Imag
     state_width = int(146 * scale)
     timer_x = left + int(330 * scale)
     baseline = top + int(9 * scale)
-    draw.text((vehicle_x, baseline), f"[ {config['vehicle'].upper()} ]",
+    draw.text((vehicle_x, baseline), f"[ {config['vehicle']} ]",
               font=font(FONT_MONO_BOLD, max(11, int(14 * scale))), fill=primary)
     draw.rectangle((state_x, top + inset, state_x + state_width,
                     top + top_height - inset), fill=accent)
     text_center(draw, (state_x + state_width / 2, top + top_height / 2),
-                state_name.upper(), font(FONT_MONO_BOLD, max(11, int(14 * scale))),
+                ("running" if state_name == "stale" else state_name).upper(), font(FONT_MONO_BOLD, max(11, int(14 * scale))),
                 "#15232c")
     draw.line((timer_x - int(20 * scale), top + int(8 * scale),
                timer_x - int(20 * scale), top + top_height - int(8 * scale)),
               fill=(226, 235, 241, 185), width=max(1, int(scale)))
-    draw.text((timer_x, baseline), "TIME",
-              font=font(FONT_MONO, max(10, int(13 * scale))), fill=secondary)
+    draw.text((timer_x, baseline), "WALL",
+              font=font(FONT_MONO_BOLD, max(10, int(14 * scale))), fill=secondary)
     draw.text((timer_x + int(67 * scale), baseline), f"{state['elapsed']:05.1f} s",
               font=font(FONT_MONO_BOLD, max(11, int(14 * scale))), fill=accent)
+
+    camera = config.get("camera", "FrontCamera")
+    image_type = config.get("image_type", "RGB")
+    camera_font = font(FONT_MONO_BOLD, max(10, int(15 * scale)))
+    format_font = font(FONT_MONO_BOLD, max(10, int(13 * scale)))
+    cw = draw.textlength(camera, font=camera_font)
+    badge_width = max(32 * scale, draw.textlength(image_type, font=format_font) + 14 * scale)
+    strip_width = 74 * scale + cw + badge_width
+    sx, sy = (width - strip_width) / 2, top + 44 * scale
+    draw.rectangle((sx, sy, sx + strip_width, sy + 21 * scale), fill=(28, 33, 41, 199))
+    draw.text((sx + 8 * scale, sy + 5.5 * scale), "CAM",
+              font=font(FONT_MONO, max(10, int(13 * scale))), fill=secondary)
+    draw.text((sx + 42 * scale, sy + 4 * scale), camera, font=camera_font, fill=primary)
+    bx = sx + 58 * scale + cw
+    draw.rectangle((bx, sy + 2 * scale, bx + badge_width, sy + 19 * scale),
+                   fill=(169, 202, 218, 31))
+    text_center(draw, (bx + badge_width / 2, sy + 10.5 * scale), image_type,
+                format_font, "#9ee8ff")
 
     radius = int(132 * scale)
     cx, cy = width - radius - int(24 * scale), height - radius + int(4 * scale)
@@ -138,7 +157,7 @@ def render(config: dict, state_name: str, width: int, height: int) -> Image.Imag
         (.72, (112, 225, 38)),
         (1.0, (255, 210, 22)),
     ]
-    active_segments = round(normalized * segments)
+    active_segments = 0 if state_name == "stale" else round(normalized * segments)
     for index in range(active_segments):
         segment_start = start + sweep * index / segments
         segment_end = start + sweep * (index + 1.03) / segments
@@ -166,21 +185,21 @@ def render(config: dict, state_name: str, width: int, height: int) -> Image.Imag
                      cy + math.sin(pointer_angle) * (fill_inner - 3 * scale))
     pointer_outer = (cx + math.cos(pointer_angle) * (outer_outer + 3 * scale),
                      cy + math.sin(pointer_angle) * (outer_outer + 3 * scale))
-    draw.line((pointer_inner, pointer_outer), fill=pointer_color,
+    draw.line((pointer_inner, pointer_outer), fill=(0, 0, 0, 0) if state_name == "stale" else pointer_color,
               width=max(3, int(4 * scale)))
 
     current_color = "#22f3ec"
     peak_color = "#ff5964"
-    status_color = "#5bea72" if state_name == "running" else accent
-    text_center(draw, (cx, cy - 34 * scale), "CURRENT  m/s",
+    status_color = "#ffbe5a" if state_name == "stale" else "#5bea72"
+    text_center(draw, (cx, cy - 34 * scale), "SIM GT  m/s",
                 font(FONT_MONO_BOLD, max(10, int(13 * scale))), current_color)
-    text_center(draw, (cx, cy - 8 * scale), f"{state['speed']:.1f}",
+    text_center(draw, (cx, cy - 8 * scale), "--" if state_name == "stale" else f"{state['speed']:.1f}",
                 font(FONT_MONO_BOLD, max(23, int(31 * scale))), current_color)
     text_center(draw, (cx, cy + 23 * scale), "PEAK  m/s",
                 font(FONT_MONO_BOLD, max(9, int(11 * scale))), peak_color)
     text_center(draw, (cx, cy + 45 * scale), f"{state['peak']:.1f}",
                 font(FONT_MONO_BOLD, max(17, int(22 * scale))), peak_color)
-    status_text = {"idle": "READY", "running": "TRACKING", "finished": "FINISHED"}[state_name]
+    status_text = "STALE DATA" if state_name == "stale" else "LIVE DATA"
     text_center(draw, (cx, cy + 70 * scale), status_text,
                 font(FONT_MONO_BOLD, max(11, int(13 * scale))), status_color)
     return Image.alpha_composite(image, overlay).convert("RGB")

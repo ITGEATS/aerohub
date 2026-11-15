@@ -1,5 +1,40 @@
 # UE5 observation display
 
+## 当前 HUD v1（2026-11-15）
+
+本版完成主视口身份、按车辆隔离的状态/墙钟计时/速度峰值、
+Global 质心俯视、动态标题与中央提示，移除仪表底部重复状态。
+Tab 在本项目观察适配层登记的原生 streaming capture 间轮换，G 切换 Global。
+不修改上游，不读取上游 private 状态；原始相机位姿和后处理由原生 UE 组件提供。
+
+可读性修订：WALL 改为蓝白粗体；相机行字号和字重提高、背景加深，
+RGB 用亮青色、深度格式用暖金色。实际 1280×720 DepthVis 高反差背景已审核。
+左右标题均采用独立 Noto CJK Bold 与深色描边，左侧暖金色、右侧亮青色；
+字体与许可随包部署。SetTitle 通过 side 选择，默认 left，支持独立清空。
+标题源码依据与验证记录见 [TITLE_STYLE.md](TITLE_STYLE.md)。
+
+生命周期主入口为 ControlRun（start/finish/reset），同一回调原子更新指定车辆
+状态和计时；正常重复调用保持结果，IDLE 下 finish 拒绝。旧独立接口保留兼容。
+实际双机计时隔离、重复调用、重新开始及非法事件检查通过，无飞行操作。
+
+调用入口与完整语义见 [RPC.md](RPC.md)。中文字体 Noto CJK 及许可随包部署。
+HTTPServer 回调由其核心 Tick 执行；开发及运行验证未建立额外后台线程修改 UE 对象。
+独立 RPC 与现有计时 HTTP 兼容，任务生命周期事件由调用方上报，服务端维护对应显示状态和计时。
+
+当前运行证据位于 log/projectairsim/hud-v1/：
+插件编译、实际场景包 Build/Cook/Stage/Archive、双机静态真值遥测、RPC 状态/
+计时隔离、消息过期、实际 Tab/G、Global 控制地面瞬移后的质心与俯视检查均通过。
+2026-11-15 视觉修订：恢复原细边框半透明紧凑主栏；车辆为主标签，
+相机原名为下方次级行，图像类型为弱化徽标；速度表几何保持。
+已在实际 1280×720 窗口审核完整画面，RPC 回归通过，用户视觉验收待确认。
+客户端移除终端输入循环，任务状态由控制程序通过 RPC 上报。
+这不是飞行验收。后文为历史记录，
+其中早期“未编译”和单车限制由本节及 RPC.md 替代。
+
+
+
+开发前阅读 [Native capabilities and interface development reference](../../../docs/ProjectAirSim原生显示接口核查.md)，核对原生能力、来源版本、通信限制与本项目扩展边界。
+
 `AerohubDisplay` is an independent UE 5.2 plugin. It uses public UE actor,
 scene-capture and HUD interfaces, without modifying ProjectAirSim core code.
 Its source lives here; generated binaries are installed in the external Blocks
@@ -75,8 +110,10 @@ Current limits:
 - Speed is the magnitude of upstream ProjectAirSim ground-truth `twist.linear`
   in m/s, forwarded by `display_telemetry.py` using service-only RPC. It is not
   PX4 telemetry. Data older than one wall second displays `--`.
-- Peak is accumulated since startup/reset. READY/TRACKING/FINISHED reflects
-  display timer state, not planner health. The review viewport is 1280×720.
+- Peak is accumulated since startup/reset. The top panel explicitly labels
+  TIMER IDLE/RUNNING/FINISHED and WALL time; it does not report planner health.
+  The gauge labels speed SIM GT and independently reports LIVE DATA, STALE DATA,
+  WAITING DATA or NO VEHICLE. Stale data hides the current value, needle and colored fill. The review viewport is 1280×720.
 - Presence does not mean PX4 is connected or ready.
 - One local player/world per port; simultaneous PIE worlds need distinct ports.
 - The plugin replaces the default HUD; projects with an existing custom HUD
@@ -134,3 +171,48 @@ creation failure observed with NVIDIA 580.178.04; accepted SunSky/SSGI lighting 
 
 Build, launch and interface instructions: [course package](../course/PACKAGE_README.md).
 Artifacts and validation evidence: `log/projectairsim/package-course-v7/`.
+
+## Display iteration (2026-11-14)
+
+The source and offline v6 preview clarify timer and telemetry semantics while retaining
+the existing layout. Review images are in `log/projectairsim/display-preview/v6/`,
+including a stale-data case at both resolutions. This iteration has not yet been
+compiled or checked in UE or a packaged application. The development backlog is
+[场景客户端开发清单](../../../docs/场景客户端开发清单.md).
+
+## JSON-RPC source increment (2026-11-15, not runtime-validated)
+
+The plugin source adds POST `/aerohub/rpc` on the existing display HTTP port.
+This is an independent JSON-RPC 2.0 request/response endpoint, not the native
+ProjectAirSim NNG transport. Send an explicit request id; notifications and batch
+requests are not supported by this initial increment.
+
+Implemented methods: `SetTitle` with `params.text`, `ShowMessage` with
+`params.text` and optional `duration_seconds` (default 3, zero persists),
+`ClearMessage`, and `GetDisplayState`. Text is limited to 512 UTF-16 code
+units; durations must be finite and between zero and 86400 seconds.
+Status includes title and currently visible message. Titles and messages are
+drawn before the main HUD panels; the gauge's duplicate status label is removed.
+
+Example request (after rebuilding the plugin):
+```json
+{"jsonrpc":"2.0","id":1,"method":"SetTitle","params":{"text":"Experiment 1"}}
+```
+
+This increment is uncompiled. It currently truncates drawn title/message text;
+wrapping, multilingual font coverage, game-thread dispatch verification,
+per-vehicle state/timer APIs, view identity and Global are still pending.
+Existing Python tests do not validate this new UE endpoint.
+
+### Vehicle state source increment
+
+SetRunState now accepts:
+```json
+{"jsonrpc":"2.0","id":2,"method":"SetRunState","params":{"vehicle_id":"Drone1","state":"running"}}
+```
+Allowed states are idle/running/finished. The top badge displays this explicit
+state, or -- before one is supplied; timer events do not set it. Telemetry is
+stored by vehicle, rejecting the reserved __global__ identity. Automatic
+view binding, per-vehicle timers and reset isolation are not complete yet.
+The plugin's initial text-only increment passed BuildPlugin; the state
+increment is validated separately in the build-state log.

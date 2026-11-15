@@ -18,13 +18,54 @@ config/simulator/
 `ros_setup_resource` 引用资源名；原先直接填写路径的方式仍可使用。
 UE 资源目前用于登记和查询，尚未提供自动启动编辑器的命令。
 
-客户端环境归属 ProjectAirSim，放在 `~/ProjectAirSim/.venv/`。在仓库根目录准备：
+## 开发资源导航
+
+`resources.yaml` 同时登记运行资源和开发资源。ProjectAirSim 开发从
+`projectairsim_source` 进入，读取其原生文档、Python API、core 和 UE 实现，
+再选择复用或扩展。本机实际位置由资源解析器确定，不以文档中的示例路径为准。
+
+| 资源名 | 用途 | 开发时查阅 |
+| --- | --- | --- |
+| `projectairsim_source` | 上游源码根目录 | `docs/`、`client/python/projectairsim/src/projectairsim/`、`core_sim/`、`unreal/Blocks/Plugins/ProjectAirSim/Source/` |
+| `projectairsim_project` | UE 工程文件 | 场景、项目插件、编译和编辑器入口 |
+| `projectairsim_blocks` | 已打包可执行文件 | 独立启动与目标包验收；源码改动需重新构建才会进入包 |
+| `projectairsim_python` | Python client 环境解释器 | 原生客户端依赖和调用验证 |
+| `projectairsim_ros2_setup` | ROS bridge overlay | 已构建桥接器的运行环境；不代表其源码位置 |
+| `ue5_root` / `ue5_editor` | UE 工具链与编辑器 | 插件编译、场景编辑和打包 |
+
+从仓库根目录查询本机实际源码路径，自动应用 `resources.local.yaml` 覆盖：
 
 ```bash
-uv venv --python 3.12 ~/ProjectAirSim/.venv
-uv pip install --python ~/ProjectAirSim/.venv/bin/python \
-  -r simulator/projectairsim/requirements-client.txt
+python3 -c 'from simulator.manager.resources import resolve_resource; print(resolve_resource("projectairsim_source"))'
 ```
+
+打开该目录前核对其存在性；该查询只解析配置，不下载、创建或启动资源。
+`config/simulator/*.yaml` 的 `projectairsim.source_resource` 可以选择另一资源名，
+应以所选场景配置为准；`projectairsim_source` 是默认入口。
+
+原生能力、锁定版本、源码位置、接口限制与本项目扩展见
+[ProjectAirSim 开发参考](../docs/ProjectAirSim原生显示接口核查.md)。
+自建显示插件位于 `simulator/projectairsim/unreal/AerohubDisplay/`，
+管理与适配位于 `simulator/manager/`、`simulator/projectairsim/`。
+上游阅读不授权修改其源码；扩展方式遵守[开发者贡献指导](../docs/开发者贡献指导.md)。
+
+## Python 客户端环境
+
+客户端环境通过 `projectairsim_python` 定位，源码通过 `projectairsim_source` 定位。
+首次使用先在配置对应的位置创建独立 venv（默认示例为 `~/ProjectAirSim/.venv`），
+已有环境不重复创建。然后从仓库根目录安装当前上游源码的可编辑 SDK：
+
+```bash
+# 仅首次创建；若资源配置覆盖了路径，以配置为准
+uv venv --python 3.12 ~/ProjectAirSim/.venv
+python3 simulator/projectairsim/setup_client.py --check
+python3 simulator/projectairsim/setup_client.py
+```
+
+SDK 源码不复制到主仓库，安装后无需手动设置 PYTHONPATH 即可使用配置中的解释器
+导入 `projectairsim` 和 `ImageDisplay`。其他场景采用不同资源时，用
+`--source-resource` / `--python-resource` 显式选择对应资源名。
+详见 [ProjectAirSim 接入说明](../simulator/projectairsim/README.md)。
 
 ```bash
 # 使用默认配置（先设置其中的安装路径）

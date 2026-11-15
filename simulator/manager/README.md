@@ -1,5 +1,7 @@
 # Simulator Manager
 
+开发前阅读 [原生能力与显示接口开发参考](../../docs/ProjectAirSim原生显示接口核查.md)，核对原生能力、来源版本、通信限制与本项目扩展边界。
+
 用户配置入口为根目录 [config/](../../config/README.md)，默认读取
 `config/simulator/default.yaml`；同目录其他场景 YAML 使用 `--config` 显式选择。
 普通场景 YAML 可纳入 Git，只有 `*.local.yaml` 被忽略。启动命令为
