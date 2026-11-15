@@ -27,7 +27,7 @@ description: 迁移或复现无人机 Planner 时使用；识别计划产物与�
 和共享 AS2 `NavigationModule`（`drone.navigation`），具体服务端放在当前 Planner 的
 `ros2_adapter/`。先核对原有目标、执行、结果与停止机制，将这些机制映射到公共接口，
 保留算法已有规划逻辑。Point/Pose 通过显式约束共享入口，不支持的要求明确返回原因。
-参考 [公共调用契约](../../src/planner/python_api/README.md)；SUPER 的 PC Docker 实现
+参考 [公共调用契约](../../src/tool/navigation/python_api/README.md)；SUPER 的 PC Docker 实现
 提供已验证样例，其他 Planner 的支持需分别验证。Demo 是调用方，算法专有 Topic/Service
 由适配层封装，公共 Module 不包含算法专有协议。
 

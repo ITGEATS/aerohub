@@ -6,7 +6,7 @@
 ## 范围与检查矩阵
 
 公共 Action 与 Python Module 沿用 SUPER 实现，不新增 YOPO 专属上层接口。
-新增服务端在 `src/planner/yopo/ros2_adapter/uav_yopo_planner/navigation.py`，
+新增服务端在 `src/tool/navigation/planner/yopo/ros2_adapter/uav_yopo_planner/navigation.py`，
 `navigation_action` 默认关闭，Demo 显式开启。初版工作站 Demo 直接使用公共 ROS Action（后续已补齐 Module 调用，见文末）；
 真实 AS2 `drone.load_module('navigation')` / `drone.navigation` 与 YOPO 的连接在接口测试中验证。
 两种方式使用同一个 Action 服务端。
