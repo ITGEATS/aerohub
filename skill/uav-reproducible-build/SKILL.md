@@ -59,13 +59,6 @@ description: 为无人机算法及 AS2 扩展建立固定工具镜像内的可�
 
 ROS shell 环境脚本不一定支持 Bash nounset。入口可在 source ROS/AS2/colcon setup 时暂不启用 `set -u`，加载后再启用；用真实目标镜像构造节点，而不只做 Python 语法检查。Python ROS 节点避免以 `handle`、`clients` 等 Node 只读属性命名自己的状态；目标 rclpy 的真实构造检查能检出这类问题。
 
-## 同名算法包与交付路径
+## 同名 ROS 包隔离
 
-两个算法包含同名 ROS 包时，目录隔离仍不够：同时隔离包发现、build、install 和运行时
-overlay，构建前拒绝把另一算法同步进已有工作区。EGO-Planner-v2 与 Swarm-Formation
-均含 ego_planner/traj_utils，EGO需显式选择专用工作区，不能加入既有 all 包集合。
-
-从迁移副本整理进正式目录时，检查任务脚本的父目录计算、容器挂载、配置引用和测试
-fixture路径；用新外部工作区构建并加载当前消息/Adapter，不能借旧volume的成功掩盖
-缺失文件。冻结的最小反例可随测试提交，原始大日志只保留索引与哈希。此检查不自动
-证明目录整理后的飞行闭环通过，报告须区分历史验收与新构建/加载结果。
+不同算法包含同名 ROS 包时，源码目录分开不能消除包发现与运行时解析冲突。构建时隔离包发现范围、build 和 install，运行时检查所加载 overlay 的包前缀，避免选中另一个算法的同名包。
