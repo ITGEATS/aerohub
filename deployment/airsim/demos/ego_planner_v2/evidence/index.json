@@ -162,6 +162,150 @@
       "original": "log/ego_planner_v2/dual-crossing-09/result.json",
       "sha256": "0615a6f36b3dc5c332065c3ec20601126bc68ed5b61936840530cad3de1a5efc",
       "bytes": 4566
+    },
+    {
+      "file": "evidence/hybrid/hybrid-ground-20261113-01/hybrid-ground-05/ground-audit.json",
+      "original": "migration-log/hybrid-ground-20261113-01/hybrid-ground-05/ground-audit.json",
+      "sha256": "df9cd58b67ea51af6f7f0c7584a79e05da36b4254784e293b7f25073d24ad8d0",
+      "bytes": 4753
+    },
+    {
+      "file": "evidence/hybrid/hybrid-flight-20261113-01/hybrid-flight-01/mission-basic/stage-audit.json",
+      "original": "migration-log/hybrid-flight-20261113-01/hybrid-flight-01/mission-basic/stage-audit.json",
+      "sha256": "f74d4c44bb9bbaffd6690cbb172495cacef355ae1af2b05ffcf1c951bcc05e6b",
+      "bytes": 1141
+    },
+    {
+      "file": "evidence/hybrid/hybrid-flight-20261113-01/hybrid-flight-01/mission-short/stage-audit.json",
+      "original": "migration-log/hybrid-flight-20261113-01/hybrid-flight-01/mission-short/stage-audit.json",
+      "sha256": "986f20fc408f5a5522004bc98fb6c10d0194ca1f89cb8f4bf0afcc9d25144d47",
+      "bytes": 1724
+    },
+    {
+      "file": "evidence/hybrid/hybrid-flight-20261113-01/hybrid-flight-01/flight-session-audit.json",
+      "original": "migration-log/hybrid-flight-20261113-01/hybrid-flight-01/flight-session-audit.json",
+      "sha256": "181d37f55f7f7faf77d54680e6733d293b2b1d24893bd716220695cb0bc08805",
+      "bytes": 2935
+    },
+    {
+      "file": "evidence/hybrid/hybrid-crossing-20261113-01/hybrid-crossing-01/mission-basic/stage-audit.json",
+      "original": "migration-log/hybrid-crossing-20261113-01/hybrid-crossing-01/mission-basic/stage-audit.json",
+      "sha256": "8a115fffadfef11b6c86552c7106de025fdae7354433f1646c4dde6ebf255688",
+      "bytes": 1138
+    },
+    {
+      "file": "evidence/hybrid/hybrid-crossing-20261113-01/hybrid-crossing-01/mission-crossing/stage-audit.json",
+      "original": "migration-log/hybrid-crossing-20261113-01/hybrid-crossing-01/mission-crossing/stage-audit.json",
+      "sha256": "821db262fbcb4e023d0b3a5df13d5c3bf41a822a25c01e7e6dc38f1d65e87f88",
+      "bytes": 3017
+    },
+    {
+      "file": "evidence/hybrid/hybrid-crossing-20261113-01/hybrid-crossing-01/flight-session-audit.json",
+      "original": "migration-log/hybrid-crossing-20261113-01/hybrid-crossing-01/flight-session-audit.json",
+      "sha256": "c18ec75a776cab42f7475965cdf6bcb1423ad921c02c1a4cccca2c49e9c33484",
+      "bytes": 12077
+    },
+    {
+      "file": "evidence/hybrid/fault/final-d0-cancel-01/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-resume-20261113/final-d0-cancel-01/mission-fault/stage-audit.json",
+      "sha256": "807165d392dba15b90698d46e0ef079d59f81ec7ad039c6a6bfe43fb99e17866",
+      "bytes": 3006
+    },
+    {
+      "file": "evidence/hybrid/fault/final-d0-cancel-01/flight-session-audit.json",
+      "original": "ego-hybrid-resume-20261113/final-d0-cancel-01/flight-session-audit.json",
+      "sha256": "5a2d5d25aa8295f1a2cd9cbb383cfde8ccdc7b32989336dc150391d122281810",
+      "bytes": 3251
+    },
+    {
+      "file": "evidence/hybrid/fault/final-d0-planner-exit-02/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-resume-20261113/final-d0-planner-exit-02/mission-fault/stage-audit.json",
+      "sha256": "7c159de45703f0970fd21d01bdefeaa13fe8e7ad7df3ee07ec6a1665943269d1",
+      "bytes": 2971
+    },
+    {
+      "file": "evidence/hybrid/fault/final-d0-planner-exit-02/flight-session-audit.json",
+      "original": "ego-hybrid-resume-20261113/final-d0-planner-exit-02/flight-session-audit.json",
+      "sha256": "a6a34755bf3898e31e4ebab103f443fba45c1bc01495a6cfb7c983a04dc51244",
+      "bytes": 2549
+    },
+    {
+      "file": "evidence/hybrid/fault/d0-cloud-03/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d0-cloud-03/mission-fault/stage-audit.json",
+      "sha256": "c2d5cb2866caa4db34bed70c5d2998217730ef3672ee60c1a666aaa008bc9b47",
+      "bytes": 3097
+    },
+    {
+      "file": "evidence/hybrid/fault/d0-cloud-03/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d0-cloud-03/flight-session-audit.json",
+      "sha256": "2595c84881091529c02b060ae98d4938bd5080496d2efb4c5cdc259e2248c973",
+      "bytes": 3368
+    },
+    {
+      "file": "evidence/hybrid/fault/d0-odom-03/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d0-odom-03/mission-fault/stage-audit.json",
+      "sha256": "61bb6076a5ad0a7074d3fde6b4677a9c4168dcfdd1a9e349f3e5393bd642e882",
+      "bytes": 3095
+    },
+    {
+      "file": "evidence/hybrid/fault/d0-odom-03/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d0-odom-03/flight-session-audit.json",
+      "sha256": "d7e40fafb957e267207c6d7513b7d9d3750bd79d05e53d626240f30b85455d01",
+      "bytes": 3361
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-cancel-05/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-cancel-05/mission-fault/stage-audit.json",
+      "sha256": "66d31cbb976be31f513e74e859cbd00a6294c29a064c4af063f878f165ccf14f",
+      "bytes": 3007
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-cancel-05/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-cancel-05/flight-session-audit.json",
+      "sha256": "20c1745d90dcc4883c46ba4c12917a9d8f9d60fa66021456d9b528ee9195d262",
+      "bytes": 3136
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-planner-exit-05/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-planner-exit-05/mission-fault/stage-audit.json",
+      "sha256": "ec415b54776b6a187078d1372663881e2253d30adf3cebec1587e30cfea8aa68",
+      "bytes": 2971
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-planner-exit-05/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-planner-exit-05/flight-session-audit.json",
+      "sha256": "9dc4c6896c11723e465daf38f612bcd9ed6bd5533830aefc87fb71a31a67c88f",
+      "bytes": 1854
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-cloud-06/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-cloud-06/mission-fault/stage-audit.json",
+      "sha256": "6949de7c3ac19ae38a4cd8b35c53f7b1f15e3af07b40f59488ff7b91bf4bc0ba",
+      "bytes": 3089
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-cloud-06/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-cloud-06/flight-session-audit.json",
+      "sha256": "dfdfa17bb730ca8475bf740698cb19940ddf0f8c316bc9fac14f9091c1921325",
+      "bytes": 3362
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-odom-07/mission-fault/stage-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-odom-07/mission-fault/stage-audit.json",
+      "sha256": "691c02a4e4bd00da15890a2a4787e3913ba64c151a07ee4c14c26d8a6a63c8a1",
+      "bytes": 3094
+    },
+    {
+      "file": "evidence/hybrid/fault/d1-odom-07/flight-session-audit.json",
+      "original": "ego-hybrid-remaining-20261114/d1-odom-07/flight-session-audit.json",
+      "sha256": "3d557fbb0618d15d673765a096b1b0434ee507367283fb9fd761ef006046ccd6",
+      "bytes": 3482
+    },
+    {
+      "file": "evidence/hybrid/summary.json",
+      "original": "derived mixed-audit index; references retained source archives",
+      "sha256": "ad4ffddcb0122674fea9883adab951c39129886e27b686e996fa8440f629ca84",
+      "bytes": 12119
     }
   ]
 }

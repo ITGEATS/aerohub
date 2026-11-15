@@ -34,23 +34,43 @@ class Contracts(unittest.TestCase):
         bad=copy.deepcopy(segment);bad['vehicles'][0]['points'][-1]['v'][0]=.01
         self.assertFalse(check([bad]))
 
-    def test_candidate_scope_mismatch_is_rejected(self):
+    def test_candidate_configuration_and_scope(self):
         config=json.loads((run.HERE/'config.example.json').read_text())
-        config.update(candidate='/data/aerohub/validation/ego-v2-20261112',vehicle='')
-        scoped=dict(config,candidate='/data/aerohub/validation/ego-v2-scoped-20261113',vehicle='drone0')
+        scoped=dict(config,candidate='/data/aerohub/validation/team-ego-r2',vehicle='drone0')
         run.validate(scoped)
-        for invalid in (dict(scoped,vehicle=''),dict(config,vehicle='drone0'),dict(scoped,vehicle='drone1')):
-            with self.assertRaises(ValueError): run.validate(invalid)
+        legacy=dict(scoped,vehicle='')
+        run.validate(legacy)
+        self.assertEqual(run.topic_map(legacy),{})
+        for vehicle in ('drone1', None):
+            with self.assertRaises(ValueError): run.validate(dict(scoped,vehicle=vehicle))
         self.assertEqual(run.topic_map(scoped)['/ego/cancel'],'/drone0/ego/cancel')
-        self.assertEqual(run.topic_map(config),{})
+
+    def test_candidate_cannot_escape_isolated_installation(self):
+        config=json.loads((run.HERE/'config.example.json').read_text())
+        for candidate in ('/sys_prod/robot', '/data/aerohub/validation',
+                          '/data/aerohub/validation/../lib', '/data/aerohub/validation/x/y',
+                          '/data/aerohub/validation/x/', '/data/aerohub/validation/x;true',
+                          '/data/aerohub/validation/x\n', 'relative', None):
+            with self.subTest(candidate=candidate),self.assertRaises(ValueError):
+                run.validate(dict(config,candidate=candidate))
 
     def test_scoped_prepare_carries_same_mapping_on_board(self):
         config=json.loads((run.HERE/'config.example.json').read_text())
-        config.update(candidate='/data/aerohub/validation/ego-v2-scoped-20261113',vehicle='drone0')
+        config.update(candidate='/data/aerohub/validation/team-ego-r2',vehicle='drone0')
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/'scoped-01';run.prepare(out,config)
             self.assertEqual((out/'bundle/interfaces.py').read_bytes(),(run.HERE/'interfaces.py').read_bytes())
             self.assertEqual(json.loads((out/'bundle/config.json').read_text())['vehicle'],'drone0')
+
+    def test_legacy_prepare_preserves_global_interface_configuration(self):
+        config=json.loads((run.HERE/'config.example.json').read_text())
+        config.update(candidate='/data/aerohub/validation/team-legacy',vehicle='')
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/'legacy-01';run.prepare(out,config)
+            restored=json.loads((out/'bundle/config.json').read_text())
+            self.assertEqual(restored['vehicle'],'')
+            self.assertEqual(run.topic_map(restored),{})
+            self.assertEqual(restored['remote'],config['candidate']+'/sessions/legacy-01')
 
     def test_planner_kill_requires_exact_session_identity(self):
         tree=ast.parse((run.HERE/'board_fault_injector.py').read_text())

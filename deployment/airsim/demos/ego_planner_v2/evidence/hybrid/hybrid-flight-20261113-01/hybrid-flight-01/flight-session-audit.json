@@ -1,0 +1,131 @@
+{
+  "passed": true,
+  "passed_checks": 13,
+  "total_checks": 13,
+  "checks": {
+    "basic_independent_audit": true,
+    "short_independent_audit": true,
+    "ground_observation": true,
+    "board_archive_hash": true,
+    "drone0_actual_native_peer_consumption": true,
+    "drone0_safe_stop": true,
+    "drone0_ten_nodes_exit_cleanly": true,
+    "drone1_actual_native_peer_consumption": true,
+    "drone1_safe_stop": true,
+    "drone1_ten_nodes_exit_cleanly": true,
+    "pc_thread_owned": true,
+    "pc_participants_unique": true,
+    "live_moving_fleet_camera": true
+  },
+  "metrics": {
+    "drone0_native_peer_accepts": [
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 1,
+        "start": 1794542639.9512842
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 2,
+        "start": 1794542640.9893064
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 3,
+        "start": 1794542642.0183284
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 4,
+        "start": 1794542643.0593505
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 5,
+        "start": 1794542644.0913725
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 6,
+        "start": 1794542645.1173944
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 7,
+        "start": 1794542646.1434164
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 8,
+        "start": 1794542647.1754384
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 9,
+        "start": 1794542647.634448
+      }
+    ],
+    "drone1_native_peer_accepts": [
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 1,
+        "start": 1794542640.0532863
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 2,
+        "start": 1794542641.0943086
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 3,
+        "start": 1794542642.1203306
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 4,
+        "start": 1794542643.1583526
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 5,
+        "start": 1794542644.196375
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 6,
+        "start": 1794542645.2193966
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 7,
+        "start": 1794542646.2424185
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 8,
+        "start": 1794542647.4304438
+      }
+    ],
+    "camera_centroid_excursion_m": 2.114900344105345,
+    "camera_actual_sample_span_s": 110.12608695030212
+  },
+  "scope": "Real native MINCO accepted into peer planner state, mixed flight, live moving camera and owned node cleanup; no crossing-avoidance claim"
+}

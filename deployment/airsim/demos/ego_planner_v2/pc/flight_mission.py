@@ -160,7 +160,7 @@ class Mission(Node):
 
     def collision_checkpoint(self, label):
         """Only call when stationary, outside takeoff, navigation and landing."""
-        if self.phase not in ('preflight','holding','ego','landed') or ('odom' in self.latest and self.speed()>.15):
+        if self.phase not in ('preflight','holding','ego','fault_hold','landed') or ('odom' in self.latest and self.speed()>.15):
             raise RuntimeError('collision checkpoint requires stationary flight boundary')
         self.collision_snapshot = self.rpc.call('simGetCollisionInfo', self.vehicle_name)
         self.event(collision_checkpoint=label, collision=self.collision_snapshot, collision_fresh=True)

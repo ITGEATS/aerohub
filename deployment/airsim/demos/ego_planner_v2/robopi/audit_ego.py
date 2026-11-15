@@ -40,7 +40,7 @@ def source_peak(poly, derivative):
     return max(values)
 
 
-def authorized_holds(polys, segments, goal):
+def authorized_holds(polys, segments, goal, vehicle_id='drone0'):
     """Independent raw-record check; never extrapolate an unrecorded final hold."""
     holds = []
     for poly in polys:
@@ -53,7 +53,7 @@ def authorized_holds(polys, segments, goal):
                 continue
             start = segment['start_ns']
             for vehicle in segment['vehicles']:
-                if vehicle['vehicle_id']!='drone0':
+                if vehicle['vehicle_id']!=vehicle_id:
                     continue
                 points = vehicle['points']
                 stop = start+points[-1]['t_ns']

@@ -25,7 +25,7 @@ for group,folder in [('native_sha256','native'),('adapter_sha256','bridge')]:
 evidence=json.loads((demo/'evidence/index.json').read_text())
 for row in evidence['files']:
     if sha(demo/row['file'])!=row['sha256']:errors.append('evidence hash '+row['file'])
-for p in [component/'README.md',component/'ros2_adapter/bridge/README.md',demo/'README.md',demo/'VALIDATION.md',demo/'robopi/README.md']:
+for p in [component/'README.md',component/'ros2_adapter/bridge/README.md',demo/'README.md',demo/'VALIDATION.md',demo/'robopi/README.md',demo/'hybrid/README.md',demo/'HYBRID_PREPARATION.md']:
     for link in re.findall(r'\]\(([^)]+)\)',p.read_text(encoding='utf8')):
         if '://' in link or link.startswith('#'):continue
         target=link.split('#')[0]

@@ -8,6 +8,7 @@ import run
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('output',type=Path)
 parser.add_argument('--sync-if-needed',action='store_true')
+parser.add_argument('--sync-margin',type=float,default=.5,help='Disarmed maintenance trigger; acceptance gate remains 0.5 s')
 args=parser.parse_args()
 config=json.loads((args.output/'config.json').read_text())
 
@@ -22,7 +23,8 @@ def probe():
 
 before=probe(); result=dict(before=before)
 best=min(before,key=lambda r:r['rtt'])
-if abs(best['offset'])+best['rtt']/2>.5 and args.sync_if_needed:
+if not 0<args.sync_margin<=.5:raise ValueError('Sync margin must be in (0, 0.5]')
+if abs(best['offset'])+best['rtt']/2>args.sync_margin and args.sync_if_needed:
     state=run.board_action(config,'status')
     if not state['status_fresh'] or any(state['status'].get(k) is not False for k in ('armed','px4_armed')):
         raise RuntimeError('Fresh disarmed state required for authorized clock sync')
@@ -32,6 +34,7 @@ if abs(best['offset'])+best['rtt']/2>.5 and args.sync_if_needed:
     result['after']=probe()
 best=min(result.get('after',before),key=lambda r:r['rtt'])
 result['bound_s']=abs(best['offset'])+best['rtt']/2
+result['sync_margin_s']=args.sync_margin
 result['passed']=result['bound_s']<=.5
 run.write(args.output/('clock-preflight-'+str(time.time_ns())+'.json'),result)
 print(json.dumps(result,indent=2))

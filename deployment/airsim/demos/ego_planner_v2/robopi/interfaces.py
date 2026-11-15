@@ -1,17 +1,23 @@
 """Explicit interface mapping shared by runtime, clients and evidence collection."""
 
 
+def probe_prefix(run):
+    from policy import run_id
+    return '/acceptance/run_'+run_id(run).replace('-', '_')+'/'
+
+
 def topic_map(config):
     if not config.get('vehicle'):
         return {}
-    if config['vehicle'] != 'drone0':
-        raise ValueError('This single-aircraft entry owns drone0 only')
+    if config['vehicle'] not in ('drone0', 'drone1'):
+        raise ValueError('Supported compute scopes are drone0 and drone1')
+    ns = config['vehicle']
     return {
-        '/ego/goal': '/drone0/ego/goal',
-        '/ego/cancel': '/drone0/ego/cancel',
-        '/ego/status': '/drone0/ego/status',
-        '/ego/drone0/odom': '/drone0/ego/native/odom',
-        '/ego/drone0/points': '/drone0/ego/native/points',
-        '/planner/trajectory': '/drone0/planner/trajectory',
-        '/planner/failure': '/drone0/planner/failure',
+        '/ego/goal': f'/{ns}/ego/goal',
+        '/ego/cancel': f'/{ns}/ego/cancel',
+        '/ego/status': f'/{ns}/ego/status',
+        '/ego/drone0/odom': f'/{ns}/ego/native/odom',
+        '/ego/drone0/points': f'/{ns}/ego/native/points',
+        '/planner/trajectory': f'/{ns}/planner/trajectory',
+        '/planner/failure': f'/{ns}/planner/failure',
     }

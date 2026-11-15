@@ -39,11 +39,13 @@ def validate(config):
         ipaddress.IPv4Address(config[key])
     if config['pc_ip'] == config['board_ip']:
         raise ValueError('PC and board must have different addresses')
-    candidates = {'/data/aerohub/validation/ego-v2-20261112': '',
-                  '/data/aerohub/validation/ego-v2-scoped-20261113': 'drone0',
-                  '/data/aerohub/validation/ego-v2-pr1': 'drone0'}
-    if config['candidate'] not in candidates or config.get('vehicle', '') != candidates[config['candidate']]:
-        raise ValueError('Candidate and explicit vehicle scope must match')
+    # The installation name is local configuration, not a list of past test runs.
+    # Keep a canonical isolated prefix because it is also used in remote commands.
+    if not isinstance(config.get('candidate'), str) or not re.fullmatch(
+            r'/data/aerohub/validation/[A-Za-z0-9][A-Za-z0-9_-]{0,63}', config['candidate']):
+        raise ValueError('candidate must be a direct named child of /data/aerohub/validation')
+    if config.get('vehicle', '') not in ('', 'drone0'):
+        raise ValueError('Single-board scope must be empty (legacy) or drone0')
     topic_map(config)
     if not config.get('target'):
         raise ValueError('An explicit HDC target is required')

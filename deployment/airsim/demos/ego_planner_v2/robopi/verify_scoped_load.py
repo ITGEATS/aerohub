@@ -17,11 +17,17 @@ if root.parent != Path('/data/aerohub/validation'):
     raise SystemExit('Expected an isolated validation candidate')
 manifest = json.loads((root/'deployment.json').read_text())
 checks = {}
-checks['all_manifest_hashes'] = all(hashlib.sha256((root/'install'/p).read_bytes()).hexdigest()==h
+checks['manifest_prefix'] = manifest['prefix'] == str(root)
+checks['all_manifest_hashes'] = bool(manifest['files']) and all(hashlib.sha256((root/'install'/p).read_bytes()).hexdigest()==h
                                   for p,h in manifest['files'].items())
 checks['target_python_abi'] = sysconfig.get_config_var('SOABI') == 'cpython-312-aarch64-linux-ohos'
 checks['new_adapter_modules'] = all(Path(m.__file__).is_relative_to(root) for m in (node, conversion, scope))
-checks['terminal_fix_sha'] = hashlib.sha256(Path(conversion.__file__).read_bytes()).hexdigest() == 'bbba1855ecdc68597cf49438eb3b21e1ef1f43216198b0785afef5fdbdc860e7'
+# Verify the loaded modules against this deployment, without freezing a past revision.
+checks['adapter_modules_match_manifest'] = all(
+    Path(m.__file__).is_relative_to(root/'install') and
+    manifest['files'].get(Path(m.__file__).relative_to(root/'install').as_posix()) ==
+    hashlib.sha256(Path(m.__file__).read_bytes()).hexdigest()
+    for m in (node, conversion, scope))
 native = Path(get_package_prefix('ego_planner'))/'lib/ego_planner/ego_planner_node'
 data = native.read_bytes()
 checks['new_native_prefix_aarch64'] = native.is_relative_to(root) and data[:4]==b'\x7fELF' and struct.unpack_from('<H',data,18)[0]==183

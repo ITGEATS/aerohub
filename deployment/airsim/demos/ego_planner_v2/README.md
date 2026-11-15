@@ -1,7 +1,6 @@
-# EGO：PC 单／双机与 RoboPi 单机
+# EGO：PC、RoboPi 单机与混合双机
 
-本目录只交付 PC 单／双机和 RoboPi 单机。混合 RoboPi Drone0＋PC Drone1 的监管入口
-不在本 PR。历史飞行与本次整理检查分别见 [VALIDATION.md](VALIDATION.md)。
+本目录交付 PC 单／双机、RoboPi 单机，以及 RoboPi Drone0＋PC Drone1 的混合监管入口。历史飞行与本次整理检查分别见 [VALIDATION.md](VALIDATION.md)。
 
 ## 固定环境与构建
 
@@ -14,13 +13,27 @@
 Windows 示例，仓库根目录执行；工作区由操作者选择，不能与 Swarm 共用：
 
 ```powershell
-$env:EGO_PC_WORK = 'E:\aerohub-build\ego-pr1-pc'
+$env:EGO_PC_WORK = '<仓库外独立构建目录的绝对路径>'
 python deployment/airsim/demos/ego_planner_v2/run.py build --workspace $env:EGO_PC_WORK
 ```
 
 `build_pc.sh` 在 `/work` 下分别构建原生包、公共接口/FollowTimedPath、framework/Adapter。
 实际源码哈希保存在工作区 `source-manifest.json`。不需要旧迁移工作区或个人 Docker volume。
 原生包只有六个；不要对整个 AeroHub 的 `src/` 执行不加选择的 colcon 构建。
+
+## 本地配置与 Demo 约束
+
+| 内容 | 配置归属 |
+| --- | --- |
+| PC、RoboPi、AirSim 地址和 HDC target | 操作者的 config.local.json；仓库只提供示例地址和设备占位符 |
+| PC 构建目录 | pc_workspace / EGO_PC_WORK / --workspace；必须是仓库外独立工作区 |
+| 板端候选 | candidate 与部署 --as2-root 一致；/data/aerohub/validation 下的独立目录，启动时核对部署清单和文件哈希 |
+| 双机名称、起点、端口、短程/交叉路线与验收门限 | 本 Demo 的已验证场景契约；更换场景时需要对应复验，不能当作通用算法限制 |
+| 镜像摘要、目标 ABI、源码及历史证据哈希 | 可复现版本和验收来源记录，保留精确值 |
+
+各层级的 config.local.json 均被本目录 .gitignore 忽略；其他自选配置文件应放在仓库外。
+源码和资源路径从当前仓库推导，容器 /input、/work、/session 是挂载契约，不是宿主个人路径。
+历史证据中的测试日期和路径保留原貌，不参与运行默认值。这些 Demo 约束不写入通用 Skill。
 
 ## PC 仿真
 
@@ -68,12 +81,12 @@ bash tools/robopi/deploy_lib.sh --component as2 --include-ego   --as2-root /data
 ```
 
 运行包仅含算法/Adapter/AS2/导航及必要接口，故障任务和审计不会被装入 install。
-新候选位于 `/data/aerohub/validation/ego-v2-pr1`；旧已验收候选和系统 ROS 保留。
+上面的候选名仅为示例；可在 `/data/aerohub/validation/` 下选择独立目录，并让本地配置的 `candidate` 与 `--as2-root` 一致。目录名使用字母、数字、下划线或连字符，长度1–64，首字符为字母或数字。旧已验收候选和系统 ROS 保留。
 安装后在目标端加载该候选 board_env.sh，并运行 `verify_scoped_load.py <候选根>`；
 需另行传入该检查脚本，它不会进入生产 install。
 `prepare-only` 的打包检查不是新前缀板端飞行验收。
 
-复制 `robopi/config.scoped.example.json` 到本地配置，填当前 HDC target、IPv4、domain；
+复制 `robopi/config.scoped.example.json` 到本 Demo 的 `config.local.json`（Git 忽略），填当前 candidate、HDC target、IPv4、domain；
 `vehicle=drone0`。PC客户端加载上面构建的 EGO_PC_WORK。顺序执行：
 
 ```text
@@ -105,4 +118,10 @@ PX4使用命名配置 `UXRCE_DDS_PTCFG=2`。HDC在线或ping通过不能替代�
 这些检查不能替代 AirSim/PX4 动力学验收。
 
 已知边界：历史验收没有证明长期退出可靠性；后续混合场景曾暴露 AS2 估计器退出竞态
-及服务停止顺序问题，其修复与混合回归另行交付。本 PR 不包含未完成的修复。
+及服务停止顺序问题。现将已验收的 FollowPath 信号退出与服务停止顺序修复纳入；这不代表长期退出可靠性已解决。
+
+## RoboPi＋PC 混合双机
+
+混合入口及地面、短程、交叉、规划侧故障流程见 [hybrid/README.md](hybrid/README.md)。
+沿用同一个外部构建入口，复用 deployment/swarm；历史结果与本次整理检查分别记录。
+本目录的根 run.py 仍为 PC 构建/生命周期入口，混合运行使用 hybrid/run.py。

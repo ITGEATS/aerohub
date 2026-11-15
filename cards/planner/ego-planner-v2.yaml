@@ -42,4 +42,4 @@ type_specific:
 validation:
   stage: partial
   evidence: [deployment/airsim/demos/ego_planner_v2/VALIDATION.md]
-  limitations: [not-a-general-Mission-or-Tool, mixed-deployment-not-in-this-PR, no-real-flight, no-localization-loss-or-network-loss-acceptance]
+  limitations: [not-a-general-Mission-or-Tool, current-layout-board-flight-not-rerun, no-real-flight, no-localization-loss-or-network-loss-acceptance]

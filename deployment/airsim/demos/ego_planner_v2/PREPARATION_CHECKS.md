@@ -34,7 +34,7 @@ AS2执行组件的职责保持明确，未连接UE、PX4或RoboPi。结果摘要
 
 新 dev 更新了 AS2/Pixhawk 的 gitlink 和 OHOS 源码准备方式；本 Demo 仍明确使用原固定
 镜像及已验收候选。EGO native、Adapter、framework、interfaces、FollowPath 源码相对
-原构建输入未改变。验收 Skill 合并保留团队新增规则和本次每机/末端保持经验。
+原构建输入未改变。历史合并曾保留本次每机/末端保持经验；随后 Skill 复核已撤回这些项目特例，团队基线内容保留。
 本次未获取并重编译新 AS2 gitlink，未重新交叉编译或飞行，不能宣称新依赖已验收。
 
 Git 属性保留原生源码、Adapter 和历史证据的原始字节；暂存区 77 份 SHA256 已逐项验证。
@@ -42,3 +42,5 @@ Git 属性保留原生源码、Adapter 和历史证据的原始字节；暂存�
 
 同步后重新通过：66 个 Python 文件解析及来源/证据校验，部署布局 8/8，单机入口
 19/19，六个 Skill、Bash 与组件 YAML 检查。没有重复运行飞行或 ROS 动态矩阵。
+
+后续混合增量的检查单独记录在 [HYBRID_PREPARATION.md](HYBRID_PREPARATION.md)，不覆盖本页历史结果。

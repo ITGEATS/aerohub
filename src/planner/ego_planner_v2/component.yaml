@@ -15,6 +15,8 @@ deployment:
   pc_build: deployment/airsim/demos/ego_planner_v2/run.py build
   board_build: tools/robopi/build_lib.sh ego-planner-v2
   board_package: tools/robopi/deploy_lib.sh --component as2 --include-ego --as2-root /data/aerohub/validation/ego-v2-pr1
+  mixed_lifecycle: deployment/airsim/demos/ego_planner_v2/hybrid/run.py
+  mixed_instructions: deployment/airsim/demos/ego_planner_v2/hybrid/README.md
   board_lifecycle: deployment/airsim/demos/ego_planner_v2/robopi/run.py
   instructions: deployment/airsim/demos/ego_planner_v2/README.md
   roles: 'AirSim and PX4 SITL on PC; EGO/Adapter/AS2 on selected compute; task client on workstation'
@@ -27,5 +29,5 @@ lifecycle:
 validation:
   status: partial
   evidence: deployment/airsim/demos/ego_planner_v2/VALIDATION.md
-  scope: 'historical PC single/dual and RoboPi single simulation; relocation checks separately recorded'
-  exclusions: [mixed-pc-robopi, both-compute-on-one-board, real-flight, localization-loss, network-loss, long-term-reliability]
+  scope: 'historical PC single/dual, RoboPi single and mixed RoboPi/PC simulation; current-layout checks separately recorded'
+  exclusions: [both-compute-on-one-board, real-flight, localization-loss, network-loss, long-term-reliability]
