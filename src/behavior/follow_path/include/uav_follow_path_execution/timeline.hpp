@@ -5,11 +5,13 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace uav_follow_path_execution {
+inline constexpr double kContinuityNumericalEpsilon = 1e-3;
 using Vec = std::array<double, 3>;
 struct Point {
   double t{};
@@ -34,12 +36,36 @@ inline bool finite(const Vec & v) {
   return std::all_of(v.begin(), v.end(), [](double x) {return std::isfinite(x);});
 }
 inline void validate(const Path & p, double now) {
-  if (p.task.empty() || p.vehicle.empty() || p.frame.empty() || p.revision == 0 ||
-    !std::isfinite(now) || !std::isfinite(p.start) || !std::isfinite(p.generated) ||
-    p.start <= now || p.generated > now || p.generated > p.start ||
-    !std::isfinite(p.max_speed) || p.max_speed <= 0 || p.points.size() < 2 ||
-    p.fields > 7 || ((p.fields & 2) && !(p.fields & 1)))
-  {throw std::invalid_argument("invalid metadata or late trajectory");}
+  if (p.task.empty() || p.vehicle.empty() || p.frame.empty() || p.revision == 0) {
+    throw std::invalid_argument("missing required trajectory metadata");
+  }
+  if (!std::isfinite(now) || !std::isfinite(p.start) || !std::isfinite(p.generated)) {
+    throw std::invalid_argument("non-finite trajectory timestamp");
+  }
+  if (p.start <= now) {
+    std::ostringstream reason;
+    reason.precision(17);
+    reason << "late trajectory: start=" << p.start << " now=" << now
+           << " lag=" << now-p.start;
+    throw std::invalid_argument(reason.str());
+  }
+  if (p.generated > now) {
+    std::ostringstream reason;
+    reason.precision(17);
+    reason << "future generation timestamp: generated=" << p.generated << " now=" << now
+           << " lead=" << p.generated-now;
+    throw std::invalid_argument(reason.str());
+  }
+  if (p.generated > p.start) {
+    throw std::invalid_argument("trajectory generated after its start epoch");
+  }
+  if (!std::isfinite(p.max_speed) || p.max_speed <= 0) {
+    throw std::invalid_argument("invalid trajectory speed limit");
+  }
+  if (p.points.size() < 2) {throw std::invalid_argument("trajectory has fewer than two points");}
+  if (p.fields > 7 || ((p.fields & 2) && !(p.fields & 1))) {
+    throw std::invalid_argument("invalid trajectory field mask");
+  }
   double previous = -1;
   for (const auto & point : p.points) {
     if (!std::isfinite(point.t) || point.t < 0 || point.t <= previous ||
@@ -123,11 +149,15 @@ public:
       p.generated < previous.generated || p.start <= previous.start || p.start > previous.end())
     {throw std::invalid_argument("stale, excessive pending, or incompatible update");}
     const auto boundary = sample(previous, p.start);
-    if (distance(boundary.p, p.points.front().p) > position_tolerance ||
-      ((p.fields & 1) && distance(boundary.v, p.points.front().v) > velocity_tolerance) ||
-      ((p.fields & 2) && distance(boundary.a, p.points.front().a) > acceleration_tolerance) ||
+    if (distance(boundary.p, p.points.front().p) >
+        position_tolerance + kContinuityNumericalEpsilon ||
+      ((p.fields & 1) && distance(boundary.v, p.points.front().v) >
+        velocity_tolerance + kContinuityNumericalEpsilon) ||
+      ((p.fields & 2) && distance(boundary.a, p.points.front().a) >
+        acceleration_tolerance + kContinuityNumericalEpsilon) ||
       ((p.fields & 4) && std::abs(std::remainder(
-        boundary.yaw-p.points.front().yaw, 2*std::acos(-1.0))) > yaw_tolerance))
+        boundary.yaw-p.points.front().yaw, 2*std::acos(-1.0))) >
+        yaw_tolerance + kContinuityNumericalEpsilon))
     {throw std::invalid_argument("discontinuous trajectory replacement: position=" +
       std::to_string(distance(boundary.p, p.points.front().p)) + " velocity=" +
       std::to_string(distance(boundary.v, p.points.front().v)) + " acceleration=" +

@@ -23,6 +23,7 @@ def generate_launch_description():
         DeclareLaunchArgument("follow_path_plugin_name", default_value="follow_path_plugin_position"),
         DeclareLaunchArgument("timed_continuity_tolerance", default_value="0.15"),
         DeclareLaunchArgument("timed_acceleration_continuity_tolerance", default_value="1.4"),
+        DeclareLaunchArgument("timed_yaw_continuity_tolerance", default_value="0.15"),
     ]
     for behavior in ("takeoff", "land", "go_to"):
         description += module.get_behavior_launch_description(behavior)
@@ -37,6 +38,8 @@ def generate_launch_description():
             "timed_continuity_tolerance": LaunchConfiguration("timed_continuity_tolerance"),
             "timed_acceleration_continuity_tolerance": LaunchConfiguration(
                 "timed_acceleration_continuity_tolerance"),
+            "timed_yaw_continuity_tolerance": LaunchConfiguration(
+                "timed_yaw_continuity_tolerance"),
         }],
     ))
     return LaunchDescription(description)

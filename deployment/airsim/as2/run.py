@@ -84,6 +84,12 @@ def main():
                     if not 0.0 < value <= 20.0:
                         raise ValueError('AS2_TIMED_ACCELERATION_CONTINUITY_TOLERANCE must be in (0, 20]')
                     command.append(f'timed_acceleration_continuity_tolerance:={value}')
+                yaw = os.environ.get('AS2_TIMED_YAW_CONTINUITY_TOLERANCE')
+                if yaw:
+                    value = float(yaw)
+                    if not 0.0 < value <= 3.141592653589793:
+                        raise ValueError('AS2_TIMED_YAW_CONTINUITY_TOLERANCE must be in (0, pi]')
+                    command.append(f'timed_yaw_continuity_tolerance:={value}')
             elif len(command) > 2 and command[2].endswith('selected_behaviors.launch.py'):
                 raise ValueError('AS2_BEHAVIORS subset is incompatible with follow_path backend')
     if os.environ.get('AS2_TF_SCOPE')=='per-vehicle':

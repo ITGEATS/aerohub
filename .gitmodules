@@ -55,3 +55,7 @@
 [submodule "src/state_estimator/fast_livo2/dependencies/sophus"]
 	path = src/basic_function/state_estimator/fast_livo2/dependencies/sophus
 	url = https://github.com/strasdat/Sophus.git
+[submodule "src/tool/navigation/planner/falcon/upstream"]
+	path = src/tool/navigation/planner/falcon/upstream
+	url = https://github.com/Air-Suck/FALCON.git
+	branch = aerohub-ros2
