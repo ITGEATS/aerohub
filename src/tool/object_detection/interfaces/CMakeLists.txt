@@ -7,7 +7,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(uav_inference_interfaces REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/ObjectDetection.msg" "msg/ObjectDetectionFrame.msg" "srv/DetectObjects.srv"
+  "msg/ObjectDetection.msg" "msg/ObjectDetectionFrame.msg" "msg/ObjectObservation.msg" "srv/DetectObjects.srv" "srv/DetectSnapshot.srv"
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs uav_inference_interfaces)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()

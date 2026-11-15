@@ -5,6 +5,7 @@
 ```text
 src/
 ├── tool/
+│   ├── object_detection/   # 公共单次检测、实现适配与 AS2 Module
 │   └── navigation/
 │       ├── planner/       # cat_ora、swarm_formation、super、gcopter、ipc、yopo、diffphys
 │       ├── framework/     # 共用配置、轨迹校验、机群调用与执行协调
@@ -25,7 +26,7 @@ src/
 - Inference 是基础能力。`models/` 保存各工作中模型计算部分的适配、前后处理、依赖与验证；公共 runtime、ROS Adapter 和设备后端提供在线推理服务。YOPO 轨迹重建等导航逻辑仍位于 `tool/navigation/planner/`。
 - `navigation/interfaces/` 保留现有 `uav_planner_interfaces` 包。它历史上同时包含规划与 FollowTimedPath 执行协议；本次不拆包或更改类型，避免破坏现有消费者。
 - AS2、PX4 和仿真器依赖保留原位置。Demo Mission 脚本和部署编排仍在 `deployment/`，卡片仍在 `cards/`。
-- 尚未合入当前基线的目标检测分支不由此次整理自动合入。后续接入时，RGB-D Object Detection Tool 归 `tool/object_detection/`，YOLO 模型适配归 `basic_function/inference/models/yolo26n_seg/`。
+- RGB-D Object Detection Tool 位于 `tool/object_detection/`，对应用提供单次观测接口和 AS2 Module；YOLO 模型适配保留在 `basic_function/inference/models/yolo26n_seg/`，不承担任务编排。
 
 ## 路径迁移
 
