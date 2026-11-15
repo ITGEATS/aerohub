@@ -1,5 +1,5 @@
 {
-  "kind": "historical-summary-records-not-raw-bags",
+  "kind": "historical-and-current-summary-records-not-raw-bags",
   "files": [
     {
       "file": "evidence/fault-recovery-index.json",
@@ -306,6 +306,30 @@
       "original": "derived mixed-audit index; references retained source archives",
       "sha256": "ad4ffddcb0122674fea9883adab951c39129886e27b686e996fa8440f629ca84",
       "bytes": 12119
+    },
+    {
+      "file": "evidence/delivery-ground-20261115-01/ground-audit.json",
+      "original": "ego-delivery-ground-20261115/delivery-ground-20261115-01/ground-audit.json",
+      "sha256": "b33b8e4ef63311cf61cc3b5faf6f8b9d785be42296df09dcd447f20ee02bd424",
+      "bytes": 4753
+    },
+    {
+      "file": "evidence/delivery-ground-20261115-01/camera-result.json",
+      "original": "ego-delivery-ground-20261115/delivery-ground-20261115-01/camera-result.json",
+      "sha256": "6e6987cbdb801560a1de9d4d9486e252dbde266ea9e634c077a99644443ca36e",
+      "bytes": 2090
+    },
+    {
+      "file": "evidence/delivery-ground-20261115-01/board-install-after.json",
+      "original": "ego-delivery-ground-20261115/board-install-after.json",
+      "sha256": "2f92fb0d5d9d0b021652a48f4e1025ade4fdd1f89e650a4673a4ccb01a86876f",
+      "bytes": 120
+    },
+    {
+      "file": "evidence/delivery-ground-20261115-01/summary.json",
+      "original": "derived from ego-delivery-ground-20261115/result.json; local PC path omitted",
+      "sha256": "ae09f4dffc5b38c0710c3aaedc1236b75672f902b7bfbdf4535375993edb9875",
+      "bytes": 1623
     }
   ]
 }
