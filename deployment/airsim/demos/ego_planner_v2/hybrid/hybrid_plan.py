@@ -19,7 +19,7 @@ def shared_modules(root):
 def resolve(config, snapshot, shared_root):
     topology_module,view=shared_modules(shared_root)
     topology=topology_module.resolve_topology(config)
-    if topology['vehicle_count']!=2 or topology['board_vehicle']['name']!='drone0' or topology['coordination_mode']!='decentralized':
+    if topology['deployment_stage']!='hybrid_board' or topology['vehicle_count']!=2 or topology['board_vehicle']['name']!='drone0' or topology['coordination_mode']!='decentralized':
         raise ValueError('This acceptance entry requires decentralized RoboPi drone0 + PC drone1')
     settings=copy.deepcopy(snapshot)
     fleet={}

@@ -8,6 +8,6 @@ source /work/ground_overlay/install/local_setup.bash
 mkdir -p /work/ego_runtime
 cd /work/ego_runtime
 colcon --log-base log build --base-paths \
-  /input/src/planner/framework \
-  /input/src/planner/ego_planner_v2/ros2_adapter/bridge \
+  /input/src/tool/navigation/framework \
+  /input/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge \
   --build-base build --install-base install --executor sequential

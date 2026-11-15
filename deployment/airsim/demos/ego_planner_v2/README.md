@@ -2,6 +2,8 @@
 
 本目录交付 PC 单／双机、RoboPi 单机，以及 RoboPi Drone0＋PC Drone1 的混合监管入口。历史飞行与本次整理检查分别见 [VALIDATION.md](VALIDATION.md)。
 
+源码现位于 `src/tool/navigation/planner/ego_planner_v2/`。对齐 dev 的目录、配置与验证边界见 [合并检查](VALIDATION.md#对齐-dev-目录与共享配置2026-11-15)。
+
 ## 固定环境与构建
 
 使用已有镜像，不解包或修改镜像：

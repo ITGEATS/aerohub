@@ -57,9 +57,9 @@ def normalize_config(config):
     if (work/'component').read_text().strip()!='ego-planner-v2':
         raise ValueError('Workspace belongs to another component')
     manifest=json.loads((work/'source-manifest.json').read_text())
-    for rel in ('src/planner/ego_planner_v2/ros2_adapter/native',
-                'src/planner/ego_planner_v2/ros2_adapter/bridge',
-                'src/planner/interfaces','src/planner/framework','src/behavior/follow_path'):
+    for rel in ('src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native',
+                'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge',
+                'src/tool/navigation/interfaces','src/tool/navigation/framework','src/behavior/follow_path'):
         for path in (PROJECT/rel).rglob('*'):
             if not path.is_file() or '__pycache__' in path.parts:continue
             key=path.relative_to(PROJECT).as_posix()
@@ -79,7 +79,7 @@ def compute_command(out,config):
         '--memory','3g','--cpus','4','-p',ports(config,6,17 if config.get('fault_case') else 16),
         '-v',str(out)+':/session:ro',
         '-v',str(SINGLE)+':/single:ro','-v',str(HERE)+':/hybrid:ro',
-        '-v',str(PROJECT/'src/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
+        '-v',str(PROJECT/'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
         '-v',str(config['pc_workspace'])+':/work:ro',
         '-e','ROS_DOMAIN_ID='+str(config['domain']),'-e','ROS_LOCALHOST_ONLY=0',
         '-e','PYTHONDONTWRITEBYTECODE=1','-e','OPENBLAS_NUM_THREADS=1',
@@ -98,10 +98,10 @@ def prepare(out,config):
     config=dict(config,run_id=out.name,hybrid=True,remote=config['candidate']+'/sessions/'+out.name)
     write(out/'config.json',config)
     (out/'pc-runtime').mkdir()
-    schema=dict(schema_version=1,fleet=dict(vehicle_count=2,board_vehicle_index=0,name_prefix='drone',
+    schema=dict(schema_version=1,deployment={'stage':'hybrid_board'},fleet=dict(vehicle_count=2,board_vehicle_index=0,name_prefix='drone',
         airsim_name_prefix='Drone',initial_spacing_m=4.),
         nodes={'board':{'launch_command':['python3',config['remote']+'/board.py','start','--run-id',out.name]},
-               'pc':{'launch_command':compute_command(out,config)}},
+               'onboard_computer':{'image':single.ONBOARD,'launch_command':compute_command(out,config)}},
         coordination={'mode':'decentralized'},ground_station={'required':True,'placement':'pc',
             'launch_command':['python3','/hybrid/observe.py','/session','40']},
         airsim=dict(base_settings='settings.snapshot.json',rpc_port=41451,

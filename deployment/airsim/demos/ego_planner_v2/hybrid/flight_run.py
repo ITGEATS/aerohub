@@ -65,7 +65,7 @@ def flight(out,config):
                 '-v',str(out)+':/session:ro','-v',str(evidence)+':/evidence',
                 '-v',str(hybrid.DEMO/'pc')+':/input:ro','-v',str(HERE)+':/hybrid:ro',
                 '-v',str(hybrid.SINGLE)+':/single:ro',
-                '-v',str(hybrid.PROJECT/'src/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
+                '-v',str(hybrid.PROJECT/'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
                 '-v',str(config['pc_workspace'])+':/work:ro']
             if stage!='basic':args+=['-v',str(out/'mission-basic')+':/baseline:ro']
             script={'crossing':'crossing_client.py','fault':'fault_client.py'}.get(stage,'flight_client.py')

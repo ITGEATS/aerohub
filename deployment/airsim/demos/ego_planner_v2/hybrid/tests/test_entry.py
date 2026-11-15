@@ -19,9 +19,9 @@ class EntryTests(unittest.TestCase):
         self.root=Path(self.temp.name);self.work=self.root/'work';self.work.mkdir()
         (self.work/'component').write_text('ego-planner-v2\n')
         manifest={p.relative_to(entry.PROJECT).as_posix():entry.hashlib.sha256(p.read_bytes()).hexdigest()
-                  for rel in ['src/planner/ego_planner_v2/ros2_adapter/native',
-                              'src/planner/ego_planner_v2/ros2_adapter/bridge',
-                              'src/planner/interfaces','src/planner/framework','src/behavior/follow_path']
+                  for rel in ['src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native',
+                              'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge',
+                              'src/tool/navigation/interfaces','src/tool/navigation/framework','src/behavior/follow_path']
                   for p in (entry.PROJECT/rel).rglob('*') if p.is_file() and '__pycache__' not in p.parts}
         (self.work/'source-manifest.json').write_text(json.dumps(manifest))
         self.config=json.loads((HERE/'config.example.json').read_text())
@@ -72,6 +72,10 @@ class EntryTests(unittest.TestCase):
                 self.assertEqual(execute.call_count,1)
             plan=json.loads((out/'plan.json').read_text())
             self.assertEqual(plan['topology']['board_vehicle']['name'],'drone0')
+            self.assertEqual(plan['topology']['deployment_stage'],'hybrid_board')
+            self.assertEqual(plan['topology']['onboard_computer_image'],entry.single.ONBOARD)
+            self.assertEqual([v['placement'] for v in plan['topology']['vehicles']],
+                             ['physical_board','onboard_computer_container'])
             self.assertEqual([x['name'] for x in plan['topology']['pc_vehicles']],['drone1'])
             for vehicle,directory in [('drone0','bundle'),('drone1','drone1')]:
                 cfg=json.loads((out/directory/'config.json').read_text())
@@ -92,7 +96,7 @@ class EntryTests(unittest.TestCase):
         module=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(module)
         with patch.object(module,'ROOT',self.root):
             cfg=dict(self.config,fault_vehicle='drone1',vehicle='drone1',
-                     ego_launch_file=str(entry.PROJECT/'src/planner/ego_planner_v2/ros2_adapter/bridge/launch/ego_as2.launch.py'))
+                     ego_launch_file=str(entry.PROJECT/'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge/launch/ego_as2.launch.py'))
             (self.root/'config.json').write_text(json.dumps(cfg))
             context.launch_configurations.update(vehicle='drone1',resolved_config=str(entry.DEMO/'pc/ego_dual.yaml'),use_sim_time='true')
             actions=module.nodes(context)

@@ -10,17 +10,17 @@ if [[ -e /work/component && $(cat /work/component) != ego-planner-v2 ]]; then
 fi
 printf '%s\n' ego-planner-v2 > /work/component
 colcon --log-base /work/log/native build \
-  --base-paths /input/src/planner/ego_planner_v2/ros2_adapter/native \
+  --base-paths /input/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native \
   --build-base /work/build/humble --install-base /work/install/humble \
   --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 source /work/install/humble/local_setup.bash
 colcon --log-base /work/log/execution build \
-  --base-paths /input/src/planner/interfaces /input/src/behavior/follow_path \
+  --base-paths /input/src/tool/navigation/interfaces /input/src/behavior/follow_path \
   --build-base /work/ground_overlay/build --install-base /work/ground_overlay/install \
   --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 source /work/ground_overlay/install/local_setup.bash
 colcon --log-base /work/log/adapter build \
-  --base-paths /input/src/planner/framework /input/src/planner/ego_planner_v2/ros2_adapter/bridge \
+  --base-paths /input/src/tool/navigation/framework /input/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge \
   --build-base /work/ego_runtime/build --install-base /work/ego_runtime/install \
   --executor sequential --cmake-args -DBUILD_TESTING=OFF
 source /work/ego_runtime/install/local_setup.bash
@@ -28,8 +28,8 @@ python3 - <<'PY'
 import hashlib,json
 from pathlib import Path
 root=Path('/input')
-paths=['src/planner/ego_planner_v2/ros2_adapter/native','src/planner/ego_planner_v2/ros2_adapter/bridge',
-       'src/planner/interfaces','src/planner/framework','src/behavior/follow_path']
+paths=['src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native','src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge',
+       'src/tool/navigation/interfaces','src/tool/navigation/framework','src/behavior/follow_path']
 files={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
        for rel in paths for p in (root/rel).rglob('*') if p.is_file() and '__pycache__' not in p.parts}
 Path('/work/source-manifest.json').write_text(json.dumps(files,indent=2))

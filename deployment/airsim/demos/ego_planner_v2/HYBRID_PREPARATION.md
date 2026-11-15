@@ -65,3 +65,31 @@ AS2/Pixhawk gitlink的目标端兼容性仍为独立待办，不因本次路径�
 ego-delivery-ground-20261115 证据包，需维护者提供或按入口重新采集。
 本结果证明整理入口可使用现有产物运行地面链路；不等于新依赖构建、新前缀安装或完整飞行矩阵
 重跑，也不证明长期输入间歇已修复。osrf工作站切换与新AS2/Pixhawk依赖验证仍为独立待办。
+
+## 对齐 dev 目录与共享配置（2026-11-15）
+
+本分支合入 dev `cfb685ce3ce1fe772524dffd20ad7f4ff612de8b`。EGO 源码迁至
+`src/tool/navigation/planner/ego_planner_v2/`；构建、部署及测试引用同步更新。
+混合入口显式生成 `deployment.stage: hybrid_board` 与 `nodes.onboard_computer`，
+沿用既有 Drone0 板端 / Drone1 容器职责。卡片按 Card v1 迁移，运行接口和门限不变。
+
+旧外部工作区仍记录原源码路径；入口不会把它们视为当前目录已构建。保留原工作区与
+板端候选，后续构建应按新路径准备独立工作区，不能只改 source-manifest 来伪装重建。
+`native/README.md` 保留原迁移记录及其哈希，其中旧工作区命令不是当前 AeroHub 入口；
+当前命令以本 Demo 和 hybrid/README.md 为准。
+
+此次离线检查：89 个 Python 文件、55 个证据文件、43 个原生基线文件与 7 个 Adapter
+基线文件校验通过；部署布局 8 项、单机契约 21 项、混合入口 8 项、拓扑/Runtime 4 项、
+共享 swarm 18 项、Adapter 归属 7 项、ROS 曲线转换 5 项、FollowPath 数学 1 项，合计
+72 项通过。新路径发现 10 个 ROS 包；6 份 Skill 格式检查及 Shell 语法检查通过。
+本地检查归档为 `ego-dev-merge-20261115`。最初检查脚本的挂载路径与 colcon 日志位置
+问题已修正并补验；失败日志保留。
+
+这些是离线配置/消息/源码检查，ROS 测试复用原 PC 安装，仅验证未变接口的加载和行为；
+不是新路径全量构建、板端部署或飞行。历史地面 78/78 和飞行证据仍对应各自记录的版本。
+本次 dev 带入新的 AS2/Pixhawk gitlink，其目标端验证仍未完成；组件保持 partial。
+
+Card v1 检查：EGO 卡片及新增的四个数据类型引用通过。对同一校验器分别输入最新 dev
+和合并结果，全库均报告相同的 78 条既有旧卡片错误；本次新增错误为 0，未批量改写其他
+算法卡片。26 项交付来源哈希及 PowerShell 入口语法检查通过。相对 dev 的差异无空白错误；
+dev 自带的其他文件末尾空行保持原样。

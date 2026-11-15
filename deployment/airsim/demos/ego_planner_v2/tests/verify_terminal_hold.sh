@@ -15,11 +15,11 @@ export ROS_DOMAIN_ID=104 ROS_LOCALHOST_ONLY=1 PYTHONDONTWRITEBYTECODE=1 OPENBLAS
 export ROS_LOG_DIR=/tmp/ego-terminal-hold-ros-log
 unset FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
 workspace=$(mktemp -d /tmp/ego-terminal-hold.XXXXXX)
-colcon --log-base "$out/build-log" build --base-paths "$project/src/planner/ego_planner_v2/ros2_adapter/bridge" \
+colcon --log-base "$out/build-log" build --base-paths "$project/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge" \
     --build-base "$workspace/build" --install-base "$workspace/install" \
     --packages-select uav_ego_planner_adapter > "$out/build.txt" 2>&1
 source "$workspace/install/local_setup.bash"
-tests="$project/src/planner/ego_planner_v2/ros2_adapter/tests"
+tests="$project/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/tests"
 python3 -B "$tests/test_terminal_hold.py"
 python3 -B "$tests/test_as2_conversion.py"
 python3 -B "$tests/test_adapter_scope.py"

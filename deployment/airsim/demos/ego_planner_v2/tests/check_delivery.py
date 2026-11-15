@@ -7,7 +7,7 @@ import re
 import sys
 
 root=Path(sys.argv[1]).resolve();demo=root/'deployment/airsim/demos/ego_planner_v2'
-component=root/'src/planner/ego_planner_v2'
+component=root/'src/tool/navigation/planner/ego_planner_v2'
 errors=[];count=0
 for folder in (demo,component):
     for p in folder.rglob('*.py'):

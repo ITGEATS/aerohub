@@ -9,7 +9,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def nodes(context):
-    path='/input/src/planner/ego_planner_v2/ros2_adapter/bridge/launch/ego_as2.launch.py'
+    path='/input/src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge/launch/ego_as2.launch.py'
     spec=importlib.util.spec_from_file_location('production_launch',path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     result=module.nodes(context)

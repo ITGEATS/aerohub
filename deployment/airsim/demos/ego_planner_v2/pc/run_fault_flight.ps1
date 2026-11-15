@@ -40,7 +40,7 @@ Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object Name -NE '.env' | 
 $snapshot = Join-Path $out 'source_snapshot'
 New-Item -ItemType Directory -Path $snapshot | Out-Null
 Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Object Name -NE '.env' | Copy-Item -Destination $snapshot
-$sources = @('src/planner/ego_planner_v2/ros2_adapter/bridge', 'src/planner/ego_planner_v2/ros2_adapter/native', 'src/planner/framework', 'src/behavior/follow_path')
+$sources = @('src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge', 'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native', 'src/tool/navigation/framework', 'src/behavior/follow_path')
 $hashes = foreach ($relative in $sources) {
     Get-ChildItem -LiteralPath (Join-Path $projectRoot $relative) -Recurse -File |
         Where-Object { $_.FullName -notmatch '__pycache__|\.pyc$' } | Get-FileHash -Algorithm SHA256

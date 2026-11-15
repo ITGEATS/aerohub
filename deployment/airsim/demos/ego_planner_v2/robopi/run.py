@@ -151,7 +151,7 @@ def prepare(out, config):
         for p in [HERE/'mission_client.py', PROJECT/'deployment/airsim/demos/ego_planner_v2/pc/flight_mission.py',
                   PROJECT/'deployment/airsim/demos/ego_planner_v2/pc/ego_flight_mission.py',
                   PROJECT/'deployment/airsim/demos/ego_planner_v2/pc/ego_reference_check.py', HERE/'interfaces.py',
-                  *sorted((PROJECT/'src/planner/ego_planner_v2/ros2_adapter/bridge/uav_ego_planner_adapter').glob('*.py')),
+                  *sorted((PROJECT/'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge/uav_ego_planner_adapter').glob('*.py')),
                   HERE/'fault_mission.py']})
     write(out/'roles.json', {'board': ['AS2', 'navigation_inputs', 'EGO', 'Adapter'],
         'pc': ['AirSim (existing, separately managed)', 'PX4/Agent/sensors', 'clock', 'mission client'],
@@ -222,7 +222,7 @@ def mission(config, out, stage, baseline):
             '-v', str(out)+':/session:ro', '-v', str(evidence)+':/evidence',
             '-v', str(PROJECT/'deployment/airsim/demos/ego_planner_v2/pc')+':/input:ro',
             '-v', str(HERE)+':/entry:ro',
-            '-v', str(PROJECT/'src/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
+            '-v', str(PROJECT/'src/tool/navigation/planner/ego_planner_v2/ros2_adapter/bridge')+':/adapter-source:ro',
             '-v', os.environ['EGO_PC_WORK']+':/work:ro']
     if stage in ('ego', 'fault'):
         if baseline is None:

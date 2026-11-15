@@ -14,7 +14,7 @@ done
 python3 -B - <<'PY'
 from pathlib import Path
 import yaml
-for p in [Path('cards/planner/ego-planner-v2.yaml'),Path('src/planner/ego_planner_v2/component.yaml')]:
+for p in [Path('cards/planner/ego-planner-v2.yaml'),Path('src/tool/navigation/planner/ego_planner_v2/component.yaml')]:
     data=yaml.safe_load(p.read_text());assert data['id']
     print('YAML valid:',p)
 PY

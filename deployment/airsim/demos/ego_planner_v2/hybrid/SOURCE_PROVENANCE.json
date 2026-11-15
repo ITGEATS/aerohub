@@ -78,13 +78,13 @@
       "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/flight_run.py",
       "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/flight_run.py",
       "source_sha256": "dca395cb2fe1679b5f1ebd6424bcf2108250d9bbf9789221b0ced72b923aa347",
-      "delivered_sha256": "3140c2f7202268b09abb17cdde052b51b3a72da082c763b4417e56fb076f85c0"
+      "delivered_sha256": "43d43c8093806dc52f78df81051e859b5cf365fb2df1847e96cf7df161cb7649"
     },
     {
       "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/hybrid_plan.py",
       "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/hybrid_plan.py",
       "source_sha256": "21eb8a8270caa45a6e5ccfbffdaca0f6db416a5656850740dbe42cf772d7f5d2",
-      "delivered_sha256": "21eb8a8270caa45a6e5ccfbffdaca0f6db416a5656850740dbe42cf772d7f5d2"
+      "delivered_sha256": "a8889147b63c25b1e95b4c4948c67d20cd1d22f302c1cb62e52518bc45978fc8"
     },
     {
       "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/observe.py",
@@ -102,7 +102,7 @@
       "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/run.py",
       "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/run.py",
       "source_sha256": "00698e8d6fc1010d74b206264a6a4cf9860264b93bea17d03b88b6314f7732f8",
-      "delivered_sha256": "8574accf474f84b45f378b30979e7ef141dd3146fcc22932357e97281944af9f"
+      "delivered_sha256": "fb51e2a91ab82bf10829870fb0042e80e97a1d240f834fd9972b84813547c398"
     },
     {
       "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/tests/test_crossing_audit.py",
@@ -164,7 +164,8 @@
     "external workspace with source manifest verification",
     "single participant allocation, mission IDs outside compute pool",
     "clock synchronization opt-in; unchanged flight gate",
-    "shared in-repository MessagePack fallback"
+    "shared in-repository MessagePack fallback",
+    "dev cfb685c: navigation source layout and explicit hybrid_board/onboard_computer schema"
   ],
   "excluded": [
     "relaxed long-distance demo",
