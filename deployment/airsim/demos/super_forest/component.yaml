@@ -1,0 +1,42 @@
+schema_version: '0.1'
+id: aerohub.planner.super-single
+version: '0.1.0'
+source:
+  upstream: src/tool/navigation/planner/super/upstream
+  integration: src/tool/navigation/planner/super/ros2_adapter
+  provenance: src/tool/navigation/planner/super/ros2_adapter/native/SOURCE.json
+provides: [planner.super-single]
+cards: [cards/planner/super-single.yaml]
+roles:
+  compute: [SUPER-native, embedded-ROG-Map, SUPER-adapter, AS2, FollowTimedPath]
+  workstation: [AS2-navigation-module, ROS-task-client, simulation-scoring]
+  simulator: [AirSim, sensor-bridge]
+  flight_controller: [PX4-SITL]
+runtime:
+  images: ['uav/apps-super-forest:migration-main-behavior', 'flight_board:v0.1.0']
+  platform: linux-x86_64
+  execution_location: pc
+  dependencies: [as2_python_api, uav_planner_python_api, uav_planner_framework, uav_follow_path_execution, as2_navigation_inputs, ROS-2-Humble, AirSim, PX4-SITL]
+  build: deployment/airsim/demos/super_forest/build_navigation_overlay.sh
+  launch: deployment/airsim/demos/super_forest/run.py
+  configuration: deployment/airsim/demos/super_forest/planner.yaml
+  overlay: log/super-navigation/workspace/install
+  navigation_action: true
+  public_interfaces:
+    navigate:
+      address: /drone0/navigate_to_pose
+      schema: uav_planner_interfaces/action/NavigateToPose
+      parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+  python_entry: drone.navigation.to_point
+  stop: standard-navigation-Action-cancel-then-existing-execution-client-quiescent-before-native-Land
+  sharing: native-SUPER-embedded-map-and-adapter-form-one-deployment-stop-affects-navigation
+  provider_selection: one-selected-navigation-provider-per-UAV-public-address-no-cross-process-arbitrator
+  persistence: log/super-navigation
+resources:
+  motion: exclusive-drone0-FollowTimedPath-session
+  internal_map: SUPER-process-owned-not-the-independent-ROG-Map-component
+validation:
+  evidence: deployment/airsim/demos/super_forest/VALIDATION-navigation-20261114.md
+  supported_constraints: [UNCONSTRAINED, KEEP_YAW, deployed-speed-only]
+  arrival_semantics: configured-position-tolerance-low-speed-hold-and-execution-complete-then-confirm-stop
+  limitations: [PC-simulation-public-interface-only, no-target-orientation, no-real-hardware-public-interface-validation, no-generic-resource-arbitrator]

@@ -10,12 +10,12 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import String
 from std_srvs.srv import SetBool
 from uav_inference_interfaces.srv import InferDetections
-from uav_object_detection_interfaces.msg import ObjectDetectionFrame
+from uav_object_detection_interfaces.msg import ObjectDetection, ObjectDetectionFrame
 from uav_object_detection_interfaces.srv import DetectObjects
 from uav_inference.yolo_contract import array_image, seconds, validate_frame
 from tf2_ros import Buffer, TransformListener
@@ -32,22 +32,26 @@ class ObjectDetectionTool(Node):
         if not 0 < self.timeout < float('inf'):raise ValueError('timeout_s must be positive finite')
         self.streaming=self.declare_parameter('stream_enabled',False).value
         image_topic=self.declare_parameter('image_topic','sensor_measurements/FrontCamera/rgb/image').value
+        self.camera_qos = (QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
+                           if self.declare_parameter('camera_reliable', False).value
+                           else qos_profile_sensor_data)
         namespace=self.get_namespace().strip('/')
         output_frame=self.declare_parameter('output_frame',namespace+'/odom' if namespace else 'odom').value
-        self.tf_buffer=Buffer(node=self)
-        self.tf_listener=TransformListener(self.tf_buffer,self)
-        self.projector=Projector(self.tf_buffer,output_frame,
-            sync_tolerance=self.declare_parameter('sync_tolerance',.05).value,
-            transform_wait=self.declare_parameter('transform_wait',.25).value,
-            scale_16u=self.declare_parameter('depth_scale_16u',.001).value,
-            perspective=self.declare_parameter('depth_is_perspective',False).value,
-            registered=self.declare_parameter('registered_depth',False).value)
-        for kind,default in [('depth_topic','sensor_measurements/FrontCamera/depth_planar/image'),
-                             ('rgb_info_topic','sensor_measurements/FrontCamera/rgb/camera_info'),
-                             ('depth_info_topic','sensor_measurements/FrontCamera/depth_planar/camera_info')]:
-            topic=self.declare_parameter(kind,default).value
-            callback=self.on_depth if kind=='depth_topic' else lambda msg,key=kind:self.on_info('rgb' if key=='rgb_info_topic' else 'depth',msg)
-            self.create_subscription(Image if kind=='depth_topic' else CameraInfo,topic,callback,qos_profile_sensor_data)
+        self.tf_buffer = self.tf_listener = self.projector = None
+        self.position_lock = threading.Lock()
+        self.output_frame = output_frame
+        self.position_config = dict(
+            sync_tolerance=self.declare_parameter('sync_tolerance', .05).value,
+            transform_wait=self.declare_parameter('transform_wait', .25).value,
+            scale_16u=self.declare_parameter('depth_scale_16u', .001).value,
+            perspective=self.declare_parameter('depth_is_perspective', False).value,
+            registered=self.declare_parameter('registered_depth', False).value)
+        self.position_topics = {
+            kind: self.declare_parameter(kind, default).value
+            for kind, default in [
+                ('depth_topic', 'sensor_measurements/FrontCamera/depth_planar/image'),
+                ('rgb_info_topic', 'sensor_measurements/FrontCamera/rgb/camera_info'),
+                ('depth_info_topic', 'sensor_measurements/FrontCamera/depth_planar/camera_info')]}
         self.generation=time.time_ns();self.enabled=True
         self.lock=threading.RLock();self.call_lock=threading.Lock()
         self.pending=None;self.last_rgb=self.last_clock=0.
@@ -62,12 +66,37 @@ class ObjectDetectionTool(Node):
         self.health=self.create_publisher(String,'tools/object_detection/status',10)
         self.overlay=self.create_publisher(Image,'perception/object_detection/overlay',qos_profile_sensor_data)
         if self.streaming:
-            self.create_subscription(Image,image_topic,self.on_rgb,qos_profile_sensor_data)
+            self.create_subscription(Image,image_topic,self.on_rgb,self.camera_qos)
         self.create_subscription(String,'inference/yolo/status',lambda m:setattr(self,'model',json.loads(m.data)),10)
         self.create_service(DetectObjects,'tools/object_detection/detect',self.service,callback_group=group)
         self.create_service(SetBool,'tools/object_detection/enable',self.enable,callback_group=group)
+        from .snapshot import SnapshotAdapter
+        self.snapshot = SnapshotAdapter(self, image_topic)
         self.create_timer(.05,self.tick)
+        if self.streaming:
+            self._ensure_position_inputs()
         self.worker=threading.Thread(target=self.work,daemon=True);self.worker.start()
+
+    def _ensure_position_inputs(self):
+        """Activate RGB-D/TF consumers only for explicit 3D or legacy use."""
+        with self.position_lock:
+            if self.projector is not None:
+                return
+            buffer = Buffer(node=self)
+            projector = Projector(buffer, self.output_frame, **self.position_config)
+            self.tf_buffer = buffer
+            self.projector = projector
+            # Dynamic TF is a continuously refreshed state stream. A best-effort
+            # reader avoids reliable retransmission backlog on the shared image
+            # transport. Buffer still queries the exact capture stamp; static TF
+            # keeps TransformListener's reliable transient-local defaults.
+            self.tf_listener = TransformListener(buffer, self, qos=qos_profile_sensor_data)
+            for kind, topic in self.position_topics.items():
+                callback = (self.on_depth if kind == 'depth_topic' else
+                            lambda msg, key=kind: self.on_info(
+                                'rgb' if key == 'rgb_info_topic' else 'depth', msg))
+                self.create_subscription(Image if kind == 'depth_topic' else CameraInfo,
+                                         topic, callback, self.camera_qos)
 
     def now(self):return self.get_clock().now().nanoseconds/1e9
 
@@ -102,13 +131,15 @@ class ObjectDetectionTool(Node):
             if self.pending is not None:self.dropped+=1
             self.pending=(self.generation,msg)
 
-    def infer(self,request):
+    def infer(self,request,category=None,observation_active=None,estimate_position=True):
         if not self.call_lock.acquire(blocking=False):raise ValueError('BUSY')
         try:
             with self.lock:
                 token=self.generation
                 if not self.enabled:raise ValueError('STOPPED')
             if not request.image.header.frame_id or (self.optical and request.image.header.frame_id!=self.optical):raise ValueError('unexpected/missing optical frame')
+            if estimate_position:
+                self._ensure_position_inputs()
             if not self.client.service_is_ready():raise ValueError('INFERENCE_NOT_READY')
             started=time.perf_counter();done=threading.Event()
             self.last_call=dict(request_id=request.request_id,send_monotonic_s=started,
@@ -126,12 +157,20 @@ class ObjectDetectionTool(Node):
                 if not self.enabled or token!=self.generation:raise ValueError('CANCELLED_GENERATION')
             frame=result.result
             validate_frame(frame,request)
-            frame.detections=[b for b in frame.detections if b.category==self.category]
+            frame.detections=[b for b in frame.detections if b.category==(category if category is not None else self.category)]
             timing=json.loads(frame.timings_json)
             timing['tool_ros_roundtrip_ms']=(time.perf_counter()-started)*1000
             frame.timings_json=json.dumps(timing)
-            measured=self.projector.project(frame,token,self.active)
-            if not self.active(token):raise ValueError('CANCELLED_GENERATION')
+            if estimate_position:
+                measured=self.projector.project(frame,token,observation_active or self.active)
+            else:
+                measured=ObjectDetectionFrame(
+                    header=frame.header, image_header=frame.header,
+                    request_id=frame.request_id, generation=frame.generation,
+                    tool_generation=token, worker_generation=frame.worker_generation,
+                    model_version=frame.model_version, timings_json=frame.timings_json,
+                    valid=True, detections=[ObjectDetection(detection=d) for d in frame.detections])
+            if not (observation_active or self.active)(token):raise ValueError('CANCELLED_GENERATION')
             return measured
         except Exception as exc:
             self.last_call['error']=str(exc)
@@ -178,7 +217,8 @@ class ObjectDetectionTool(Node):
         with self.lock:
             if now<self.last_clock:
                 self.generation=max(time.time_ns(),self.generation+1);self.pending=None;self.last_rgb=0.
-                self.projector.reset();self.tf_buffer.clear()
+                if self.projector is not None:
+                    self.projector.reset();self.tf_buffer.clear()
             self.last_clock=now
             self.health.publish(String(data=json.dumps(dict(healthy=self.enabled and self.worker.is_alive() and
                 not self.error,error=self.error,generation=self.generation,

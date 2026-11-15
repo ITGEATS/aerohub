@@ -11,12 +11,14 @@ from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
 from rclpy.qos import qos_profile_sensor_data
 from as2_msgs.action import Takeoff, Land
+from action_msgs.srv import CancelGoal
 from rosgraph_msgs.msg import Clock
 from as2_msgs.msg import PlatformInfo
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from std_msgs.msg import String
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import SetBool
 from uav_as2_sensor_adapter.rpc import Rpc
+from as2_python_api.drone_interface_base import DroneInterfaceBase
 
 
 class Mission(Node):
@@ -37,13 +39,20 @@ class Mission(Node):
         self.create_subscription(TwistStamped, '/drone0/self_localization/twist', lambda m: setattr(self, 'twist', m), qos_profile_sensor_data)
         self.create_subscription(String, '/drone0/yopo/status', self.on_status, 10)
         self.create_subscription(String, '/drone0/yopo/events', self.on_event, 100)
-        self.goal_pub = self.create_publisher(PoseStamped, '/drone0/yopo/goal', 1)
+        self.drone = DroneInterfaceBase('drone0', use_sim_time=True)
+        self.drone.load_module('navigation')
+        self.navigation = self.drone.navigation
+        self.navigation_started = False
         self.task_clients = []
         self.last_clock_ns = None
         self.clock_samples = 0
         self.create_subscription(Clock, '/clock', self.on_clock, qos_profile_sensor_data)
         self.last_collision = 0.
         self.initial_collision = None
+
+    def close(self):
+        self.drone.shutdown()
+        self.drone.destroy_node()
 
     def on_clock(self, msg):
         stamp=msg.clock.sec*1000000000+msg.clock.nanosec
@@ -95,6 +104,19 @@ class Mission(Node):
         if not response.success:
             raise RuntimeError(name+' rejected: '+str(response))
 
+    def cancel_navigation(self):
+        if self.navigation_started:
+            future = self.navigation.cancel_async()
+            if future is None:
+                return
+        else:
+            # Recovery is explicit: cancel any previous task owned by this UAV.
+            client = self.create_client(CancelGoal, '/drone0/navigate_to_pose/_action/cancel_goal')
+            self.task_clients.append(client)
+            self.wait(client.service_is_ready, 3)
+            future = client.call_async(CancelGoal.Request())
+        self.wait(future.done, 5)
+
     def action(self, kind, name, goal):
         client = ActionClient(self, kind, name); self.task_clients.append(client)
         self.wait(client.server_is_ready)
@@ -137,9 +159,6 @@ class Mission(Node):
             # Let measured motion settle; the Planner uses a future reference epoch.
             until = time.monotonic()+3
             self.wait(lambda: time.monotonic() >= until)
-            goal = PoseStamped(); goal.header.frame_id = 'drone0/odom'
-            goal.header.stamp = self.get_clock().now().to_msg()
-            goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = self.goal
             responses = self.rpc.call('simGetImages', [dict(camera_name='yopo_front', image_type=1,
                                                           pixels_as_float=True, compress=False)], 'PX4', False)
             image = responses[0]
@@ -157,16 +176,24 @@ class Mission(Node):
             if require_obstacle and not obstacle_pixels:
                 raise RuntimeError('forest task has no confirmed horizon obstacles in 15m depth')
             previous_task = self.status.get('task_id')
-            self.goal_pub.publish(goal)
+            self.wait(lambda: self.navigation.ready)
+            self.navigation.to_point(*self.goal, wait=False, timeout=float(timeout_s))
+            self.navigation_started = True
             self.wait(lambda: self.status.get('task_id') != previous_task and self.status.get('state') == 'RUNNING', 5, score=True)
             if fault != 'none':
                 self.wait(lambda: self.status.get('revision', 0) >= 3, 15, score=True)
                 self.result['fault'] = fault
                 if fault == 'cancel':
-                    self.service(Trigger, '/drone0/yopo/cancel', Trigger.Request())
+                    self.navigation.cancel_async()
                 else:
                     (self.output/'fault-request.json').write_text(json.dumps(dict(fault=fault, wall=time.time()))+'\n')
             self.wait(lambda: self.status.get('state') in ('STOPPED', 'FAULT'), timeout_s, score=True)
+            self.wait(lambda: self.navigation.done, 12, score=True)
+            nav = self.navigation.result
+            self.result['navigation_result'] = dict(success=nav.success, code=nav.code, reason=nav.reason, stop_confirmed=nav.stop_confirmed)
+            expected_code = {'none':'SUCCEEDED', 'cancel':'CANCELED', 'stale':'EXECUTION_FAILED', 'worker-exit':'EXECUTION_FAILED'}[fault]
+            if nav.code != expected_code or not nav.stop_confirmed:
+                raise RuntimeError('unexpected navigation result: ' + str(nav))
             self.result['arrived_5m'] = 'ARRIVED_5M' in self.status.get('reason', '')
             self.result['stopped'] = self.status.get('state') == 'STOPPED'
             expected_reason = {'none':'ARRIVED_5M','cancel':'CANCELED','stale':'STALE_OR_INVALID_INPUT',
@@ -182,7 +209,7 @@ class Mission(Node):
                 try:
                     try:
                         if self.status.get('state') != 'STOPPED':
-                            self.service(Trigger, '/drone0/yopo/cancel', Trigger.Request())
+                            self.cancel_navigation()
                     except Exception as error:
                         self.result['cancel_error'] = str(error)
                     try:
@@ -237,7 +264,7 @@ def main():
     try:
         node.run(args.ground_only, args.recover_only, args.fault, args.require_obstacle, args.timeout)
     finally:
-        node.destroy_node(); rclpy.shutdown()
+        node.close(); node.destroy_node(); rclpy.shutdown()
 
 
 if __name__ == '__main__':

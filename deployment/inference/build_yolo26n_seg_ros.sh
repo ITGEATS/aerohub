@@ -8,4 +8,4 @@ if ! command -v colcon >/dev/null || [[ "${ROS_DISTRO:-}" != humble ]]; then
 fi
 mkdir -p "$work_dir"
 cd "$work_dir"
-exec colcon build --base-paths "$repo_dir/src/basic_function/inference/interfaces" "$repo_dir/src/basic_function/inference/ros2_adapter" "$repo_dir/src/basic_function/perception/object_detection" --packages-select uav_inference_interfaces uav_inference uav_object_detection_interfaces uav_object_detection --event-handlers console_direct+
+exec colcon build --base-paths "$repo_dir/src/basic_function/inference/interfaces" "$repo_dir/src/basic_function/inference/ros2_adapter" "$repo_dir/src/tool/object_detection" --packages-select uav_inference_interfaces uav_inference uav_object_detection_interfaces uav_object_detection --event-handlers console_direct+

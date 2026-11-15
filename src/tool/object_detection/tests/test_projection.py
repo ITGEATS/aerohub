@@ -1,6 +1,8 @@
 """Actual ROS message/TF2 tests; isolated software geometry, no accuracy claim."""
 import copy
 import unittest
+import threading
+import time
 from array import array
 
 import numpy as np
@@ -60,6 +62,36 @@ class ProjectionTest(unittest.TestCase):
         result=self.p.project(self.frame,8,lambda _:False)
         self.assertIn('CANCELLED_GENERATION',result.error)
         self.assertFalse(result.detections[0].position_valid)
+
+    def test_late_capture_time_tf_recovers_within_existing_budget(self):
+        self.buffer.clear()
+        self.p.wait=.25
+        transform=TransformStamped()
+        transform.header.frame_id='odom';transform.child_frame_id='camera_optical'
+        transform.header.stamp=self.header.stamp
+        transform.transform.translation.x=2.;transform.transform.rotation.w=1.
+        timer=threading.Timer(.04,lambda:self.buffer.set_transform(transform,'late-test'))
+        timer.start()
+        try:
+            result=self.p.project(self.frame,8,lambda _:True)
+        finally:
+            timer.join()
+        self.assertTrue(result.valid,result.error)
+        self.assertEqual(result.header.stamp,self.header.stamp)
+        self.assertTrue(result.detections[0].position_valid)
+
+    def test_persistently_stale_tf_never_falls_back_to_latest(self):
+        self.buffer.clear();self.p.wait=.02
+        transform=TransformStamped()
+        transform.header.frame_id='odom';transform.child_frame_id='camera_optical'
+        transform.header.stamp.sec=99;transform.transform.rotation.w=1.
+        self.buffer.set_transform(transform,'stale-test')
+        started=time.monotonic()
+        result=self.p.project(self.frame,8,lambda _:True)
+        self.assertGreaterEqual(time.monotonic()-started,.02)
+        self.assertIn('capture-time TF wait expired',result.error)
+        self.assertFalse(result.detections[0].position_valid)
+        self.assertEqual(result.header.stamp,self.header.stamp)
 
     def test_invalid_calibration_invalidates_old_calibration(self):
         bad=copy.deepcopy(self.info);bad.d=[.1,0.,0.,0.,0.]

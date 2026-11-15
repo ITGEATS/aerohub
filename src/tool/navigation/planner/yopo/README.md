@@ -46,3 +46,16 @@ PYTHONPATH=src/tool/navigation/planner/yopo/ros2_adapter src/basic_function/infe
 ```
 
 验证分层以 Demo 中的验收记录为准；数值对照、ROS 传输、GPU 服务链都不能单独证明 AirSim 动力学通过。
+
+## 公共单机导航入口
+
+`navigation_action:=true` 启用 `/<uav>/navigate_to_pose`，复用公共
+[AS2 Navigation Module](../../python_api/README.md)，具体包装层在
+`ros2_adapter/uav_yopo_planner/navigation.py`。默认 false 保留旧话题/服务入口；
+启用后旧入口不能旁路修改 Action 任务。`yopo_single` Demo 显式启用公共入口。
+
+该层调用既有 `begin/stop`，保留原推理、候选选择、参考曲线、滚动执行和停止门槛。
+不改模型或规划算法。只支持无终点朝向约束；不支持的显式要求返回 UNSUPPORTED。
+默认到达仍为距离 <5m 后确认停稳，不提供 SUPER 的1.5m精度承诺。
+公共接口测试、实际仿真结果与限制见
+[导航对照验证](../../../../../deployment/airsim/demos/yopo_single/VALIDATION-navigation-20261115.md)。
