@@ -22,8 +22,7 @@ def main():
     parser.add_argument('--estimate-position',action='store_true')
     parser.add_argument('--samples',type=int,default=10)
     parser.add_argument('--collect-failures',action='store_true')
-    parser.add_argument('--near-target',action='store_true',help='Require ten valid near car measurements and save scoring inputs')
-    parser.add_argument('--scene-inventory',action='store_true',help='Record existing scene target poses for test planning')
+    parser.add_argument('--near-target',action='store_true',help='Require valid near car measurements and save scoring inputs')
     parser.add_argument('--vehicle-x',type=float,default=0.)
     parser.add_argument('--vehicle-y',type=float,default=0.)
     parser.add_argument('--vehicle-yaw',type=float,default=0.)
@@ -106,16 +105,6 @@ def main():
         while 'Ready for takeoff!' not in subprocess.check_output(['docker','logs',prefix+'vehicle'],text=True,stderr=subprocess.STDOUT):
             if time.monotonic()>deadline:raise TimeoutError('PX4 ground readiness timeout')
             time.sleep(.25)
-        if args.scene_inventory:
-            sys.path.insert(0,str(ROOT/'simulator/airsim/sensors'))
-            from uav_as2_sensor_adapter.rpc import Rpc
-            rpc=Rpc('127.0.0.1',49471,timeout=15.)
-            try:
-                names=rpc.call('simListSceneObjects','.*')
-                targets={name:rpc.call('simGetObjectPose',name) for name in names
-                         if any(word in name.lower() for word in ('car','vehicle','truck','sedan','van','bus'))}
-                (output/'scene-inventory.json').write_text(json.dumps(dict(names=names,targets=targets),indent=2)+'\n')
-            finally:rpc.close()
         subprocess.run([str(ROOT/'src/basic_function/inference/models/yolo26n_seg/.venv/bin/python'),
                         str(APP/'scene_reference.py'),'--output',str(output)],check=True,timeout=30)
         launch('sensor','flight_board:v0.1.0',

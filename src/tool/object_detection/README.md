@@ -1,5 +1,10 @@
 # Object Detection Tool: public single observation
 
+Version 0.3.0 provides RGB-only detection and optional RGB-D positioning through
+the AS2 Module. Real AirSim/CUDA calls and static near-target measurements have
+been checked; see [validation](../../../deployment/object_detection/VALIDATION-tool.md)
+for evidence and current limits.
+
 ```python
 drone.load_module("object_detection")
 response = drone.object_detection.detect(category="person", timeout=2.0)

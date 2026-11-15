@@ -16,7 +16,6 @@ from as2_python_api.drone_interface_base import DroneInterfaceBase
 from as2_msgs.msg import PlatformInfo
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_msgs.msg import TFMessage
@@ -127,27 +126,6 @@ def main():
                 return False
             return tool.tf_buffer.can_transform('drone0/odom',header.frame_id,Time.from_msg(header.stamp))
         wait(measurement_ready)
-        if args.estimate_position:
-            original_project = tool.projector.project
-            def traced_project(frame, token, active):
-                def mark(phase):
-                    row = dict(kind='projection_'+phase, wall=time.monotonic(),
-                               stamp_ns=ns(frame.header),
-                               clock_ns=tool.get_clock().now().nanoseconds)
-                    try:
-                        latest = tool.tf_buffer.lookup_transform(
-                            'drone0/odom', 'drone0/FrontCamera_optical', Time())
-                        row['latest_tf_ns'] = ns(latest.header)
-                    except Exception as error:
-                        row['tf_error'] = str(error)
-                    state_trace.append(row)
-                    return row
-                mark('start')
-                projected = original_project(frame, token, active)
-                end_row = mark('end')
-                end_row['error'] = projected.error
-                return projected
-            tool.projector.project = traced_project
         health=adapter.detector.client.request('/health/ready');assert health['device'].startswith('cuda')
         outcomes=[]
         failures=[]

@@ -63,7 +63,7 @@ python3 deployment/object_detection/airsim/run.py \
 以及probe/result.json、rgb.png和depth-m.npy。测试先等相机与平台，再等真实深度
 采样时刻的AS2历史TF；周期PlatformInfo或Module服务发现不代替测量链就绪。
 
-## 执行结果与限制
+## 历史接入记录（08/09，早于近距与TF修正）
 
 证据目录：`log/object-detection-tool/airsim-rgb-08/` 与 `airsim-rgb-09/`。
 原始日志不纳入Git。09的结果如下：
@@ -83,7 +83,7 @@ python3 deployment/object_detection/airsim/run.py \
 09三次wall耗时约0.624/0.605/0.868秒，均在各2秒请求预算内。
 person和bus没有检出对象；car检出1个对象，但有效深度点不足20，返回
 `PARTIAL`、`position_valid=false`。原测量实现只接受0.02–10米，未改算法门限。
-因此本轮没有有效汽车三维位置证据。
+因此09轮没有有效汽车三维位置证据；后续近距通过结果见下文及POSITIONING.md。
 
 09的bus空结果还保留了一次 `capture-time TF wait expired` reason：
 原投影阶段0.25秒等待期间TF未覆盖对应stamp；响应后显式历史TF查询已可用。
