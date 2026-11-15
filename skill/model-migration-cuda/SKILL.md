@@ -9,7 +9,7 @@ description: 将 CUDA 推理模型接入 Aerohub Inference，收束每模型独�
 
 ## 准备条件与使用边界
 
-使用者先按 [Inference 前置条件](../../src/inference/README.md#开始前准备什么)和
+使用者先按 [Inference 前置条件](../../src/basic_function/inference/README.md#开始前准备什么)和
 模型 README 准备对应运行环境。调用已有 ROS 服务无需模型开发工具；准备 CUDA
 worker 时使用模型独立 uv 环境，驱动/GPU 属于宿主条件，Torch/CUDA 运行库按锁文件
 安装。是否需要额外系统 SDK 或编译器以该模型实际构建为准，不能从 CUDA 名称推导。
@@ -22,9 +22,7 @@ ROS adapter 的构建、部署环境与模型环境分别准备。
 
 读取项目约定、现有模型入口和真实导入链，记录算法提交、本地修改、Python/框架版本、权重来源和校验和、预处理与输出语义。保留原环境与固定输入输出作为迁移对照。
 
-算法调用 Inference 不改变源码分类。例如 YOPO 的 upstream 在 `src/planner/yopo/upstream/`，模型模块在 `src/inference/models/yopo/`；引用算法实现，不复制网络或把整个 Planner 搬入 Inference。明确模型返回的是候选状态、轨迹还是控制量。
-
-模型运行入口与准备入口使用同一源码和产物定位约定；版本身份应由实际加载来源保证，固定版本声明须有源码校验支持。
+算法调用 Inference 不改变源码分类。例如 YOPO 的 upstream 在 `src/tool/navigation/planner/yopo/upstream/`，模型模块在 `src/basic_function/inference/models/yopo/`；引用算法实现，不复制网络或把整个 Planner 搬入 Inference。明确模型返回的是候选状态、轨迹还是控制量。
 
 完成条件：源码与模型文件可追溯，需保留的本地修改已明确，未知硬件/输入条件已标记。
 
@@ -32,7 +30,7 @@ ROS adapter 的构建、部署环境与模型环境分别准备。
 
 ## 2. 收束独立环境
 
-每模型在 `src/inference/models/<模型>/` 维护 `pyproject.toml`、`uv.lock` 和忽略的 `.venv/`。依据推理真实导入保留依赖，不直接安装上游全部训练、ROS、仿真和可视化依赖。公共 FastAPI runtime 使用仓库相对路径依赖；ROS Adapter 留在独立 ROS 环境。
+每模型在 `src/basic_function/inference/models/<模型>/` 维护 `pyproject.toml`、`uv.lock` 和忽略的 `.venv/`。依据推理真实导入保留依赖，不直接安装上游全部训练、ROS、仿真和可视化依赖。公共 FastAPI runtime 使用仓库相对路径依赖；ROS Adapter 留在独立 ROS 环境。
 
 在新位置从锁文件重建环境，不直接移动旧 venv。固定适合该模型的 Python 版本及 CUDA wheel 来源，默认用 `uv sync --locked`；更新锁文件作为显式依赖变更验证。不要将 YOPO 的 Python/CUDA 基线推广成其他模型默认。
 
@@ -57,7 +55,7 @@ ROS adapter 的构建、部署环境与模型环境分别准备。
 
 ## 4. 分层验证与交付
 
-- 在 `src/inference/manifest.json` 登记稳定模型 ID、仓库相对模型目录及描述。manifest 只声明支持集合，不复制各模型版本/依赖/权重清单。用户配置统一用 YAML，优先在已有用户配置中维护 `inference.models` 模型 ID 列表，通过 `--config` 指定。先核对现有入口，无法确定统一配置路径时明确询问；不把模型选择混入 ROS 参数或有严格 schema 的资源路径配置。可提交片段为 `config/inference.example.yaml`，默认独立本地 YAML 路径为 `config/inference.local.yaml`，不覆盖已有用户文件。
+- 在 `src/basic_function/inference/manifest.json` 登记稳定模型 ID、仓库相对模型目录及描述。manifest 只声明支持集合，不复制各模型版本/依赖/权重清单。用户配置统一用 YAML，优先在已有用户配置中维护 `inference.models` 模型 ID 列表，通过 `--config` 指定。先核对现有入口，无法确定统一配置路径时明确询问；不把模型选择混入 ROS 参数或有严格 schema 的资源路径配置。可提交片段为 `config/inference.example.yaml`，默认独立本地 YAML 路径为 `config/inference.local.yaml`，不覆盖已有用户文件。
 - 复用 `deployment/inference/setup_models.py` 按配置调用模型 setup。先用 `--list` 核对支持集合、`--dry-run` 检查选择；未知/重复模型在执行前拒绝，空列表不操作。实际准备只作用于所选模型，失败停止，不卸载未选模型或启动服务。
 - 对照迁移前固定输入，比较所有候选、评分和元数据，而非只比较最佳候选；阈值在运行前按模型要求确定。
 - 循环模型对照连续序列中的全部输出和h_next，并覆盖显式复位及分支独立性。请求携带h、响应返回h_next时，worker预热不应改变调用方的初始状态；调用方单独决定超时/过期结果是否接纳。跨CPU/GPU对照出现小幅差异时先核查TF32等精度设置，保留原门槛与失败事实；同一新环境中的源码对照不代表旧框架版本也已验证。
@@ -73,22 +71,27 @@ ROS adapter 的构建、部署环境与模型环境分别准备。
 
 ## 原生可变速度模型的版本与对照
 
-当上游已有速度缩放配置时，先核对它是否同时缩放状态归一化、候选速度/加速度和轨迹时长；仅给执行端降限不能代替该模型配置。对每个部署配置独立运行全候选/评分对照，并将速度配置与预处理版本纳入响应 model_version。各模型已验证配置及数值结果记录在对应模型的验证文档。
+当上游已有速度缩放配置时，先核对它是否同时缩放状态归一化、候选速度/加速度和轨迹时长；仅给执行端降限不能代替该模型配置。对每个部署配置独立运行全候选/评分对照，并将速度配置与预处理版本纳入响应 model_version。YOPO 的锁定参考入口已完成6 m/s CPU及2 m/s CPU/CUDA对照；这一结论不扩展到其他配置或其他模型。
 
 
 ## 多后端模型的职责边界
 
+迁移图像检测模型时，公共 Inference 只提供模型直接输出的框、类别、分数和掩膜。
+需要深度和历史位姿的三维测量由调用侧感知/Tool 组合；目标关联、KF 与预测属于其
+导航消费者。复用图像转换函数时不得通过导入上层业务 Node 隐式依赖 Planner/KF。
+分别交付推理与三维测量契约，保留 RGB、深度和位置时刻/坐标，缺少配准输入时标无效。
+数值迁移对照与 ROS 调用检查分开；真实 RGB 配合合成深度/TF 只证明接口与几何，
+不能记成真实传感器定位精度或飞行验收。已有实测深度/掩膜可独立回放核对测量算法。
+
 同一模型支持 CUDA/HMM 时，共用模型 CPU 前后处理和请求响应组装；adapter 只负责
 源码/参数准备与后端构造。公共 `TorchBackend` 的命名 NumPy 输入输出、设备传输、
-同步计时和关闭契约见[后端说明](../../src/inference/runtime/aerohub_inference/backends/README.md)。
+同步计时和关闭契约见[后端说明](../../src/basic_function/inference/runtime/aerohub_inference/backends/README.md)。
 框架依赖保留在模型独立环境，公共 HTTP runtime 与板端 HMM 不因共用服务而安装 Torch。
 
 重构前在实际运行权限下保存固定输入和全部输出，重构后对照所有候选、评分、身份和
-配置。GPU 在沙箱内探测失败时检查实际运行权限；共用处理修改后复验受影响的已支持后端。具体回归配置和结果留在模型验证文档。
+配置。GPU 在沙箱内探测失败时继续检查实际宿主权限；YOPO 本轮在真实 RTX 4090 上
+完成 6/2 m/s 旧新输出一致与双容器 ROS 10/10 回归。共用处理修改后同时复验板端
+HMM；无需为此扩展到未经授权的仿真或飞行任务。
 
 计时区分输入传输、前向与同步、输出传输；保留既有聚合字段时注明重叠关系。
 worker 正常退出调用后端 close；关闭幂等，关闭后拒绝继续执行。
-
-## GPU 故障
-
-CUDA 初始化失败（如错误999）时，在实际 worker 环境检查最小 CUDA 调用和设备/驱动状态，判断是否为 GPU 故障；确认后考虑显卡/驱动修复，必要时经授权重启主机。恢复后复验真实模型推理。

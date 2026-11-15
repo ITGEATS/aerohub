@@ -251,7 +251,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--render-mode", choices=("windowed", "offscreen"))
     args = parser.parse_args()
-    profile = load_profile(args.profile, args.binary) if args.profile else None
+    # Recovery uses the saved session even if the original profile moved or broke.
+    recovery = args.action in ("status", "stop")
+    profile = load_profile(args.profile, args.binary) if args.profile and not recovery else None
     if args.render_mode:
         os.environ["AIRSIM_RENDER_MODE"] = args.render_mode
         if profile and profile["backend"] == "projectairsim":
@@ -274,7 +276,11 @@ def main() -> int:
     if args.action == "attach" and backend != "projectairsim":
         raise ValueError("attach requires a ProjectAirSim config")
     if backend in (None, "airsim"):
-        return subprocess.run(_airsim_command(args, args.action)).returncode
+        command = _airsim_command(args, args.action)
+        if recovery and args.profile:
+            index = command.index("--profile")
+            del command[index:index+2]
+        return subprocess.run(command).returncode
     if args.timeout <= 0:
         raise ValueError("timeout must be positive")
     if args.action == "check":

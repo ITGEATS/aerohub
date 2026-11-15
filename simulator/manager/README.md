@@ -132,3 +132,9 @@ reset/断连完整矩阵、实际下游算法、同套 AirSim 对照及正式四
 复用已有 ProjectAirSim 服务，执行与 start 相同的原生场景加载和传感器桥接。
 会话记录 `owns_host: false`，失败清理和 stop 均只终止本会话辅助进程。
 AirSim 后端暂不支持 attach。详见根目录 `config/README.md`。
+
+## dev 合入与旧场景迁移
+
+入口、资源优先级、状态恢复与检查清单见 [INTEGRATION.md](INTEGRATION.md)。
+原生 AirSim JSON 场景与直接调用旧 manager 的 Demo 保留；统一入口按后端分发，
+新配置不会要求已有场景改用 ProjectAirSim。

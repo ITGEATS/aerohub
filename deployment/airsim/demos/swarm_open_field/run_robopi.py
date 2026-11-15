@@ -12,7 +12,7 @@ from deployment.swarm.topology import load_config
 from hybrid_plan import BOARD_RPC_RELAY_PORT,NATIVE_PARAMETERS,PREFIX,RPC_PORT,build_plan,write_plan
 
 def execute(cmd,**kw):return subprocess.run(list(map(str,cmd)),check=True,**kw)
-def manager(action,out,profile):return [sys.executable,ROOT/'simulator/manager/manager.py',action,'--profile',profile,'--run-dir',out/'scene']
+def manager(action,out,profile):return [sys.executable,ROOT/'simulator/airsim/manager/manager.py',action,'--profile',profile,'--run-dir',out/'scene']
 
 def plan_from_files(config,scenario):
     return build_plan(config,scenario,yaml.safe_load((APP/'task.yaml').read_text()),
@@ -74,7 +74,7 @@ def main():
         for source,target in [('deployment/airsim/demos/catora_open_field/mission.py','common/flight_mission.py'),('deployment/airsim/demos/catora_open_field/stop_board.py','stop_board.py'),
             ('deployment/airsim/demos/catora_open_field/hybrid/metrics.py','metrics.py'),('deployment/airsim/as2/run.py','run_as2.py'),('deployment/airsim/as2/selected_behaviors.launch.py','selected_behaviors.launch.py'),
             ('deployment/airsim/as2/scoped_tf.launch.py','scoped_tf.launch.py'),('simulator/airsim/sensors/uav_as2_sensor_adapter/rpc.py','airsim_rpc.py'),
-            ('deployment/airsim/config/as2/config.yaml','config.yaml'),('deployment/airsim/config/as2/pid_speed_controller.yaml','pid.yaml'),('src/planner/swarm_formation/ros2_adapter/native/plan_manage/scripts/ros2_proxy.py','ros2_proxy.py')]:archive.add(ROOT/source,arcname=target)
+            ('deployment/airsim/config/as2/config.yaml','config.yaml'),('deployment/airsim/config/as2/pid_speed_controller.yaml','pid.yaml'),('src/tool/navigation/planner/swarm_formation/ros2_adapter/native/plan_manage/scripts/ros2_proxy.py','ros2_proxy.py')]:archive.add(ROOT/source,arcname=target)
         archive.add(paths['board_fleet'],arcname='fleet.yaml');archive.add(out/'board-dds.xml',arcname='dds.xml');archive.add(vendor/'msgpack',arcname='msgpack')
     hdc('file','send',str(out/'app.tar.gz'),remote+'/app.tar.gz')
     digest=hashlib.sha256((out/'app.tar.gz').read_bytes()).hexdigest()

@@ -13,7 +13,10 @@ config/simulator/
 
 安装资源统一登记在 `config/resources.yaml`，包括 UE4、UE5、AirSim 和 ProjectAirSim。
 本机路径差异放在已忽略的 `config/resources.local.yaml`，同名资源覆盖共享值。
-旧用户级及 AirSim 资源配置仍可读取；根目录配置优先，本机覆盖最后生效。
+资源按以下顺序加载，后者覆盖同名项：共享 `config/resources.yaml` →
+用户级 `~/.config/aerohub/resources.yaml` → 旧 AirSim 本机
+`simulator/airsim/config/resources.local.yaml` → 新 `config/resources.local.yaml`。
+共享默认值不会覆盖已有本机配置。
 场景 YAML 通过 `source_resource`、`binary_resource`、`python_resource` 和
 `ros_setup_resource` 引用资源名；原先直接填写路径的方式仍可使用。
 UE 资源目前用于登记和查询，尚未提供自动启动编辑器的命令。

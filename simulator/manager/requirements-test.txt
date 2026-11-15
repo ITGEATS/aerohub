@@ -1,0 +1,4 @@
+# Manager, legacy scene check, and offline HUD preview test dependencies.
+PyYAML>=6,<7
+msgpack>=1,<2
+Pillow>=9,<13

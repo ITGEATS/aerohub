@@ -9,9 +9,9 @@ def resolve_resource(name):
     root = Path(__file__).resolve().parents[2]
     config_home = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
     resources = {}
-    for config in (config_home / 'aerohub/resources.yaml',
+    for config in (root / 'config/resources.yaml',
+                   config_home / 'aerohub/resources.yaml',
                    root / 'simulator/airsim/config/resources.local.yaml',
-                   root / 'config/resources.yaml',
                    root / 'config/resources.local.yaml'):
         if not config.exists():
             continue
