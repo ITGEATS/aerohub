@@ -18,7 +18,7 @@ from geometry_msgs.msg import PoseStamped, TwistStamped
 from std_msgs.msg import String
 from std_srvs.srv import SetBool
 from uav_as2_sensor_adapter.rpc import Rpc
-from uav_planner_interfaces.action import NavigateToPose
+from as2_python_api.drone_interface_base import DroneInterfaceBase
 
 
 class Mission(Node):
@@ -39,14 +39,20 @@ class Mission(Node):
         self.create_subscription(TwistStamped, '/drone0/self_localization/twist', lambda m: setattr(self, 'twist', m), qos_profile_sensor_data)
         self.create_subscription(String, '/drone0/yopo/status', self.on_status, 10)
         self.create_subscription(String, '/drone0/yopo/events', self.on_event, 100)
-        self.navigation = ActionClient(self, NavigateToPose, '/drone0/navigate_to_pose')
-        self.navigation_handle = self.navigation_result = None
+        self.drone = DroneInterfaceBase('drone0', use_sim_time=True)
+        self.drone.load_module('navigation')
+        self.navigation = self.drone.navigation
+        self.navigation_started = False
         self.task_clients = []
         self.last_clock_ns = None
         self.clock_samples = 0
         self.create_subscription(Clock, '/clock', self.on_clock, qos_profile_sensor_data)
         self.last_collision = 0.
         self.initial_collision = None
+
+    def close(self):
+        self.drone.shutdown()
+        self.drone.destroy_node()
 
     def on_clock(self, msg):
         stamp=msg.clock.sec*1000000000+msg.clock.nanosec
@@ -99,8 +105,10 @@ class Mission(Node):
             raise RuntimeError(name+' rejected: '+str(response))
 
     def cancel_navigation(self):
-        if self.navigation_handle is not None:
-            future = self.navigation_handle.cancel_goal_async()
+        if self.navigation_started:
+            future = self.navigation.cancel_async()
+            if future is None:
+                return
         else:
             # Recovery is explicit: cancel any previous task owned by this UAV.
             client = self.create_client(CancelGoal, '/drone0/navigate_to_pose/_action/cancel_goal')
@@ -151,9 +159,6 @@ class Mission(Node):
             # Let measured motion settle; the Planner uses a future reference epoch.
             until = time.monotonic()+3
             self.wait(lambda: time.monotonic() >= until)
-            goal = PoseStamped(); goal.header.frame_id = 'drone0/odom'
-            goal.header.stamp = self.get_clock().now().to_msg()
-            goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = self.goal
             responses = self.rpc.call('simGetImages', [dict(camera_name='yopo_front', image_type=1,
                                                           pixels_as_float=True, compress=False)], 'PX4', False)
             image = responses[0]
@@ -171,26 +176,20 @@ class Mission(Node):
             if require_obstacle and not obstacle_pixels:
                 raise RuntimeError('forest task has no confirmed horizon obstacles in 15m depth')
             previous_task = self.status.get('task_id')
-            self.wait(self.navigation.server_is_ready)
-            request = NavigateToPose.Goal(target=goal, orientation_mode=NavigateToPose.Goal.UNCONSTRAINED,
-                                          use_timeout=True, timeout=float(timeout_s))
-            accepted = self.navigation.send_goal_async(request)
-            self.wait(accepted.done)
-            self.navigation_handle = accepted.result()
-            if not self.navigation_handle.accepted:
-                raise RuntimeError('navigation goal rejected')
-            self.navigation_result = self.navigation_handle.get_result_async()
+            self.wait(lambda: self.navigation.ready)
+            self.navigation.to_point(*self.goal, wait=False, timeout=float(timeout_s))
+            self.navigation_started = True
             self.wait(lambda: self.status.get('task_id') != previous_task and self.status.get('state') == 'RUNNING', 5, score=True)
             if fault != 'none':
                 self.wait(lambda: self.status.get('revision', 0) >= 3, 15, score=True)
                 self.result['fault'] = fault
                 if fault == 'cancel':
-                    self.navigation_handle.cancel_goal_async()
+                    self.navigation.cancel_async()
                 else:
                     (self.output/'fault-request.json').write_text(json.dumps(dict(fault=fault, wall=time.time()))+'\n')
             self.wait(lambda: self.status.get('state') in ('STOPPED', 'FAULT'), timeout_s, score=True)
-            self.wait(self.navigation_result.done, 12, score=True)
-            nav = self.navigation_result.result().result
+            self.wait(lambda: self.navigation.done, 12, score=True)
+            nav = self.navigation.result
             self.result['navigation_result'] = dict(success=nav.success, code=nav.code, reason=nav.reason, stop_confirmed=nav.stop_confirmed)
             expected_code = {'none':'SUCCEEDED', 'cancel':'CANCELED', 'stale':'EXECUTION_FAILED', 'worker-exit':'EXECUTION_FAILED'}[fault]
             if nav.code != expected_code or not nav.stop_confirmed:
@@ -265,7 +264,7 @@ def main():
     try:
         node.run(args.ground_only, args.recover_only, args.fault, args.require_obstacle, args.timeout)
     finally:
-        node.destroy_node(); rclpy.shutdown()
+        node.close(); node.destroy_node(); rclpy.shutdown()
 
 
 if __name__ == '__main__':

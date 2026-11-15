@@ -95,5 +95,24 @@ YOPO 复用同一 `NavigateToPose` 和上述 `drone.navigation`，以
 YOPO 的默认任务超时同为 300 ROS 秒。成功结果在原有 STOPPED 后才返回；
 FAULT 返回 STOP_UNCONFIRMED，其他原始失败原因保存在 reason。
 启用公共入口时，旧 `yopo/goal` 和 `yopo/cancel` 拒绝修改任务；未启用时保留原有行为。
-工作站 Demo 使用同一公共 ROS Action，实际 AS2 Module 与 YOPO 的对接由
+SUPER 与 YOPO 工作站 Demo 均通过 `drone.navigation.to_point(...)` 进入公共 Action，
+取消和结果读取也使用共享 Module。YOPO 的独立恢复命令可经标准 Action cancel 服务
+取消此前客户端遗留的任务。Module 与 YOPO 的协议回归由
 `deployment/airsim/demos/yopo_single/test_navigation_interface.py` 验证。
+
+
+## 阶段性验收与后续细化
+
+当前阶段已完成公共 Action / AS2 Module、SUPER 与 YOPO 各自适配，以及两套 Demo
+正常导航入口统一。接口回归与实际仿真证据见各 Demo 验证记录。
+YOPO 原始5m到达触发与最终停稳误差的区别仍保留；统一结果结构不代表两种算法
+已经提供相同成功承诺。长程记录来自直接Action调用；补齐Module后的Demo已验证短程和取消。
+
+下一阶段待办：
+
+- [ ] 统一成功语义：目标范围、执行完成与最终停稳。
+- [ ] 明确参数契约：默认值、单位、坐标系、约束和不支持时的处理。
+- [ ] 明确公共就绪检查与Planner专属检查的归属。
+- [ ] 提取共用任务管理：接纳、互斥、超时、取消、反馈与结果。
+- [ ] 保留算法专属适配：目标转换、规划调用、轨迹生成与滚动更新。
+- [ ] 使用SUPER、YOPO回归细化后的成功、取消和异常路径。

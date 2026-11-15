@@ -24,7 +24,7 @@ cd /repo/log/yopo-single/ros_ws
 colcon build --base-paths /repo/src/behavior/follow_path --packages-select uav_follow_path_execution
 ```
 
-运行时加载同一 install overlay。工作站仅从 onboard 规范定义重新生成 Takeoff/Land/PlatformInfo 所需的最小 AS2 接口集合，不复制 AS2 二进制。YOPO 接口变化后同时重建 Adapter/Planner 和调用方 overlay。
+运行时加载同一 install overlay。工作站仅从 onboard 规范定义重新生成 Takeoff/Land/PlatformInfo及Python Module 所需的最小 AS2 接口集合，不复制 AS2 二进制。YOPO 接口变化后同时重建 Adapter/Planner 和调用方 overlay。
 
 ## 分角色运行
 
@@ -94,15 +94,16 @@ PYTHONPATH=src/inference/ros2_adapter python3 -m unittest discover -s deployment
 
 ## 共享导航接口对照
 
-本 Demo 的 compute 显式开启 `navigation_action:=true`，工作站使用
-`/drone0/navigate_to_pose` Action 发目标、取消并核对结果；不再向 `yopo/goal`
-发目标。工作站 overlay 同时生成 `uav_planner_interfaces`，更新后重新执行
+本 Demo 的 compute 显式开启 `navigation_action:=true`，工作站通过
+`drone.navigation.to_point(...)` 发目标、`cancel_async()` 取消、`result` 核对结果；不再向 `yopo/goal`
+发目标。工作站 overlay 同时构建 `uav_planner_interfaces`、AS2 Python API 和共享 Module，
+准备校验过的 Python 依赖，并设置 AS2_MODULES_PATH；更新后重新执行
 `prepare-workstation`。恢复入口通过公共 Action cancel 服务取消现存任务。
 
 公共 Python 调用仍为 `drone.load_module('navigation')` 后
 `drone.navigation.to_point(x, y, z, wait=False)`；使用完整 AS2 Python API、
 `uav_planner_python_api` 及其依赖，并将其 `share/.../modules` 加到 AS2_MODULES_PATH。
-实际 Module 对接由 `test_navigation_interface.py` 验证，工作站 Demo 本身使用 ROS Action。
+实际 Module 对接由 `test_navigation_interface.py` 验证，工作站 Demo 也使用这一 Module。
 两个客户端消费同一服务端，没有算法专属 Python Module。
 
 SUPER/YOPO 的支持约束对照见 [公共接口说明](../../../../src/planner/python_api/README.md)。

@@ -7,7 +7,7 @@
 
 公共 Action 与 Python Module 沿用 SUPER 实现，不新增 YOPO 专属上层接口。
 新增服务端在 `src/planner/yopo/ros2_adapter/uav_yopo_planner/navigation.py`，
-`navigation_action` 默认关闭，Demo 显式开启。工作站 Demo 直接使用公共 ROS Action；
+`navigation_action` 默认关闭，Demo 显式开启。初版工作站 Demo 直接使用公共 ROS Action（后续已补齐 Module 调用，见文末）；
 真实 AS2 `drone.load_module('navigation')` / `drone.navigation` 与 YOPO 的连接在接口测试中验证。
 两种方式使用同一个 Action 服务端。
 
@@ -105,3 +105,26 @@ FAULT 返回 STOP_UNCONFIRMED，不将 stop ACK 等同于停稳；取消和其�
 场景/传感器/计算/PX4日志、原始轨迹、状态、碰撞评分和结果；
 `forest-long/summary.json` 为汇总，`forest-long/result.json` 为任务原始结果。
 本轮专属场景、容器和CUDA worker已回收，其他原有容器保持运行。
+
+## YOPO Demo 补齐 AS2 Module 调用
+
+后续按用户要求，将工作站 Demo 的正常导航目标、取消和结果读取统一到
+`DroneInterfaceBase('drone0', use_sim_time=True)` 加载的共享 `navigation` Module：
+`to_point(..., wait=False)` → `cancel_async()` / `done` / `result`。
+DroneInterface 自带执行器处理 Action 回调，Demo 继续独立处理观测和碰撞评分，
+结束时关闭并销毁 DroneInterface。算法与公共服务端保持不变。
+恢复专用入口仍可通过标准 Action cancel 服务取消此前客户端遗留的任务，
+不将当前 Module 无句柄的 cancel 误当成跨客户端恢复。
+
+`prepare-workstation` 补编译 AS2 Python API 和共享 Module，并从固定 onboard 消息定义
+补生成 AlertEvent/BehaviorStatus；复用已锁定SHA的CPython3.10依赖清单，运行时设置
+Python依赖路径和AS2_MODULES_PATH。不重建镜像。
+`log/yopo-single/module-ground-build.log` 记录4包工作站构建通过。
+`log/yopo-single/module-demo-01` 的地面与实际CUDA森林短程任务通过，
+日志确认从工作站安装目录加载 navigation Module；导航结果成功且确认停稳，
+无碰撞，Land和disarmed通过。该轮仍如实记录已解除武装后的offboard释放拒绝。
+此前长程记录使用直接Action调用；本次应用入口更改不重标为Module长程验收。
+
+`log/yopo-single/module-demo-cancel` 的独立地面检查和实际CUDA森林取消用例通过：
+至少3个revision后由Demo调用Module的cancel_async，结果CANCELED且stop_confirmed=true，
+无碰撞，Land和disarmed通过。两轮均生成原始result和summary，环境与worker已回收。
