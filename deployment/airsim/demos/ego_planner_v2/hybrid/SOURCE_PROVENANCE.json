@@ -156,7 +156,7 @@
       "destination": "src/behavior/follow_path/src/follow_path_extended.cpp",
       "source": "migration/dependencies/aerohub/src/behavior/follow_path/src/follow_path_extended.cpp",
       "source_sha256": "71798e9a1eee80310fc6ef851f63a9b2fbbbd72ab30f9aa78ffc9801e8fdb2e6",
-      "delivered_sha256": "71798e9a1eee80310fc6ef851f63a9b2fbbbd72ab30f9aa78ffc9801e8fdb2e6"
+      "delivered_sha256": "1c3ed69620177c44a73b7bfcf254b9e851f530e0e61293ca1d1f26bd852356cf"
     }
   ],
   "mechanical_and_entry_changes": [
@@ -172,5 +172,6 @@
     "dual compute on one RoboPi",
     "withdrawn Skill patches"
   ],
-  "limits": "Hashes identify files; historical flights do not validate this relocated source tree or the current AS2 gitlinks."
+  "limits": "Hashes identify files; historical flights do not validate this relocated source tree or the current AS2 gitlinks.",
+  "delivered_hash_basis": "Git blob bytes after repository line-ending normalization; source_sha256 preserves the original snapshot bytes."
 }
