@@ -2,7 +2,7 @@
 
 `extension_client.py` 是本项目对 ProjectAirSim 新增 RPC 的统一客户端对象，Python 3 标准库即可运行，
 不依赖 ProjectAirSim SDK、ROS、图像库或 UE 控制台。算力板业务代码通过它调用
-仿真器上的自建 HTTP JSON-RPC。当前已实现的方法属于显示功能；
+仿真器上的自建 HTTP JSON-RPC。当前已实现显示功能及场景行人控制；
 后续本项目新增 RPC 也统一在此对象封装，不再按显示功能另建传输客户端。
 原生仿真 RPC 与传感器 topic 仍由原有链路负责。
 
@@ -113,3 +113,21 @@ IDLE/尚无记录时 finish 拒绝且不改状态。切换观察相机不影响�
 重复调用、IDLE 下 finish 拒绝、重新开始、Global 切换及双机隔离检查；
 证据为 `log/projectairsim/hud-style-review/lifecycle-check.json`。
 当前静止无人机的峰值为零，未执行非零飞行速度峰值验收。
+
+## 场景行人控制
+
+同一个客户端显式传入 `scene_port`，HUD 保持原端口；场景请求复用请求 ID、超时和错误处理。
+
+```python
+client = ProjectAirSimExtensionClient(host="127.0.0.1", port=19891, scene_port=19892)
+client.reset_actor()                 # runner 回到路线起点并暂停
+state = client.get_actor_state()     # 查询位置、时间和运行状态
+client.start_actor()                 # 从暂停位置继续
+client.stop_actor()                  # 冻结路线时间、位置和动画
+```
+
+默认 actor_id 为 `runner`。也可调用 `control_actor("runner", "start")`。
+需要 UE 加载 AerohubSceneControl 插件；端点为 `/aerohub/scene/rpc`。
+未传 scene_port 时场景方法在本地拒绝，不把场景请求发给 HUD。
+人物控制独立于无人机 HUD 与 AS2 飞行控制；起飞后启动人物的编排示例见
+`deployment/airsim/demos/weststreet/mission.py`。

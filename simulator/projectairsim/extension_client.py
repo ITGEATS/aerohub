@@ -37,30 +37,42 @@ class ProjectAirSimExtensionClient:
     per HTTP operation; use outside flight/control callbacks.
     """
 
-    def __init__(self, host='127.0.0.1', port=8991, *, timeout=3.0):
+    def __init__(self, host='127.0.0.1', port=8991, *, timeout=3.0, scene_port=None):
         if not isinstance(host, str) or not host or any(c in host for c in '/?#@'):
             raise ValueError('host must be a hostname or IP address, without a URL scheme')
         if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise ValueError('port must be an integer in 1..65535')
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not isfinite(timeout) or timeout <= 0:
             raise ValueError('timeout must be finite and positive')
+        if scene_port is not None and (isinstance(scene_port, bool) or not isinstance(scene_port, int) or not 1 <= scene_port <= 65535):
+            raise ValueError('scene_port must be an integer in 1..65535')
         address = f'[{host}]' if ':' in host and not host.startswith('[') else host
         self.url = f'http://{address}:{port}/aerohub/rpc'
+        self.scene_url = None if scene_port is None else f'http://{address}:{scene_port}/aerohub/scene/rpc'
         self.timeout = timeout
         self._open = build_opener(ProxyHandler({})).open
         self._ids = count(1)
 
     def call(self, method, **params):
         """Low-level escape hatch for adapter bootstrap and future server methods."""
+        return self._request(self.url, method, params)
+
+    def call_scene(self, method, **params):
+        """Call scene RPC without changing HUD, vehicle control or topic ownership."""
+        if self.scene_url is None:
+            raise ValueError('Scene RPC requires an explicit scene_port')
+        return self._request(self.scene_url, method, params)
+
+    def _request(self, url, method, params):
         request_id = next(self._ids)
         body = json.dumps(dict(jsonrpc='2.0', id=request_id, method=method, params=params),
                           ensure_ascii=False, allow_nan=False).encode('utf-8')
-        request = Request(self.url, data=body, headers={'Content-Type': 'application/json'})
+        request = Request(url, data=body, headers={'Content-Type': 'application/json'})
         try:
             with self._open(request, timeout=self.timeout) as reply:
                 raw = reply.read()
         except (HTTPError, URLError, OSError, HTTPException) as error:
-            raise ExtensionTransportError(f'{method} at {self.url}: {error}') from error
+            raise ExtensionTransportError(f'{method} at {url}: {error}') from error
         try:
             response = json.loads(raw)
         except (ValueError, UnicodeError) as error:
@@ -76,6 +88,30 @@ class ProjectAirSimExtensionClient:
                 raise ExtensionProtocolError('Invalid JSON-RPC error')
             raise ExtensionRPCError(error['code'], error['message'], error.get('data'))
         return response['result']
+
+    @staticmethod
+    def _validate_actor(actor_id):
+        if not isinstance(actor_id, str) or not actor_id.strip():
+            raise ValueError('actor_id must be nonempty')
+
+    def get_actor_state(self, actor_id='runner'):
+        self._validate_actor(actor_id)
+        return self.call_scene('GetActorState', actor_id=actor_id)
+
+    def control_actor(self, actor_id, event):
+        self._validate_actor(actor_id)
+        if event not in ('start', 'stop', 'reset'):
+            raise ValueError('actor event must be start, stop or reset')
+        return self.call_scene('ControlActor', actor_id=actor_id, event=event)
+
+    def start_actor(self, actor_id='runner'):
+        return self.control_actor(actor_id, 'start')
+
+    def stop_actor(self, actor_id='runner'):
+        return self.control_actor(actor_id, 'stop')
+
+    def reset_actor(self, actor_id='runner'):
+        return self.control_actor(actor_id, 'reset')
 
     def set_title(self, text, *, side='left'):
         """Set one title; empty text clears only that side."""

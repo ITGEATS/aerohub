@@ -41,6 +41,8 @@ private:
     int32 ViewIndex = INDEX_NONE;
     bool bGlobal = false;
     bool bOwnsView = false;
+    FString GlobalCameraTag;
+    bool bGlobalFollowAvailable = false;
     FString ImageType;
     UPROPERTY() ACameraActor* ObservationCamera = nullptr;
     UPROPERTY() UFont* TextFont = nullptr;

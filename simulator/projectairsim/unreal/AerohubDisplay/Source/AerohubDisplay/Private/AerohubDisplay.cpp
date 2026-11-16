@@ -54,6 +54,9 @@ void AAerohubHUD::ReadConfig()
     if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Data) || !Data.IsValid()) return;
     Data->TryGetBoolField(TEXT("enabled"), bEnabled);
     Data->TryGetBoolField(TEXT("camera_enabled"), bCameraEnabled);
+    // Opt-in only: default Global remains the UAV-centroid overhead view.
+    GlobalCameraTag.Empty();
+    Data->TryGetStringField(TEXT("global_camera_tag"), GlobalCameraTag);
     double Width;
     if (Data->TryGetNumberField(TEXT("camera_width"), Width)) CameraWidth = FMath::Clamp(Width, 160.0, 640.0);
     double RequestedSpeedMax;
@@ -281,7 +284,11 @@ FString AAerohubHUD::StatusJson() const
     Data->SetStringField(TEXT("vehicle_label"), bGlobal ? TEXT("Global") : RobotName);
     Data->SetStringField(TEXT("image_type"), ImageType);
     Data->SetBoolField(TEXT("global"), bGlobal);
-    Data->SetBoolField(TEXT("view_available"), bGlobal ? ObservationCamera != nullptr : Camera.IsValid());
+    Data->SetStringField(TEXT("global_mode"), GlobalCameraTag.IsEmpty() ? TEXT("uav_centroid") : TEXT("actor_follow"));
+    Data->SetStringField(TEXT("global_camera_tag"), GlobalCameraTag);
+    Data->SetBoolField(TEXT("global_target_present"), bGlobalFollowAvailable);
+    Data->SetBoolField(TEXT("view_available"), bGlobal
+        ? (ObservationCamera != nullptr && (GlobalCameraTag.IsEmpty() || bGlobalFollowAvailable)) : Camera.IsValid());
     Data->SetBoolField(TEXT("vehicle_present"), Robot.IsValid());
     const auto* VehicleState = VehicleStates.Find(RobotName);
     Data->SetStringField(TEXT("run_state"), VehicleState ? VehicleState->RunState : TEXT(""));
@@ -391,7 +398,9 @@ void AAerohubHUD::DrawHUD()
     DrawRect(BadgeFill,BX,SY+3*S,BadgeW,25.5f*S);
     DrawLabel(FormatText,{BX+BadgeW/2,SY+15.75f*S},19.5f*S,FormatColor,true);
 
-    const FString Health = bGlobal ? (Robot.IsValid() ? TEXT("") : TEXT("NO VEHICLES"))
+    const FString Health = bGlobal ? (!GlobalCameraTag.IsEmpty()
+        ? (bGlobalFollowAvailable ? TEXT("") : TEXT("NO FOLLOW TARGET"))
+        : (Robot.IsValid() ? TEXT("") : TEXT("NO VEHICLES")))
         : !Robot.IsValid() ? TEXT("NO VEHICLE") : !Camera.IsValid() ? TEXT("NO CAMERA")
         : LastTelemetrySeconds <= 0 ? TEXT("WAITING DATA")
         : FPlatformTime::Seconds()-LastTelemetrySeconds >= 1 ? TEXT("STALE DATA") : TEXT("");
@@ -536,7 +545,25 @@ void AAerohubHUD::UpdateView()
         FVector Center = FVector::ZeroVector;
         for (TActorIterator<AActor> It(GetWorld()); It; ++It)
             if (Names.Contains(It->GetName())) { Positions.Add(It->GetActorLocation()); Center += It->GetActorLocation(); Robot = *It; }
-        if (!Positions.IsEmpty()) {
+        bGlobalFollowAvailable = false;
+        if (!GlobalCameraTag.IsEmpty()) {
+            // Copy the reviewed scene camera; do not attach/teleport native robots.
+            ACameraActor* Follow = nullptr;
+            int32 Matches = 0;
+            for (TActorIterator<ACameraActor> It(GetWorld()); It; ++It) {
+                if (*It != ObservationCamera && !It->IsActorBeingDestroyed()
+                    && It->ActorHasTag(FName(*GlobalCameraTag))) { Follow = *It; ++Matches; }
+            }
+            if (Matches == 1 && Follow && Follow->GetCameraComponent()) {
+                const auto* Source = Follow->GetCameraComponent();
+                ObservationCamera->SetActorLocationAndRotation(Source->GetComponentLocation(), Source->GetComponentRotation());
+                Lens->FieldOfView = Source->FieldOfView;
+                Lens->PostProcessSettings = Source->PostProcessSettings;
+                Lens->PostProcessBlendWeight = Source->PostProcessBlendWeight;
+                bGlobalFollowAvailable = true;
+            }
+            CameraName = TEXT("FollowCamera");
+        } else if (!Positions.IsEmpty()) {
             Center /= Positions.Num();
             float Radius = 1000;
             for (const auto& Position : Positions) Radius = FMath::Max(Radius, FVector::Dist(Center,Position));
@@ -544,8 +571,10 @@ void AAerohubHUD::UpdateView()
             const float Height = Radius*1.3f*FMath::Max(Aspect,1.f);
             ObservationCamera->SetActorLocationAndRotation(Center+FVector(0,0,Height),FRotator(-90,0,0));
         }
-        Lens->FieldOfView = 90;
-        Lens->PostProcessSettings = FPostProcessSettings(); Lens->PostProcessBlendWeight = 0;
+        if (GlobalCameraTag.IsEmpty()) {
+            Lens->FieldOfView = 90;
+            Lens->PostProcessSettings = FPostProcessSettings(); Lens->PostProcessBlendWeight = 0;
+        }
     } else {
         USceneCaptureComponent2D* Selected = Camera.Get();
         if (!IsValid(Selected) || !Selected->IsRegistered() || !IsValid(Selected->GetOwner())

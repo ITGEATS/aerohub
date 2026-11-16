@@ -120,3 +120,21 @@ The adapter filters invalid/unregistered components and destroying actors, then
 rechecks the weak pointer after reselection. Three actual world load/reload
 cycles passed after fixing this boundary; failures and successful logs retained.
 Final build and checks are indexed by log/projectairsim/hud-v1/manifest.json.
+
+## Explicit scene follow override for Global
+
+Default Global behavior remains the native UAV-centroid overhead view. An individual
+scene may opt in through its display JSON:
+
+```json
+{"global_camera_tag":"WestRunnerGlobalFollow"}
+```
+
+Exactly one live `ACameraActor` in the current world must have this actor tag.
+Global copies that camera component's pose, FOV and postprocess each tick; this is an
+observation override, not vehicle control. No target or duplicate tags report
+`view_available=false` and `NO FOLLOW TARGET`; they must not be called successful
+tracking. State adds `global_mode` (`uav_centroid`/`actor_follow`),
+`global_camera_tag` and `global_target_present`. The override does not change any
+vehicle's telemetry, timer or mission state. Sequencer Camera Cuts must not compete
+with the observation layer. Empty/absent configuration preserves the default.

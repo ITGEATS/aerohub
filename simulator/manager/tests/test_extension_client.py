@@ -95,6 +95,29 @@ class ProjectAirSimExtensionClientTest(unittest.TestCase):
                 call()
         self.assertEqual(self.requests, [])
 
+    def test_actor_lifecycle_uses_scene_endpoint_not_hud(self):
+        client = ProjectAirSimExtensionClient(port=self.server.server_port,
+                                             scene_port=self.server.server_port)
+        client.start_actor()
+        client.stop_actor()
+        client.reset_actor()
+        client.get_actor_state()
+        client.get_state()
+        self.assertEqual([path for path, _ in self.requests],
+                         ['/aerohub/scene/rpc'] * 4 + ['/aerohub/rpc'])
+        self.assertEqual([r['params'] for _, r in self.requests[:3]], [
+            {'actor_id': 'runner', 'event': event} for event in ('start', 'stop', 'reset')])
+        self.assertEqual([r['id'] for _, r in self.requests], [1, 2, 3, 4, 5])
+
+    def test_actor_validation_and_explicit_port(self):
+        for operation in (lambda: self.client.start_actor(),
+                          lambda: self.client.control_actor('runner', 'fly'),
+                          lambda: self.client.get_actor_state(''),
+                          lambda: ProjectAirSimExtensionClient(scene_port=True)):
+            with self.assertRaises(ValueError):
+                operation()
+        self.assertEqual(self.requests, [])
+
     def test_transport_failure_is_explicit(self):
         def fail(*args, **kwargs):
             raise TimeoutError('timed out')
