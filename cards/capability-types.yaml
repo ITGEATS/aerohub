@@ -73,6 +73,24 @@ capability_types:
       axes: optical_x_right_y_down_z_forward
       timestamp: measurement_time
 
+  - id: sensor/camera/depth/range-image
+    name: Perspective depth range image
+    description: Per-pixel Euclidean range along each camera ray, distinct from axial optical-axis depth.
+    transport:
+      protocol: ros2_topic
+      schema: sensor_msgs/msg/Image
+      qos:
+        reliability: best_effort
+        durability: volatile
+        history: keep_last
+        depth: 5
+    semantics:
+      unit_system: encoding_dependent
+      units: {32FC1: m, 16UC1: mm}
+      coordinate_frame: camera_optical_frame
+      axes: optical_x_right_y_down_z_forward
+      timestamp: measurement_time
+
   - id: sensor/camera/depth/camera-info
     name: Depth camera calibration
     description: Camera intrinsics and image geometry corresponding to the axial depth stream.
@@ -216,6 +234,24 @@ capability_types:
       coordinate_frame: dpv_slam_map
       axes: frame_defined
       timestamp: latest_accepted_image_time
+
+  - id: perception/map/collaborative-sparse-landmarks/3d
+    name: Collaborative sparse visual landmarks
+    description: Sparse initialized landmarks exchanged and optimized by a multi-vehicle visual estimator; not dense geometry, free space, or a collision map.
+    transport:
+      protocol: ros2_topic
+      schema: sensor_msgs/msg/PointCloud2
+      qos:
+        reliability: best_effort
+        durability: volatile
+        history: keep_last
+        depth: 5
+    semantics:
+      unit_system: SI
+      units: {x: m, y: m, z: m}
+      coordinate_frame: collaborative_estimator_world
+      axes: frame_defined
+      timestamp: latest_estimator_update_time
 
   - id: perception/map/neural-point-anchors/3d
     name: Neural-point anchors

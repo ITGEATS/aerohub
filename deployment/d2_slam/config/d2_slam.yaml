@@ -1,0 +1,166 @@
+%YAML:1.0
+---
+imu: 1
+imu_topic: "/d2slam/input/imu"
+image0_topic: "/d2slam/input/rgb"
+depth_topic: "/d2slam/input/depth"
+is_compressed_images: 0
+imu_freq: 50
+image_freq: 10
+frame_step: 1
+lcm_thread_freq: 50.0
+loop_detection_freq: 5.0
+
+camera_configuration: 2
+num_of_cam: 1
+cam0_calib: "camera.yaml"
+image_width: 320
+image_height: 240
+enable_undistort_image: 0
+undistort_fov: 90.0
+width_undistort: 320
+height_undistort: 240
+photometric_calib: ""
+avg_photometric: 1.0
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [0.0, 0.0, 1.0, 0.4,
+          -1.0, 0.0, 0.0, 0.0,
+          0.0, -1.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 1.0]
+
+estimate_extrinsic: 0
+extrinsic_parameter_type: 0
+not_estimate_first_extrinsic: 1
+estimate_td: 0
+td: 0.0
+estimation_mode: 2
+double_counting_common_feature: 0
+
+max_solver_time: 0.08
+max_num_iterations: 8
+ceres_num_threads: 2
+consensus_max_steps: 1
+timout_wait_sync: 50
+rho_landmark: 1.0
+rho_frame_T: 100.0
+rho_frame_theta: 100.0
+relaxation_alpha: 0.0
+consensus_sync_for_averaging: 0
+consensus_sync_to_start: 0
+
+depth_far_thres: 25.0
+depth_near_thres: 0.3
+depth_sqrt_inf: 100.0
+fuse_dep: 1
+max_depth_to_fuse: 20.0
+min_depth_to_fuse: 0.3
+track_remote_netvlad_thres: 0.5
+
+init_method: 0
+init_acc_bias_threshold: 0.1
+depth_estimate_baseline: 0.03
+enable_sfm_initialization: 0
+add_vel_ba_prior: 1
+
+max_sld_win_size: 11
+landmark_estimate_tracks: 3
+min_solve_frames: 5
+max_solve_cnt: 200
+max_solve_measurements: 1000
+min_measurements_per_keyframe: 20
+nearby_drone_dist: 20.0
+
+thres_outlier: 10.0
+perform_outlier_rejection_num: 100
+tri_max_err: 0.2
+remove_scale_outlier_threshold: 5.0
+
+enable_marginalization: 1
+margin_sparse_solver: 0
+margin_enable_fej: 0
+always_fixed_first_pose: 0
+remove_base_when_margin_remote: 2
+
+max_cnt: 150
+max_superpoint_cnt: 100
+show_track_id: 0
+show_feature_extraction: 0
+write_tracking_image_to_file: 0
+check_essential: 1
+enable_lk_optical_flow: 1
+remote_min_match_num: 20
+enable_superglue_local: 0
+enable_superglue_remote: 0
+ransacReprojThreshold: 5.0
+enable_search_local_aera: 1
+enable_search_local_aera_remote: 1
+enable_motion_prediction_local: 1
+search_local_max_dist: 0.05
+parallex_thres: 0.012
+knn_match_ratio: 0.8
+feature_min_dist: 20
+track_from_keyframe: 0
+sp_track_use_lk: 1
+
+cnn_use_onnx: 1
+enable_pca_superpoint: 0
+enable_pca_netvlad: 0
+superpoint_pca_dims: 64
+netvlad_pca_dims: 1024
+cnn_enable_tensorrt: 0
+cnn_enable_tensorrt_int8: 0
+netvlad_int8_calib_table_name: ""
+superpoint_int8_calib_table_name: ""
+superpoint_config:
+   onnx_path: "/repo/src/basic_function/state_estimator/d2_slam/upstream/models/superpoint_series/superpoint_v1_dyn_size.onnx"
+   trt_engine_path: ""
+   input_width: 320
+   input_height: 240
+   input_tensor_names: ["image"]
+   output_tensor_names: ["semi", "desc"]
+   threshold: 0.015
+   nms_radius: 4
+   enable_pca: 0
+   pca_mean_path: ""
+   pca_comp_path: ""
+   superpoint_pca_dims: 64
+
+acc_n: 0.1
+gyr_n: 0.05
+acc_w: 0.002
+gyr_w: 0.0004
+g_norm: 9.805
+
+loop_detection_netvlad_thres: 0.8
+enable_homography_test: 0
+accept_loop_max_yaw: 10.0
+accept_loop_max_pos: 2.0
+loop_inlier_feature_num: 30
+lazy_broadcast_keyframe: 0
+gravity_check_thres: 0.06
+
+pgo_mode: 1
+pgo_rho_frame_T: 0.7
+pgo_rho_frame_theta: 0.625
+pgo_eta_k: 0.1
+write_g2o: 0
+g2o_output_path: "/runtime/output/output.g2o"
+write_pgo_to_file: 1
+enable_gravity_prior: 1
+gravity_sqrt_info: 10.0
+pgo_solver_time: 1.0
+solver_timer_freq: 1.0
+enable_pcm: 1
+pcm_thres: 2.8
+debug_save_g2o_only: 0
+
+output_path: "/runtime/output/"
+debug_print_sldwin: 0
+debug_print_states: 0
+enable_perf_output: 1
+debug_write_margin_matrix: 0
+verbose: 0
+print_network_status: 1

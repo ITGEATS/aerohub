@@ -1,0 +1,77 @@
+schema_version: 0.1
+id: d2-slam
+version: fork-f5ea552-aerohub-0.1.0
+description: Three-vehicle collaborative visual-inertial state estimation and sparse landmark mapping
+source:
+  repository: https://github.com/Air-Suck/D2SLAM.git
+  commit: f5ea552bf1198de1332c78a3915948cd350546ad
+  upstream_repository: https://github.com/HKUST-Aerial-Robotics/D2SLAM.git
+  upstream_commit: 4c33871083e4ae97b97973eb5bd88dc6735359d7
+  submodule_path: src/basic_function/state_estimator/d2_slam/upstream
+  upstream_modified: forked
+  license: LGPL-3.0
+capabilities:
+  - state-estimator.d2-slam-collaborative
+  - perception.d2-slam-collaborative-landmarks
+cards:
+  - cards/state-estimator/d2-slam-collaborative.yaml
+  - cards/perception/d2-slam-collaborative-landmarks.yaml
+shared_process_group: d2-slam-per-vehicle
+environment:
+  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.0]
+  architecture: linux/amd64
+  workspace_prepare: deployment/d2_slam/prepare_workspace.sh
+  workspace_default: log/workspaces/d2_slam
+  topology: deployment/swarm/configs/d2_slam.yaml
+  dependency_locks:
+    - deployment/d2_slam/locks/ros1-linux-64.lock
+    - deployment/d2_slam/locks/cuda11-linux-64.lock
+  prohibited_runtime: algorithm-specific Docker images and repository PX4 source
+runtime:
+  roles:
+    simulator: visible AirSim host process
+    flight_board: three image-embedded PX4 SITL instances and AirSim clock
+    compute: one D2SLAM GPU process and ROS bridge per vehicle; AS2 plugin when selected
+    workstation: mission, truth scoring, fault injection and evidence collection
+  topology: three independent pc_simulation compute containers
+  namespaces: [drone0, drone1, drone2]
+  clock: AirSim /clock
+  input:
+    rgb: /droneN/sensor_measurements/FrontCamera/rgb/image
+    depth: /droneN/sensor_measurements/FrontCamera/depth_perspective/image
+    imu: /droneN/sensor_measurements/imu/data
+    local_odometry: /droneN/sensor_measurements/odom
+  output_state: /droneN/d2_slam/odometry
+  output_map: /droneN/d2_slam/landmarks
+  collaboration_evidence: /droneN/d2_slam/collaboration
+requirements:
+  gpu: one CUDA-capable GPU process per vehicle
+  sensors: calibrated RGB camera, perspective range depth and six-axis IMU per vehicle
+  platform: visible AirSim 1.8.1 plus image-embedded PX4 SITL
+  calibration: body-to-camera transform must match AirSim camera pose
+lifecycle:
+  startup: AirSim; three PX4 instances; clock and sensors; three D2SLAM processes; AS2 host; mission
+  readiness: fresh independent sensors, GPU D2VINS, odometry, landmarks and both remote peers
+  stop: remove state authority before stopping the shared estimator; then land/disarm and stop owned resources
+  failure: freeze the last accepted global correction while fresh PX4 local state supports controlled landing
+  recovery: restart only while motion is stopped; restart creates a new collaborative map epoch
+authority:
+  state_and_tf: exactly one selected AS2 State Estimator provider per vehicle
+  composition: D2SLAM map-to-odom correction plus PX4 odom-to-base pose and body twist
+  shadow_gate: deployment/d2_slam/validation.yaml
+validation:
+  stage: reproduced
+  gate: deployment/d2_slam/validation.yaml
+  scope: Three-vehicle visible AirSim + PX4 SITL, real GPU D2SLAM, collaboration, sparse landmarks, AS2 authority and the declared fault matrix passed. Physical flight remains out of scope.
+  evidence:
+    - log/d2-slam/accepted/shadow/result.json
+    - log/d2-slam/accepted/authority/result.json
+    - log/d2-slam/accepted/sensor-fault/result.json
+    - log/d2-slam/accepted/algorithm-fault/result.json
+    - log/d2-slam/accepted/communication-fault/result.json
+    - log/d2-slam/plugin-smoke-final-02/output.log
+    - log/d2-slam/build-fork-f5ea552-clean.log
+  limitations:
+    - Sparse landmarks are not a dense map, occupancy map or collision representation.
+    - The accepted topology is three PC-simulated compute containers; hybrid physical-board deployment is not validated.
+    - Failure of PX4 local odometry is outside the validated degradation path.
