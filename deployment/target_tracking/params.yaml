@@ -1,0 +1,5 @@
+/**:
+  ros__parameters:
+    use_sim_time: true
+    snapshot_timeout: 1.0
+    max_capture_age: 0.5

@@ -1,0 +1,48 @@
+schema_version: '0.1'
+id: aerohub.tool.target-tracking
+version: 0.1.0
+source:
+  directory: src/tool/target_tracking
+  license: MIT
+  upstream: deployment/airsim/demos/target_tracking/reference/yopo_tracker
+  commit: d313f8610195dc986caceff7a3616f63d7e6f31f
+  implementation: YOPO/policy/target_ekf.py (installed verbatim with LICENSE)
+provides: [tool.target-tracking]
+cards: [cards/tool/target-tracking.yaml]
+roles:
+  compute: [target-tracking-adapter]
+  workstation: [AS2-target-tracking-module, ROS-client]
+dependencies:
+  observations: deployment/object_detection/component.yaml
+runtime:
+  image: onboard_computer:v0.1.1
+  image_id: sha256:c8756265a76d827633e132824922ccdf2801c2e4bae864a08d4a54215d4c601e
+  architecture: x86_64
+  build: bash deployment/target_tracking/build.sh
+  start: bash deployment/target_tracking/start.sh
+  stop: SIGINT to owned tracking process; standard action cancellation ends session only
+  health: action discovery is process readiness; feedback valid is current target readiness
+  configuration: deployment/target_tracking/params.yaml
+  namespace: configurable; drone0 default in start.sh
+  public_interfaces:
+    track:
+      address: /drone0/tools/target_tracking/track
+      schema: uav_target_tracking_interfaces/action/TrackObject
+      parameter_schema: src/tool/target_tracking/interfaces/action/TrackObject.action
+  python_entry: drone.target_tracking.track
+  timeout_clock: monotonic-wall-clock
+  persistent_state: none; each goal starts a new EKF and UUID
+  rollback: cancel, stop owned process, restore source and rebuild overlay, restart with empty state
+  coupling: one EKF per active action, Python client separate; shares external detection worker
+resources:
+  reads: [tools/object_detection/observe]
+  writes: [target-state-action-feedback]
+  exclusive: [local-tracking-session]
+  enforcement: local lock; serial detection request occupancy persists until actual reply
+  motion_authority: none
+  clock: caller-selected ROS clock; rollback aborts session
+  ports: DDS only; inherits domain/network; no HTTP listener
+validation:
+  stage: partial
+  evidence: deployment/target_tracking/VALIDATION.md
+  unfinished: [moving-target-accuracy, occlusion-and-identity, platform-fault-recovery, following-Mission]

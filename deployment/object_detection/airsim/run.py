@@ -16,7 +16,7 @@ sys.path.insert(0,str(ROOT/'deployment/airsim/demos/catora_open_field'))
 from sim_startup import StartupRelay
 
 
-def main():
+def main(probe_script=None, extra_workspace=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--estimate-position',action='store_true')
@@ -66,6 +66,11 @@ def main():
     if args.near_target:
         if not args.estimate_position:raise ValueError('--near-target requires --estimate-position')
         checks += ['ten consecutive car positions at 2-8m','independent scene collision depth error <=0.30m','output transform residual <=0.05m']
+    if probe_script is not None:
+        checks = ['disarmed before and after', 'real AirSim RGB-D through actual CUDA detector',
+                  'at least four confirmed TrackObject feedbacks consumed via AS2 Module',
+                  'finite capture stamps and covariance', 'standard action cancel',
+                  'static ground only; moving target, accuracy, faults and navigation unfinished']
     checks += (['real depth and matching calibration','RGB-depth skew <=50ms','capture-time AS2 TF']
                if args.estimate_position else ['no depth capture configured','no depth/calibration/TF consumers in Tool'])
     (output/'checks.json').write_text(json.dumps(dict(checks=checks,position_requested=args.estimate_position,
@@ -73,6 +78,8 @@ def main():
     import hashlib
     files=list(APP.glob('*.py'))+[APP/'settings.json',ROOT/'deployment/airsim/config/dds/fastdds_udp.xml']+[ROOT/'simulator/airsim/sensors/uav_as2_sensor_adapter/node.py',
         ROOT/'simulator/airsim/sensors/uav_as2_sensor_adapter/conversion.py']
+    if probe_script is not None:
+        files += [ROOT / probe_script] + list((ROOT/'src/tool/target_tracking').rglob('*.py'))
     (output/'sources.json').write_text(json.dumps({str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
     images=['flight_board:v0.1.0','onboard_computer:v0.1.0']
     (output/'images.json').write_text(subprocess.check_output(['docker','image','inspect',*images],text=True))
@@ -82,6 +89,8 @@ def main():
         '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/repo/deployment/airsim/config/dds/fastdds_udp.xml',
         '-e','PYTHONDONTWRITEBYTECODE=1','-v',str(ROOT)+':/repo:ro','-v',str(output)+':/evidence',
         '-v',str(ROOT/'log/object-detection-tool/workspace')+':/work:ro']
+    if extra_workspace is not None:
+        common += ['-v', str(extra_workspace)+':/tracking:ro']
     def launch(role,image,command,env=()):
         name=prefix+role
         subprocess.run(['docker','run','-d','--name',name,'--label','aerohub.object-detection.output='+str(output),
@@ -119,7 +128,10 @@ def main():
             'export AS2_FLEET_FILE=/evidence/fleet.yaml && exec python3 /repo/deployment/airsim/as2/run.py')
         command='source /opt/ros/humble/setup.bash && source /root/aerostack2_ws/install/setup.bash && source /work/install/setup.bash && '
         command+='export PYTHONPATH=/work/python_deps:$PYTHONPATH && export AS2_MODULES_PATH=/work/install/share/uav_object_detection_python_api/modules && '
-        command+='exec python3 /repo/deployment/object_detection/airsim/probe.py --output /evidence/probe'
+        if extra_workspace is not None:
+            command+='source /tracking/install/setup.bash && export AS2_MODULES_PATH=/tracking/install/uav_target_tracking_python_api/share/uav_target_tracking_python_api/modules:$AS2_MODULES_PATH && '
+        probe_path = probe_script or 'deployment/object_detection/airsim/probe.py'
+        command+='exec python3 /repo/'+probe_path+' --output /evidence/probe'
         if args.estimate_position:command+=' --estimate-position'
         if args.collect_failures:command+=' --collect-failures'
         if args.near_target:command+=' --near-target --samples '+str(args.samples)

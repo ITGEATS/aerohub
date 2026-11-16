@@ -1,0 +1,11 @@
+{
+  "project": "demo",
+  "settings": "settings.json",
+  "args": [
+    "-vulkan",
+    "-windowed",
+    "-ResX=1280",
+    "-ResY=720",
+    "-nosound"
+  ]
+}

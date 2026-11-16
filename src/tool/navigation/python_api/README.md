@@ -1,7 +1,7 @@
 # AS2 Navigation Module
 
-公共 Python 调用层只依赖 `uav_planner_interfaces/action/NavigateToPose`，不依赖具体
-Planner。实现服务端放在对应 `src/tool/navigation/planner/<planner>/` 下；目前 SUPER 提供首个实现。
+公共 Python 调用层使用 `NavigateToPose` Action 与 `UpdateNavigationTarget` Service，
+不依赖具体 Planner。SUPER 与 YOPO 的服务端位于各自 `ros2_adapter/`。
 
 ## 加载与调用
 
@@ -55,7 +55,8 @@ finally:
 反馈包括阶段、实际位姿、剩余距离及轨迹 revision。结果包括 success、code、reason、
 最终位姿及 stop_confirmed。ROS Goal UUID 由标准 Action 提供；接口不指定算法。
 
-首版没有抢占、暂停恢复或目标更新。同一客户端仍在运行时再次调用会抛出异常；
+同一 Module 的重复调用会更新当前任务目标，不抢占其他客户端的任务。到达策略见下节。
+
 服务端忙时拒绝新 Goal。错误请求可由服务端接收后立即返回带原因的失败结果，且
 不会产生运动。实现不得将不支持的显式要求当成成功。
 
@@ -145,3 +146,47 @@ SUPER卡片复用已有里程计、导航障碍点、控制器状态类型；YOP
 对齐检查日志在 `log/navigation-card-v1/`。两张目标Card和部署绑定检查通过；
 全仓校验仍因DiffPhys、YOLO26n-seg、GCOPTER、Object Detection四张旧卡未迁移到v1而失败，
 本次检查与修改前错误集合一致，不表示全仓卡片已全部通过。
+
+## 持续导航与目标更新（2026-11-15）
+
+```python
+nav = drone.navigation
+nav.to_point(5., 0., 2., wait=False, arrival_behavior="hold", target_timeout=60.)
+nav.to_point(7., 0., 2., wait=False)   # 同一个 Action UUID，不取消原执行
+nav.to_point(10., 0., 2., wait=False)
+nav.wait_until_arrived(timeout=30.)  # 到达后仍保留导航任务
+nav.cancel()                       # 确认停止后结束任务
+```
+
+- `arrival_behavior="complete"` 是默认值，到达且停止确认后结束；`"hold"` 则保留会话，
+  通过既有执行层停止/悬停，目标改变后重新获取执行。HOLD 必须 `wait=False`，
+  使用 `wait_until_arrived()` 等待当前目标；`wait_to_result()` 等待整个任务结束。
+- 活跃任务中重复 `to_point` / `to_pose` 仅更新目的地。未提供的任务策略继承；显式改变
+  朝向模式、速度、容差、任务超时、到达策略或目标流超时会报错，必须结束旧任务再创建。
+- `timeout` 仍是从任务创建开始计时的总时限，默认 300 ROS 秒；更新不延期。
+  `target_timeout` 是距最后一次接受目标的 ROS 秒数，过期执行停止并返回 `TARGET_TIMEOUT`。
+  Python HOLD 默认 5 秒；直接 Action HOLD 必须显式启用有限正值。
+  Mission 即使目标不动，也必须在期限内重发目标；相同位置只续期，不触发重新规划。
+- 更新服务地址 `<UAV>/navigate_to_pose/update_target`，请求包含当前 Action `goal_id`、
+  严格递增的 `target_revision`（初始为 1）、目标和朝向模式。UUID 用于任务关联，不是鉴权凭据。
+  非当前 UUID、旧版本、非法目标、停止中更新会被拒绝。没有无限待处理目标队列。
+- `accepted` 表示目的地已接受，不是轨迹已生效。反馈 `target_revision` 表示已接受目标版本，
+  `revision` 仍表示执行轨迹版本，`arrived` 表示已确认到达并处于 HOLD。
+  当前**没有目标版本到实际生效轨迹的确认映射**，不能据此声称更新已由飞控执行。
+- 运动中更新保留已有可执行轨迹与导航 Action。到达保持后的恢复允许创建新的底层
+  FollowTimedPath 执行会话，不能把已结束的轨迹当作仍可 modify。
+  SUPER 旧最终轨迹先结束时也必须先停止确认再恢复；YOPO 丢弃过期目标的推理结果，
+  并用推理时冻结的目标计算 yaw。快速目标更新若持续快于推理，仍可能耗尽覆盖并安全停止。
+- 更新不是视觉跟踪/看向目标功能；两算法已有的朝向与到达差异仍保留，特别是 YOPO 的 5m 阈值。
+  默认一轮完整任务结束后再次调用会创建新任务；停止未确认时禁止重新启动。
+
+### 构建与验证边界
+
+Action 类型已有变更，新增 `unique_identifier_msgs` 依赖；必须重新编译公共接口、
+NavigationModule、SUPER/YOPO Adapter，以及受影响的 FollowPath 执行消费者并显式加载
+同一 overlay。不能混用旧生成类型或用旧 Demo 飞行记录证明新功能。
+本次证据放在 `log/navigation-target-update/`；接口测试使用真实 ROS 传输和可控执行/推理替身，
+不等价于真实 GPU 算法或 AirSim + PX4 SITL 动力学验收。持续更新、保持恢复及失效停止的
+真实仿真闭环仍需单独验证。
+
+本轮检查记录与未完成矩阵见 [目标更新接口验证](VALIDATION-target-update-20261115.md)。

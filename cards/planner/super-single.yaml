@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: planner.super-single
-version: "0.1.0"
+version: "0.2.0"
 type: tool
 name: SUPER single-vehicle navigation
 description: Accepts a single-vehicle navigation goal and executes SUPER polynomial plans through the existing FollowTimedPath execution chain.
@@ -28,6 +28,12 @@ interfaces:
     protocol: ros2_action
     schema: uav_planner_interfaces/action/NavigateToPose
     parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+  - id: update_target
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_planner_interfaces/srv/UpdateNavigationTarget
+    parameter_schema: src/tool/navigation/interfaces/srv/UpdateNavigationTarget.srv
 
 lifecycle:
   management: system_managed

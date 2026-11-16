@@ -5,6 +5,7 @@
 ```text
 src/
 ├── tool/
+│   ├── target_tracking/    # 只观测的目标状态与有限跟踪会话
 │   ├── object_detection/   # 公共单次检测、实现适配与 AS2 Module
 │   └── navigation/
 │       ├── planner/       # cat_ora、swarm_formation、super、gcopter、ipc、yopo、diffphys
