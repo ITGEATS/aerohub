@@ -1,5 +1,15 @@
 # Mountains 地面移动目标观察验证
 
+## 当前 Demo 默认：Grounding DINO / car（平台验收未完成）
+
+Mission → Tracking → DetectSnapshot → InferGroundingDino；8003 worker 为
+`grounding-dino-tiny`。使用统一 query overlay 和 Demo 专属 params，保留深度、新鲜度门。
+[当前部署命令与只观测/显式悬停步骤](../../README.md#dino-default)。
+以下原 YOLO 结果、截图和类别诊断属于历史阶段，不代表 DINO 已验收。
+`diagnose_classes.py` 仅供显式 YOLO 历史诊断，DINO 不自动运行。
+
+
+
 本仓库入口复用固定镜像与已有 Detect → Tracking → Mission 链路。
 仅借鉴课程的 Shipping 场景启动及车队 RPC；不运行课程 task、飞行或模型编排。
 本入口没有导航执行选项；Mission 仅观察时也不加载 navigation Module。
@@ -10,10 +20,9 @@
 `profile.json` 不包含本机二进制路径，由 `--scene-package` 生成忽略 Git 的运行配置。
 manager 的独立 UserDir 中复制三份 `*Convoy3Route01.sav`，不修改原件。
 
-前置条件：已有 CUDA YOLO26n-seg 独立环境与模型、检测外部工作区
-`log/object-detection-tool/workspace`、Tracking 外部工作区
-`log/yopov2-tracking/build`，以及固定镜像 `flight_board:v0.1.0`、
-`onboard_computer:v0.1.0`。准备方式沿用 [Tracking 部署](../../README.md)。
+前置条件：已有 CUDA Grounding DINO 独立环境与模型、统一外部工作区
+`log/object-detection-query/workspace`，以及固定镜像 `flight_board:v0.1.0`、
+`onboard_computer:v0.1.1`。准备方式沿用 [Tracking 部署](../../README.md)。
 宿主运行 Python 必须能导入 msgpack；可显式加载已有兼容依赖目录
 `HOST_RPC_DEPS`，不要将含旧 pydantic 的宿主 overlay 传入模型 worker。
 入口只复制 msgpack 到本轮 probe 依赖目录；worker 使用自己的独立环境。
@@ -39,7 +48,7 @@ python3 deployment/target_tracking/airsim/mountains/run.py \
 
 使用本场景 `simStartConvoy` 启动三车，`simStopConvoy` 停车，
 `simGetConvoyStatus` 检查实际速度。独立 Actor pose 仅记录运动评分，
-不作为检测、跟踪或 Mission 输入。当前模型把此皮卡检出为 `truck`，
+不作为检测、跟踪或 Mission 输入。历史 YOLO 模型把此皮卡检出为 `truck`（新 DINO 默认查询 car，未做实时验收），
 此类别不保证颜色、外观身份或多目标关联正确。
 
 运行前 `checks.json` 固定：Mission 12 s；至少4个不同 capture ID 和采样 stamp
@@ -53,6 +62,9 @@ probe 退出先取消 Tracking、测量三车连续5次速度 <=0.1 m/s；宿主
 然后回收本次容器、场景、观察相机进程与自启 worker，并核查既有容器身份未变。
 任何未通过项保留失败；此入口不代表移动目标精度、故障恢复、导航或飞行验收。
 
+
+最新受控初态重试见 [2026-11-16 验证记录](VALIDATION-controlled-initial-20261116.md)：
+DINO 实时检出皮卡，但框内深度仍被拒绝，移动观察未执行。
 
 ## 原生起飞后悬停观察
 
@@ -102,8 +114,8 @@ PX4数组直接转list保留NumPy float32，使旧JSON写盘抛异常；真实�
 `--settings-file deployment/target_tracking/airsim/mountains/side_settings.json`
 选择X2.6/Y0/Yaw180°侧视地面初态，实际相机FRD(.8,0,−.6)、Pitch−55°。
 该配置独立于现有默认地面/悬停入口；先`--flight-only`通过，再使用
-`--hover-observe --mission-category car`，每轮使用新输出目录。
-支持的任务类别仅car/truck/bus，参数不改变模型类别映射或身份规则。
+`--hover-observe --mission-query car`，每轮使用新输出目录。
+历史YOLO实验支持car/truck/bus；当前DINO接收query文本，默认car，不据短语保证身份。
 
 实际四次原生飞行通过，两次完整观察共101次真实CUDA均无受支持框；
 全类别诊断将车辆区域判为microwave，并未重映射为车辆。静态0/4，车队未启动，

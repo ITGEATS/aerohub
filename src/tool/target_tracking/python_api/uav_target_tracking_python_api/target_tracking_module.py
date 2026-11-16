@@ -16,15 +16,15 @@ class TargetTrackingModule(ModuleBase):
     def ready(self):
         return self._client is not None and self._client.server_is_ready()
 
-    def __call__(self, category='person', timeout=10.0, feedback_callback=None):
-        return self.track(category, timeout, feedback_callback)
+    def __call__(self, query='car', timeout=10.0, feedback_callback=None):
+        return self.track(query, timeout, feedback_callback)
 
-    def track(self, category='person', timeout=10.0, feedback_callback=None):
-        if not isinstance(category, str) or not category.strip() or not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError('category and finite positive timeout required')
+    def track(self, query='car', timeout=10.0, feedback_callback=None):
+        if not isinstance(query, str) or not query.strip() or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError('query and finite positive timeout required')
         if self._client is None:
             raise RuntimeError('Tracking module destroyed')
-        return self._client.send_goal_async(TrackObject.Goal(category=category, timeout=float(timeout)), feedback_callback=feedback_callback)
+        return self._client.send_goal_async(TrackObject.Goal(query=query, timeout=float(timeout)), feedback_callback=feedback_callback)
 
     def destroy(self):
         if self._client is not None:

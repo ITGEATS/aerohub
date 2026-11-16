@@ -7,4 +7,4 @@ sys.path.insert(0, str(ROOT))
 from deployment.object_detection.airsim.run import main
 if __name__ == '__main__':
     main(probe_script='deployment/target_tracking/airsim/probe.py',
-         extra_workspace=ROOT / 'log/yopov2-tracking/build')
+         detector_backend='grounding_dino')

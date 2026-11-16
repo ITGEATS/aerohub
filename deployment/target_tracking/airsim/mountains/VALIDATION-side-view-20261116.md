@@ -1,5 +1,7 @@
 # Mountains 侧视真实飞行与目标观察 — 2026-11-16
 
+> 以下为历史版本证据；当前 query 接口及调用示例见 [Detect README](../../../../src/tool/object_detection/README.md)。历史 category 字段及 CLI 不适用于当前 schema。
+
 **FAILED / partial：侧视原生飞行通过，车辆检测与静态跟踪未通过，12s移动观察未执行。**
 没有修改检测阈值0.35、类别映射、有效期或飞行门槛；没有用黄色外观强制指定身份。
 无导航跟随、无人机传送或AirSim运动API，无镜像重建、上游修改、commit或push。

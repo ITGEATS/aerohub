@@ -16,7 +16,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from as2_msgs.msg import PlatformInfo
-from uav_inference.yolo_node import YoloNode
+from uav_inference.grounding_dino_node import GroundingDinoNode
 from uav_object_detection.node import ObjectDetectionTool
 from uav_target_tracking.node import TrackingNode
 from uav_target_tracking_interfaces.action import TrackObject
@@ -31,10 +31,10 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(exist_ok=True)
     rclpy.init(args=['--ros-args', '-r', '__ns:=/drone0', '-p', 'use_sim_time:=true',
-                     '--params-file', '/repo/deployment/object_detection/params.example.yaml',
+                     '--params-file', '/repo/deployment/target_tracking/params.yaml',
                      '-p', 'camera_reliable:=true'])
     peer = Node('tracking_ground_consumer')
-    inference, detector, tracker = YoloNode(), ObjectDetectionTool(), TrackingNode()
+    inference, detector, tracker = GroundingDinoNode(), ObjectDetectionTool(), TrackingNode()
     executor = MultiThreadedExecutor(num_threads=8)
     for node in (peer, inference, detector, tracker): executor.add_node(node)
     thread = threading.Thread(target=executor.spin, daemon=True); thread.start()
@@ -69,7 +69,7 @@ def main():
         assert not platform[-1].armed
         result['initial_disarmed'] = True
         result['health'] = inference.detector.client.request('/health/ready')
-        assert result['health']['device'].startswith('cuda')
+        assert result['health']['model_id']=='grounding-dino-tiny' and result['health']['device'].startswith('cuda')
         wait(lambda: drone.target_tracking.ready, 5)
         future = drone.target_tracking.track('car', timeout=12., feedback_callback=on_feedback)
         wait(future.done, 5); handle = future.result(); assert handle.accepted

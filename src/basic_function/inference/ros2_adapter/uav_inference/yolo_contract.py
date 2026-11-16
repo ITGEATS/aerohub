@@ -35,7 +35,7 @@ def validate_request(request):
     return array_image(image)
 
 
-def validate_frame(frame, request):
+def validate_frame(frame, request, *, mask_required=True, allow_unclipped=False, allow_empty_label=False):
     image = request.image
     if (not frame.valid or frame.header != image.header or frame.request_id != request.request_id or
             frame.generation != request.generation or (frame.width, frame.height) != (image.width, image.height) or
@@ -44,10 +44,15 @@ def validate_frame(frame, request):
     for detection in frame.detections:
         xy = detection.xyxy
         if (len(xy) != 4 or not all(math.isfinite(x) for x in xy) or
-                not 0 <= xy[0] < xy[2] <= frame.width or not 0 <= xy[1] < xy[3] <= frame.height or
-                not math.isfinite(detection.confidence) or not 0 <= detection.confidence <= 1 or not detection.category):
+                not xy[0] < xy[2] or not xy[1] < xy[3] or
+                (not allow_unclipped and not (0 <= xy[0] < xy[2] <= frame.width and 0 <= xy[1] < xy[3] <= frame.height)) or
+                not math.isfinite(detection.confidence) or not 0 <= detection.confidence <= 1 or (not allow_empty_label and not detection.category)):
             raise ValueError('invalid detection')
         mask = detection.mask
+        if not mask_required:
+            if mask.header != image.header or mask.width or mask.height or mask.step or len(mask.data):
+                raise ValueError('box-only backend returned a mask')
+            continue
         if (mask.header != image.header or mask.encoding != 'mono8' or
                 (mask.width, mask.height, mask.step) != (image.width, image.height, image.width) or
                 len(mask.data) != image.width * image.height or

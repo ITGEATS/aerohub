@@ -1,4 +1,4 @@
-string category
+string query
 # Finite wall-clock session budget in seconds. Completion is timeout, not arrival.
 float64 timeout
 ---

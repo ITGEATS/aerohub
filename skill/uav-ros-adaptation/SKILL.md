@@ -104,3 +104,20 @@ YOPO-Tracker 静态 AirSim/CUDA 观测曾业务断言通过但清理失败，修
 缺测/失效转换单独定义。验收按不同 capture ID/原始 stamp 计数，不能按重复反馈
 数量判定观测覆盖。该问题已由真实 DDS 回归先失败后通过，YOPO-Tracker 最终静态 AirSim/CUDA
 独立采样验收也已复验通过；移动目标与故障仍需各自验证。
+
+
+## 文本查询替换固定类别接口
+
+公共请求字段更名时同时更新 Service、Action Goal、Python Module、CLI、部署例子和
+在仓库内的调用方；输出模型标签保留自身语义。公共 query 与实际 label/phrase 分开
+记录，固定类别使用部署支持列表精确解析，开放词表不能按 query==phrase 再过滤。
+后端选择由部署配置负责；独立 backend adapter 收束请求构造、查询规范化和模型
+输出校验，避免将分割 mask 约束套到 boxes-only 模型。检查模型版本及 worker 世代，
+替换模型后要求显式重启并失效旧会话。
+
+字段更名和嵌套消息扩展都需重生成全部受影响消费者，避免只构建 Engine 而加载旧
+Tool/Tracking 类型。Detect query 已在固定 onboard v0.1.1 外部 overlay 连同 AS2 Python
+API 构建并通过实际 DDS；该镜像有 AS2 消息不代表已安装 Python API，运行前需实际
+导入并加载其锁定局部 Python 依赖。公共 capture 的新鲜度用配置时钟下的源 stamp
+与接纳时间/水位核查，接收发生在调用后并不排除排队的旧图；拒绝未来图时不推进
+水位，以免一个错误源 stamp 阻塞后续正常图。回滚时重置水位并失效在途世代。

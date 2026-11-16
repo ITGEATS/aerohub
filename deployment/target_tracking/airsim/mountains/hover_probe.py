@@ -18,7 +18,7 @@ import rclpy
 from rclpy.action.graph import get_action_names_and_types
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.time import Time
-from uav_inference.yolo_node import YoloNode
+from uav_inference.grounding_dino_node import GroundingDinoNode
 from uav_object_detection.node import ObjectDetectionTool
 from uav_target_tracking.node import TrackingNode
 from flight import Flight
@@ -41,29 +41,30 @@ class IndependentFlightComplete(Exception):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--flight-only',action='store_true')
-    parser.add_argument('--category',choices=['car','truck','bus'],default='truck')
+    parser.add_argument('--query',default='car')
     a=parser.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     rclpy.init(args=['--ros-args','-r','__ns:=/drone0','-p','use_sim_time:=true',
-        '--params-file','/repo/deployment/object_detection/params.example.yaml',
+        '--params-file','/repo/deployment/target_tracking/params.yaml',
         '-p','camera_reliable:=true','-p','output_frame:=earth'])
     flight=Flight(a.output)
-    inference,detector,tracker=YoloNode(),ObjectDetectionTool(),TrackingNode()
+    inference,detector,tracker=GroundingDinoNode(),ObjectDetectionTool(),TrackingNode()
     executor=MultiThreadedExecutor(num_threads=8)
     for node in (flight,inference,detector,tracker):executor.add_node(node)
     inference_calls=[];projection_calls=[];predicate_samples=[]
-    detect=inference.detector.detect
+    detect=inference.detector.infer
     def record_detect(*args,**kwargs):
         dest=a.output/'cuda-inputs';dest.mkdir(exist_ok=True)
         index=len(inference_calls)
         np.save(dest/(str(index)+'.npy'),args[0])
         import cv2
-        cv2.imwrite(str(dest/(str(index)+'.png')),cv2.cvtColor(args[0],cv2.COLOR_RGB2BGR))
+        cv2.imwrite(str(dest/(str(index)+'.png')),args[0])
         flight.event('cuda_input',path='cuda-inputs/'+str(index)+'.npy',
-            shape=list(args[0].shape),dtype=str(args[0].dtype),metadata=list(args[1:]))
-        boxes,transform=detect(*args,**kwargs)
+            shape=list(args[0].shape),dtype=str(args[0].dtype),encoding='bgr8',metadata=list(args[1:]))
+        reply=detect(*args,**kwargs)
+        boxes=reply['boxes'];transform=dict(masks='none',normalized_prompt=reply['normalized_prompt'])
         inference_calls.append(dict(wall=time.time(),boxes=[dict(category=b.get('category'),confidence=b.get('confidence'),xyxy=b.get('xyxy')) for b in boxes],transform=transform))
-        return boxes,transform
-    inference.detector.detect=record_detect
+        return reply
+    inference.detector.infer=record_detect
     infer=detector.infer
     def record_projection(*args,**kwargs):
         try:
@@ -165,7 +166,7 @@ def main():
         result['initial_convoy']=initial
         result['actions']=get_action_names_and_types(flight)
         result['health']=inference.detector.client.request('/health/ready')
-        assert result['health']['device'].startswith('cuda')
+        assert result['health']['model_id']=='grounding-dino-tiny' and result['health']['device'].startswith('cuda')
         capture('ground')
         flight.takeoff()
         result['takeoff_hover_passed']=True
@@ -194,7 +195,7 @@ def main():
             depth_stamp=header.stamp.sec+header.stamp.nanosec*1e-9,transforms=camera_tf),indent=2)+'\n')
         mission_log=(a.output/'mission-console.log').open('w')
         command=['python3','/repo/deployment/airsim/demos/target_tracking/mission.py',
-            '--category',a.category,'--frame','earth','--rate','10','--duration','32',
+            '--query',a.query,'--frame','earth','--rate','10','--duration','32',
             '--initial-wait','10','--stop-file',str(stop_file),'--output',str(a.output/'mission')]
         result['mission_command']=command
         mission=subprocess.Popen(command,stdout=mission_log,stderr=subprocess.STDOUT)

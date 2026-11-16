@@ -20,7 +20,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from uav_inference.yolo_node import YoloNode
+from uav_inference.grounding_dino_node import GroundingDinoNode
 from uav_object_detection.node import ObjectDetectionTool
 from uav_target_tracking.node import TrackingNode
 sys.path.insert(0,'/repo/simulator/airsim/sensors')
@@ -29,12 +29,13 @@ from uav_as2_sensor_adapter.rpc import Rpc
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--query',default='car')
     p.add_argument('--estimate-position',action='store_true');a=p.parse_args()
     a.output.mkdir(parents=True,exist_ok=True)
     rclpy.init(args=['--ros-args','-r','__ns:=/drone0','-p','use_sim_time:=true',
-        '--params-file','/repo/deployment/object_detection/params.example.yaml','-p','camera_reliable:=true','-p','output_frame:=earth'])
+        '--params-file','/repo/deployment/target_tracking/params.yaml','-p','camera_reliable:=true','-p','output_frame:=earth'])
     peer=Node('mountains_observer_guard')
-    inference,detector,tracker=YoloNode(),ObjectDetectionTool(),TrackingNode()
+    inference,detector,tracker=GroundingDinoNode(),ObjectDetectionTool(),TrackingNode()
     executor=MultiThreadedExecutor(num_threads=8)
     for node in (peer,inference,detector,tracker):executor.add_node(node)
     platform=[];poses=[];commands=[]
@@ -46,14 +47,15 @@ def main():
         wall=time.time(),frame=m.header.frame_id,stamp=m.header.stamp.sec+m.header.stamp.nanosec*1e-9,
         p=[m.pose.position.x,m.pose.position.y,m.pose.position.z])),qos_profile_sensor_data)
     inference_calls=[];projection_calls=[]
-    original_detect=inference.detector.detect
+    original_detect=inference.detector.infer
     def record_detect(*args,**kwargs):
-        boxes,transform=original_detect(*args,**kwargs)
+        reply=original_detect(*args,**kwargs)
+        boxes=reply['boxes'];transform=dict(masks='none',normalized_prompt=reply['normalized_prompt'])
         inference_calls.append(dict(wall=time.time(),boxes=[dict(category=b.get('category'),
             confidence=b.get('confidence'),xyxy=b.get('xyxy')) for b in boxes],
             transform=transform))
-        return boxes,transform
-    inference.detector.detect=record_detect
+        return reply
+    inference.detector.infer=record_detect
     original_infer=detector.infer
     def record_projection(*args,**kwargs):
         try:
@@ -99,13 +101,13 @@ def main():
         wait(ready)
         assert poses[-1]['frame']=='earth'
         result['health']=inference.detector.client.request('/health/ready')
-        assert result['health']['device'].startswith('cuda')
+        assert result['health']['model_id']=='grounding-dino-tiny' and result['health']['device'].startswith('cuda')
         result['actions']=get_action_names_and_types(peer)
         result['nodes']=peer.get_node_names_and_namespaces()
         result['start_convoy']=json.loads(rpc.call('simStartConvoy'))
         assert result['start_convoy']['ok']
         command=['python3','/repo/deployment/airsim/demos/target_tracking/mission.py',
-            '--category','truck','--frame','earth','--rate','10',
+            '--query',a.query,'--frame','earth','--rate','10',
             '--duration','12','--initial-wait','10','--output',str(a.output/'mission')]
         result['mission_command']=command
         with (a.output/'mission-console.log').open('w') as out:

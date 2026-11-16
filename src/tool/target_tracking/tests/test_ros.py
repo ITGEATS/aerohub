@@ -40,6 +40,8 @@ class RosTests(unittest.TestCase):
         cls.no_detection = False
         def snapshot(request, response):
             assert request.estimate_position
+            assert request.query == 'person'
+            assert not hasattr(request, 'category')
             with cls.lock:
                 cls.busy += 1; cls.peak = max(cls.busy, cls.peak); cls.calls += 1
             try:
@@ -68,8 +70,8 @@ class RosTests(unittest.TestCase):
         cls.executor.shutdown(timeout_sec=5); cls.thread.join(5)
         cls.client.destroy(); cls.tracker.destroy_node(); cls.peer.destroy_node(); rclpy.shutdown()
 
-    def goal(self, timeout, feedback=None):
-        return wait(self.client.send_goal_async(TrackObject.Goal(category='person', timeout=float(timeout)), feedback_callback=feedback))
+    def goal(self, timeout, feedback=None, query='person'):
+        return wait(self.client.send_goal_async(TrackObject.Goal(query=query, timeout=float(timeout)), feedback_callback=feedback))
 
     def test_01_timeout_feedback_and_single_session(self):
         feedback = []
@@ -106,6 +108,8 @@ class RosTests(unittest.TestCase):
         self.assertEqual(self.peak, 1)
 
     def test_03_invalid_goal_and_stale_capture(self):
+        self.assertFalse(hasattr(TrackObject.Goal(),'category'))
+        self.assertFalse(self.goal(.1,query=' ').accepted)
         for timeout in [0., -1., float('nan'), float('inf')]: self.assertFalse(self.goal(timeout).accepted)
         type(self).bad_stamp = True
         feedback = []

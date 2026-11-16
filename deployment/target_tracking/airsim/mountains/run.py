@@ -6,8 +6,8 @@ import json
 import os
 import shutil
 import signal
+import shlex
 import hashlib
-import msgpack
 from pathlib import Path
 import socket
 import subprocess
@@ -23,17 +23,23 @@ from sim_startup import StartupRelay
 
 def main():
     probe_script = "deployment/target_tracking/airsim/mountains/probe.py"
-    extra_workspace = ROOT / "log/yopov2-tracking/build"
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--scene-package',type=Path,required=True,help='Local Mountains package root; external files are read only')
     parser.add_argument('--settings-file',type=Path,help='Dedicated physical spawn/camera fixture')
-    parser.add_argument('--mission-category',choices=['car','truck','bus'],default='truck')
+    parser.add_argument('--mission-query',default='car')
     parser.add_argument('--estimate-position',action='store_true')
     parser.add_argument('--scene-audit-only',action='store_true',help='Disarmed scene geometry audit; no motion clients')
     parser.add_argument('--flight-only',action='store_true',help='Independent native takeoff/hover/land gate before observation')
     parser.add_argument('--hover-observe',action='store_true',help='Authorized simulated native Takeoff/hover/observe/Land; no pursuit')
+    parser.add_argument('--dry-run',action='store_true',help='Print deployment plan without starting resources')
     args=parser.parse_args();output=args.output.resolve()
+    if args.dry_run:
+        print(json.dumps(dict(backend='grounding_dino',model_id='grounding-dino-tiny',port=8003,
+            query=args.mission_query,params='deployment/target_tracking/params.yaml',
+            workspace='log/object-detection-query/workspace',worker_start='deployment/inference/start_grounding_dino.sh',
+            observation_only=not (args.hover_observe or args.flight_only))))
+        return
     if args.flight_only:args.hover_observe=True
     if args.hover_observe:probe_script='deployment/target_tracking/airsim/mountains/hover_probe.py'
     if not output.is_relative_to(ROOT/'log') or output.exists():
@@ -41,6 +47,10 @@ def main():
     for kind,ports in [(socket.SOCK_STREAM,[49471,5180,5190]),(socket.SOCK_DGRAM,[8981,15240,15280])]:
         for port in ports:
             with socket.socket(socket.AF_INET,kind) as probe:probe.bind(('127.0.0.1',port))
+    import msgpack
+    # Camera audit needs image libraries but never imports a model or starts inference.
+    camera_python = os.environ.get('CAMERA_PROBE_PYTHON', sys.executable)
+    subprocess.run([camera_python, '-c', 'import cv2, numpy, PIL'], check=True, timeout=10)
     output.mkdir(parents=True)
     shutil.copytree(Path(msgpack.__file__).parent,output/'rpc_deps/msgpack')
     (output/'checks.json').write_text(json.dumps(dict(
@@ -96,21 +106,21 @@ def main():
             (output/'worker-cleanup.json').write_text(json.dumps(dict(pid=worker.pid,exit_code=worker.returncode))+'\n')
     atexit.register(stop_worker)
     try:
-        with build_opener(ProxyHandler({})).open('http://127.0.0.1:8002/health/ready',timeout=2) as response:
+        with build_opener(ProxyHandler({})).open('http://127.0.0.1:8003/health/ready',timeout=2) as response:
             health=json.load(response)
     except OSError:
         with socket.socket() as test:
             test.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-            test.bind(('127.0.0.1',8002))
+            test.bind(('127.0.0.1',8003))
         worker_log=(output/'worker.log').open('w')
-        worker=subprocess.Popen(['bash',str(ROOT/'deployment/inference/start_yolo26n_seg.sh')],
+        worker=subprocess.Popen(['bash',str(ROOT/'deployment/inference/start_grounding_dino.sh')],
             stdout=worker_log,stderr=subprocess.STDOUT,start_new_session=True,
-            env={**os.environ,'INFERENCE_PORT':'8002','PYTHONPATH':''})
-        (output/'worker-owned.json').write_text(json.dumps(dict(pid=worker.pid))+'\n')
-        deadline=time.monotonic()+45
+            env={**os.environ,'INFERENCE_PORT':'8003','PYTHONPATH':''})
+        (output/'worker-owned.json').write_text(json.dumps(dict(pid=worker.pid,model_id='grounding-dino-tiny',port=8003))+'\n')
+        deadline=time.monotonic()+120
         while True:
             try:
-                with build_opener(ProxyHandler({})).open('http://127.0.0.1:8002/health/ready',timeout=2) as response:
+                with build_opener(ProxyHandler({})).open('http://127.0.0.1:8003/health/ready',timeout=2) as response:
                     health=json.load(response)
                 break
             except OSError:
@@ -118,7 +128,7 @@ def main():
                     if worker.poll() is None: os.killpg(worker.pid,signal.SIGTERM)
                     raise RuntimeError('CUDA worker unavailable; see worker.log')
                 time.sleep(.3)
-    assert health['model_id']=='yolo26n-seg' and health['device'].startswith('cuda')
+    assert health['model_id']=='grounding-dino-tiny' and health['device'].startswith('cuda')
     (output/'worker-health.json').write_text(json.dumps(health,indent=2)+'\n')
     # Pick an unused domain from existing container environments and run records.
     used={192,196}
@@ -140,8 +150,9 @@ def main():
     if args.settings_file:settings_source=args.settings_file.resolve()
     settings=json.loads(settings_source.read_text())
     checks=json.loads((output/'checks.json').read_text())
-    checks.update(settings_fixture=str(settings_source.relative_to(ROOT)),mission_category=args.mission_category,
-                  detector_confidence=.35,category_mapping_unchanged=True)
+    checks.update(settings_fixture=str(settings_source.relative_to(ROOT)),mission_query=args.mission_query,
+                  detector_backend='grounding_dino',model_id='grounding-dino-tiny',port=8003,
+                  box_threshold=.30,text_threshold=.25,inference_timeout_s=10.,snapshot_timeout_s=1.,max_capture_age_s=.5)
     (output/'checks.json').write_text(json.dumps(checks,indent=2)+'\n')
     # Ground observation and flight use separate physical spawn/camera fixtures.
     (output/'settings.json').write_text(json.dumps(settings,indent=2)+'\n')
@@ -163,7 +174,7 @@ def main():
         for source in files:
             dest=output/'source-snapshot'/source.relative_to(ROOT)
             dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,dest)
-    images=['flight_board:v0.1.0','onboard_computer:v0.1.0']
+    images=['flight_board:v0.1.0','onboard_computer:v0.1.1']
     (output/'images.json').write_text(subprocess.check_output(['docker','image','inspect',*images],text=True))
     prefix=('mountains-hover-' if args.hover_observe else 'mountains-observe-')+str(domain)+'-';owned=[];relay=None;scene_started=False
     relay_process=None;relay_log=None
@@ -171,9 +182,7 @@ def main():
         '-e','FASTDDS_BUILTIN_TRANSPORTS=UDPv4',
         '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/repo/deployment/airsim/config/dds/fastdds_udp.xml',
         '-e','PYTHONDONTWRITEBYTECODE=1','-v',str(ROOT)+':/repo:ro','-v',str(output)+':/evidence',
-        '-v',str(ROOT/'log/object-detection-tool/workspace')+':/work:ro']
-    if extra_workspace is not None:
-        common += ['-v', str(extra_workspace)+':/tracking:ro']
+        '-v',str(ROOT/'log/object-detection-query/workspace')+':/work:ro']
     if args.hover_observe:
         diagnostic=ROOT/'log/yopov2-tracking/px4-diagnostic-overlay'
         if not (diagnostic/'install/setup.bash').exists():raise RuntimeError('Missing verified external PX4 v4 diagnostic overlay')
@@ -206,7 +215,7 @@ def main():
             '-e','FLIGHT_BOARD_SENSORS=0','-e','FLIGHT_BOARD_CAMERAS=0'])
         launch('clock','flight_board:v0.1.0','exec /usr/local/bin/flight-board clock',env=[
             '-e','VEHICLE_NAME=PX4','-e','AIRSIM_RPC_PORT=49471'])
-        subprocess.run([str(ROOT/'src/basic_function/inference/models/yolo26n_seg/.venv/bin/python'),
+        subprocess.run([camera_python,
                         str(APP/'scene_probe.py'),'--output',str(output)],check=True,timeout=30)
         deadline=time.monotonic()+60
         while 'Ready for takeoff!' not in subprocess.check_output(['docker','logs',prefix+'vehicle'],text=True,stderr=subprocess.STDOUT):
@@ -219,25 +228,23 @@ def main():
             'exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args -p settings_file:=/evidence/settings.json '
             '-p rpc_host:=127.0.0.1 -p rpc_port:=49471 -p vehicle_name:=PX4 -p vehicle_namespace:=drone0 '
             '-p source_color_order:=bgr -p camera_rate_hz:=5.0 -p camera_reliable:=true -p use_sim_time:=true -p timing_file:=/evidence/camera-timing.jsonl')
-        launch('as2','onboard_computer:v0.1.0',
+        launch('as2','onboard_computer:v0.1.1',
             'source /opt/ros/humble/setup.bash && source /root/aerostack2_ws/install/setup.bash && '
             'export AS2_CONFIG_FILE=/repo/deployment/airsim/config/as2/config.yaml && '
             'export AS2_FLEET_FILE=/evidence/fleet.yaml && '+
             ('export AS2_BEHAVIORS=takeoff,land AS2_CONTROLLER_CONFIG_FILE=/repo/deployment/airsim/config/as2/pid_speed_controller.yaml && ' if args.hover_observe else '')+
             'exec python3 /repo/deployment/airsim/as2/run.py')
         command='source /opt/ros/humble/setup.bash && source /root/aerostack2_ws/install/setup.bash && source /work/install/setup.bash && '
-        command+='export PYTHONPATH=/work/python_deps:/evidence/rpc_deps:$PYTHONPATH && export AS2_MODULES_PATH=/work/install/share/uav_object_detection_python_api/modules && '
-        if extra_workspace is not None:
-            command+='source /tracking/install/setup.bash && export AS2_MODULES_PATH=/tracking/install/uav_target_tracking_python_api/share/uav_target_tracking_python_api/modules:$AS2_MODULES_PATH && '
+        command+='export PYTHONPATH=/work/python_deps:/evidence/rpc_deps:$PYTHONPATH && export AS2_MODULES_PATH=/work/install/uav_object_detection_python_api/share/uav_object_detection_python_api/modules:/work/install/uav_target_tracking_python_api/share/uav_target_tracking_python_api/modules && '
         if args.hover_observe:command+='source /px4-overlay/install/setup.bash && '
         probe_path = probe_script or 'deployment/object_detection/airsim/probe.py'
         command+='exec python3 /repo/'+probe_path+' --output /evidence/probe'
         if args.flight_only:command+=' --flight-only'
-        if args.hover_observe:command+=' --category '+args.mission_category
+        command+=' --query '+shlex.quote(args.mission_query)
         if args.estimate_position and not args.hover_observe:command+=' --estimate-position'
         owned.append(prefix+'probe')
         with (output/'probe.log').open('w') as probe_log:
-            subprocess.run(['docker','run','--rm','--name',prefix+'probe',*common,'--entrypoint','bash','onboard_computer:v0.1.0','-lc',command],
+            subprocess.run(['docker','run','--rm','--name',prefix+'probe',*common,'--entrypoint','bash','onboard_computer:v0.1.1','-lc',command],
                 stdout=probe_log,stderr=subprocess.STDOUT,check=True,timeout=210 if args.hover_observe else 100)
     finally:
         # Independent final host stop guard also covers a crashed/timed-out probe.

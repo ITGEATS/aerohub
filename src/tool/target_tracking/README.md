@@ -1,6 +1,6 @@
 # Target Tracking Tool
 
-独立、只观测的类别目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
+独立、只观测的文本查询目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
 （`estimate_position=true`）→ 锁定 YOPO-Tracker EKF → Action 状态反馈。
 不调用导航、Behavior、运动参考或 Mission，不发布自身状态/TF。
 
@@ -11,7 +11,7 @@
 
 ## 数据与时间契约
 
-- Goal：非空 `category`、有限正 `timeout`（墙钟秒）；类别能力由部署的检测器决定。
+- Goal：非空 `query`、有限正 `timeout`（墙钟秒）；query 的支持范围由部署的检测后端决定。
 - 地址：`tools/target_tracking/track`，相对车辆命名空间。每进程只接纳一个会话。
 - Feedback：`TargetState`，ENU 米/米每秒，frame 必须来自固定世界观测系；首个 frame
   固定本会话，后续变化拒绝，不通过更名进行坐标变换。配置检测器输出为车辆 odom。
@@ -57,3 +57,19 @@ cancel_future = handle.cancel_goal_async()
 共享检测器忙时仍受其原互斥/推理 worker 约束，不代表通用 Tool 仲裁已经实现。
 
 构建、运行、测试和未完成项见 [部署说明](../../../deployment/target_tracking/README.md)。
+
+## Query schema 0.2.0
+
+`TrackObject.Goal.query` and `drone.target_tracking.track(query='car', timeout=10.)`
+forward the same query to each fresh `DetectSnapshot` request. No public category
+field remains. CLI uses `--query` (default `car`); deployment selects the detector.
+DINO phrases need not equal query; Tracking consumes only `position_valid=true`
+positions and applies the unchanged EKF association/loss policy. A valid box alone
+cannot initialize a 3D target. Box-based positions are visible surface measurements,
+not object centroids; this difference matters for association and accuracy.
+
+Build all interfaces and consumers together with
+`bash deployment/object_detection/build_query_overlay.sh`, then load that overlay
+in detection, inference, tracking and clients. Current query regressions and saved
+CUDA replay are recorded in `deployment/object_detection/VALIDATION-query.md`.
+Live DINO tracking, identity/accuracy and flight remain unverified (partial).

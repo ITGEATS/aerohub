@@ -5,13 +5,17 @@
       "directory": "src/basic_function/inference/models/diffphys",
       "description": "Official DiffPhys swarm checkpoint recurrent inference with caller-owned hidden state"
     },
-    "yopo": {
-      "directory": "src/basic_function/inference/models/yopo",
-      "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"
+    "grounding-dino-tiny": {
+      "directory": "src/basic_function/inference/models/grounding_dino",
+      "description": "Grounding DINO tiny text-conditioned original-pixel box inference in an isolated CUDA environment"
     },
     "yolo26n-seg": {
       "directory": "src/basic_function/inference/models/yolo26n_seg",
       "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"
+    },
+    "yopo": {
+      "directory": "src/basic_function/inference/models/yopo",
+      "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"
     }
   }
 }

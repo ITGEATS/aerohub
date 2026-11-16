@@ -1,0 +1,33 @@
+schema_version: "1.0"
+id: inference/grounding-dino
+version: "0.1.0"
+type: capability
+name: Grounding DINO open vocabulary box inference
+description: Ground text phrases in a caller image with confidence and 2D boxes; no segmentation or target identity.
+implementation:
+  component_id: aerohub.inference.grounding-dino
+  manifest: deployment/inference/grounding_dino.component.yaml
+  shared_runtime: grounding-dino-worker-and-ros-facade
+  coupled_capabilities: []
+inputs: []
+outputs: []
+interfaces:
+  - id: infer
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_inference_interfaces/srv/InferGroundingDino
+    parameter_schema: src/basic_function/inference/interfaces/srv/InferGroundingDino.srv
+lifecycle:
+  management: system_managed
+  operations:
+    start: null
+    status: null
+    stop: null
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+resource_access:
+  reads: [caller/image, model/grounding-dino-snapshot]
+  shared_writes: [compute/gpu]
+  exclusive_writes: []

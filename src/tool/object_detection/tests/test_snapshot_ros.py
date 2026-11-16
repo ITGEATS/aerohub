@@ -121,7 +121,7 @@ class SnapshotTest(unittest.TestCase):
         self.assertIsNone(self.tool.projector)
         self.assertIsNone(self.tool.tf_buffer)
 
-    def test_category_and_valid_position(self):
+    def test_query_and_valid_position(self):
         self.tool._ensure_position_inputs()
         self.wait(lambda:self.tool.projector.depth)
         time.sleep(.1)
@@ -137,6 +137,16 @@ class SnapshotTest(unittest.TestCase):
             self.assertGreater(stamp.sec*10**9+stamp.nanosec,0)
             self.assertEqual(response.result.depth_header.stamp,stamp)
             self.assertEqual(response.result.header.frame_id,'drone0/odom')
+
+    def test_normalized_fixed_query_preserves_original_and_label(self):
+        response=self.module.detect(query=' CAR ',timeout=1.)
+        self.assertTrue(response.success,response.reason)
+        self.assertEqual(response.result.original_query,' CAR ')
+        self.assertEqual(response.result.normalized_query,'car')
+        self.assertEqual(response.result.detector_backend,'yolo')
+        self.assertEqual(response.result.detections[0].detection.category,'car')
+        self.assertFalse(hasattr(DetectSnapshot.Request(),'category'))
+        with self.assertRaises(ValueError):self.module.detect(query=' ')
 
     def test_no_detection_is_success(self):
         self.fixture.empty=True
@@ -187,7 +197,7 @@ class SnapshotTest(unittest.TestCase):
 
     def test_stop_and_unsupported(self):
         with self.assertRaises(ValueError):self.module.detect(estimate_position='false')
-        self.assertEqual(self.module.detect('elephant',1.).code,'UNSUPPORTED')
+        self.assertEqual(self.module.detect('elephant',1.).code,'UNSUPPORTED_QUERY')
         self.tool.enable(SetBool.Request(data=False),SetBool.Response())
         self.assertEqual(self.module.detect('person',1.).code,'STOPPED')
 

@@ -58,7 +58,7 @@ class TrackingNode(Node):
             f'ROS clock generation {self._clock_epoch}: change={jump.clock_change}, delta_ns={jump.delta.nanoseconds}')
 
     def goal(self, request):
-        if not request.category.strip() or not math.isfinite(request.timeout) or request.timeout <= 0:
+        if not request.query.strip() or not math.isfinite(request.timeout) or request.timeout <= 0:
             return GoalResponse.REJECT
         if not self._slot.acquire(blocking=False):
             return GoalResponse.REJECT
@@ -113,7 +113,7 @@ class TrackingNode(Node):
                 if self._pending is None and self._client.service_is_ready():
                     budget = min(float(self.get_parameter('snapshot_timeout').value), deadline - time.monotonic())
                     if budget > 0:
-                        request = DetectSnapshot.Request(category=handle.request.category, estimate_position=True, timeout=budget)
+                        request = DetectSnapshot.Request(query=handle.request.query, estimate_position=True, timeout=budget)
                         self._pending = self._client.call_async(request)
                         attempt += 1
                         self._pending_capture = attempt

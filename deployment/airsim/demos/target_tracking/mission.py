@@ -76,7 +76,7 @@ def parser():
     p.add_argument('--execute-navigation', action='store_true')
     p.add_argument('--drone-id', default='drone0')
     p.add_argument('--frame', default='earth')
-    p.add_argument('--category', default='person')
+    p.add_argument('--query', default='car')
     p.add_argument('--use-wall-time', action='store_true', help='default uses ROS simulation clock')
     for name, default in [('rate', 2.), ('distance', 5.), ('duration', 60.),
                           ('initial-wait', 15.), ('max-age', 1.),
@@ -96,8 +96,8 @@ def arguments(argv=None):
         value = getattr(a, name)
         if not math.isfinite(value) or value <= 0:
             p.error(name + ' must be finite and positive')
-    if not a.frame.strip() or not a.category.strip():
-        p.error('frame and category required')
+    if not a.frame.strip() or not a.query.strip():
+        p.error('frame and query required')
     if a.execute_navigation and 1 / a.rate >= a.target_timeout:
         p.error('update period must be shorter than target timeout')
     return a
@@ -169,7 +169,7 @@ def run(a, log, summary):
                 position=[state.position.x, state.position.y, state.position.z])
 
         track_submission = drone.target_tracking.track(
-            a.category, timeout=a.duration,
+            a.query, timeout=a.duration,
             feedback_callback=on_tracking)
         track_handle = wait_future(track_submission, a.response_timeout)
         if not track_handle.accepted:

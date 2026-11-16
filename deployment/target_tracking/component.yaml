@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.tool.target-tracking
-version: 0.1.0
+version: 0.2.0
 source:
   directory: src/tool/target_tracking
   license: MIT
@@ -18,7 +18,7 @@ runtime:
   image: onboard_computer:v0.1.1
   image_id: sha256:c8756265a76d827633e132824922ccdf2801c2e4bae864a08d4a54215d4c601e
   architecture: x86_64
-  build: bash deployment/target_tracking/build.sh
+  build: bash deployment/object_detection/build_query_overlay.sh
   start: bash deployment/target_tracking/start.sh
   stop: SIGINT to owned tracking process; standard action cancellation ends session only
   health: action discovery is process readiness; feedback valid is current target readiness
@@ -46,3 +46,4 @@ validation:
   stage: partial
   evidence: deployment/target_tracking/VALIDATION.md
   unfinished: [moving-target-accuracy, occlusion-and-identity, platform-fault-recovery, following-Mission]
+  query_contract: deployment/object_detection/VALIDATION-query.md

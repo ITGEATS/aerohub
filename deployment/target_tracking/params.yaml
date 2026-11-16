@@ -3,3 +3,12 @@
     use_sim_time: true
     snapshot_timeout: 1.0
     max_capture_age: 0.5
+    detector_backend: grounding_dino
+    query: car
+    endpoint: http://127.0.0.1:8003
+    timeout_s: 10.0
+    box_threshold: 0.30
+    text_threshold: 0.25
+    stream_enabled: false
+    registered_depth: true
+    depth_is_perspective: false

@@ -1,5 +1,15 @@
 # 目标追踪任务样例与独立 Tracking Tool
 
+## 当前 Demo 默认：Grounding DINO / car（平台验收未完成）
+
+Mission → Tracking → DetectSnapshot → InferGroundingDino；8003 worker 为
+`grounding-dino-tiny`。使用统一 query overlay 和 Demo 专属 params，保留深度、新鲜度门。
+[当前部署命令与只观测/显式悬停步骤](../../../target_tracking/README.md#dino-default)。
+以下原 YOLO 结果、截图和类别诊断属于历史阶段，不代表 DINO 已验收。
+`diagnose_classes.py` 仅供显式 YOLO 历史诊断，DINO 不自动运行。
+
+
+
 已新增工作站编排样例 `mission.py`，尚未完成飞行验收。已实现独立、只观测的 Target Tracking Tool：
 串行调用已有 `DetectSnapshot(estimate_position=true)`，维护位置、速度、协方差、
 确认/预测/失跟状态与会话生命周期；不调用导航、不生成运动指令。
@@ -38,7 +48,7 @@ MIT LICENSE；不使用其联合网络/控制器，不将整个 YOPO-Tracker 接
 默认只观测，创建跟踪会话、计算并记录跟随点，不调用导航：
 
 ```bash
-python3 deployment/airsim/demos/target_tracking/mission.py --category person --duration 60
+python3 deployment/airsim/demos/target_tracking/mission.py --query car --duration 60
 ```
 
 显式执行会产生运动请求。操作者必须先确保平台已经安全飞行，connected、armed、
@@ -47,7 +57,7 @@ offboard 且 PlatformStatus 为 FLYING。每次导航请求前检查平台时间
 停止后的平台安全处置由操作者负责。
 
 ```bash
-python3 deployment/airsim/demos/target_tracking/mission.py --category person --duration 60 --execute-navigation
+python3 deployment/airsim/demos/target_tracking/mission.py --query car --duration 60 --execute-navigation
 ```
 
 `--rate 2` 为工作站更新频率，`--distance 5` 为水平间距。沿自身到目标的水平连线

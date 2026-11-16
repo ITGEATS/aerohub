@@ -8,3 +8,5 @@ float64 depth_m
 float64 depth_spread_m
 uint32 valid_depth_pixels
 string position_error
+# Requested measurement policy; empty for RGB-only. Surface measurement, not object center.
+string position_method
