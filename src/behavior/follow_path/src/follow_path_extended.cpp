@@ -1,6 +1,8 @@
 // The original FollowPath action and plugins run unchanged through inheritance.
 // Only one of the original action and the timed companion may own execution.
 #include <memory>
+#include <csignal>
+#include <chrono>
 #include <limits>
 #include <string>
 #include "follow_path_behavior/follow_path_behavior.hpp"
@@ -240,10 +242,26 @@ private:
   rclcpp::Publisher<as2_msgs::msg::BehaviorStatus>::SharedPtr status_pub_;
 };
 
+namespace {
+volatile std::sig_atomic_t stop_requested = 0;
+void request_stop(int) {stop_requested = 1;}
+}
+
 int main(int argc,char ** argv) {
-  rclcpp::init(argc,argv);
+  // A TF/motion callback can create a temporary wait set. Let the current
+  // callback finish before invalidating its context on process shutdown.
+  rclcpp::init(argc,argv,rclcpp::InitOptions(),rclcpp::SignalHandlerOptions::None);
+  std::signal(SIGINT,request_stop);
+  std::signal(SIGTERM,request_stop);
   auto options=rclcpp::NodeOptions();
-  rclcpp::spin(std::make_shared<ExtendedFollowPath>(options));
+  auto node=std::make_shared<ExtendedFollowPath>(options);
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+  while (!stop_requested && rclcpp::ok()) {
+    executor.spin_once(std::chrono::milliseconds(20));
+  }
+  executor.remove_node(node);
+  node.reset();
   rclcpp::shutdown();
   return 0;
 }
