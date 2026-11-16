@@ -55,3 +55,6 @@
 [submodule "src/state_estimator/fast_livo2/dependencies/sophus"]
 	path = src/basic_function/state_estimator/fast_livo2/dependencies/sophus
 	url = https://github.com/strasdat/Sophus.git
+[submodule "yopo_tracker"]
+	path = deployment/airsim/demos/target_tracking/reference/yopo_tracker
+	url = https://github.com/TJU-Aerial-Robotics/YOPO-Tracker.git

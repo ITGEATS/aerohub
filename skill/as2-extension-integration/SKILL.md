@@ -42,3 +42,13 @@ description: 按原生 Aerostack2 扩展约定实现 Planner、Behavior、State 
 ## Sim(3) 对齐与降级
 
 单目 SLAM 依赖 Sim(3) 对齐时，冻结条件不能只有样本数和拟合 RMSE；还必须检查总基线、水平基线及多方向激励，避免在纯升降或近单一直线运动中冻结弱可观测变换。全局校正输入中断或算法退出后，插件保持最后一个已接受的 `map -> odom`，拒绝陈旧新值，同时由新鲜局部里程计继续提供 `odom -> base_link` 和 twist；该降级语义必须通过运动中故障注入验证。
+
+## 原生起飞高度与阻塞诊断
+
+锁定版 `takeoff_plugin_position` 将请求 `takeoff_height` 加到激活时的 earth 高度，
+成功后保留该位置目标；其反馈高度是 earth z。不能把请求值当成绝对高度，
+也不能把 position 插件的规则推广到 speed/trajectory 插件。诊断先记录实际插件、
+激活起点、最终目标、控制输入/输出模式和送入 PX4 的参考。
+Mountains 实测在车底碰撞时仍持续收到约0.485m/s向上速度，实际只爬升约0.35m，
+估计高度却漂移至约2.5m；不能因此调 PID、放宽成功阈值或延长起飞预算。
+本次通过 Demo 出生点配置避开车辆，原生3m Takeoff/hover/Land恢复通过。

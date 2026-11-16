@@ -13,7 +13,7 @@ AirSim FrontCamera（同一次 simGetImages 请求 RGB + DepthPlanar）
   → ObjectDetectionTool：接纳后收到的首帧
   → ROS Inference Facade → 独立 YOLO26n-seg worker → CUDA
   → 原实例掩码深度测量 + PX4 → AS2 提供的历史 TF
-  → DetectSnapshot → drone.object_detection.detect(category, timeout)
+  → DetectSnapshot → drone.object_detection.detect(query, timeout)
 ```
 
 Tool 不读取 AirSim RPC；相机绑定、几何与传输由部署层配置。
@@ -105,8 +105,8 @@ result.json的passed只表示checks.json列出的地面链路检查通过。
 
 当前入口默认只配置RGB捕获，Tool不启动深度/标定/TF消费者。
 上文RGB-D复验命令现在须追加 `--estimate-position` 才执行三维检查。
-公共调用默认 `detect(category='person', timeout=2.)`；定位需显式
-`detect(category='person', timeout=2., estimate_position=True)`。
+公共调用默认 `detect(query='person', timeout=2.)`；定位需显式
+`detect(query='person', timeout=2., estimate_position=True)`。
 
 新接口实际验证：
 

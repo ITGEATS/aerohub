@@ -1,0 +1,71 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "Multirotor",
+  "ClockType": "SteppableClock",
+  "ApiServerPort": 49471,
+  "Vehicles": {
+    "PX4": {
+      "VehicleType": "PX4Multirotor",
+      "UseSerial": false,
+      "UseTcp": true,
+      "LockStep": true,
+      "LocalHostIp": "127.0.0.1",
+      "TcpPort": 5180,
+      "ControlPortLocal": 15240,
+      "ControlPortRemote": 15280,
+      "Sensors": {
+        "Barometer": {
+          "SensorType": 1,
+          "Enabled": true,
+          "PressureFactorSigma": 0.0001825
+        },
+        "imu": {
+          "SensorType": 2,
+          "Enabled": true
+        },
+        "gps": {
+          "SensorType": 3,
+          "Enabled": true
+        },
+        "magnetometer": {
+          "SensorType": 4,
+          "Enabled": true
+        }
+      },
+      "ControlIp": "127.0.0.1",
+      "X": 0.0,
+      "Y": 9.0,
+      "Z": 0.0,
+      "Yaw": -90.0,
+      "EnableCollisions": true,
+      "Cameras": {
+        "FrontCamera": {
+          "X": 0.3,
+          "Y": 0,
+          "Z": -0.3,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": 0,
+          "CaptureSettings": [
+            {
+              "ImageType": 0,
+              "Width": 640,
+              "Height": 480,
+              "FOV_Degrees": 90
+            },
+            {
+              "ImageType": 1,
+              "Width": 640,
+              "Height": 480,
+              "FOV_Degrees": 90
+            }
+          ]
+        }
+      }
+    }
+  },
+  "ClockSpeed": 1.0,
+  "ViewMode": "SpringArmChase",
+  "RpcEnabled": true,
+  "LocalHostIp": "127.0.0.1"
+}

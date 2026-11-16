@@ -14,6 +14,7 @@ from tf2_ros import TransformException
 from uav_object_detection_interfaces.msg import ObjectDetection, ObjectDetectionFrame
 
 from .measurement import locate
+from .box_depth import locate_box
 
 
 def stamp_ns(header):
@@ -94,12 +95,12 @@ class Projector:
             raise ValueError('missing '+kind+' CameraInfo at acquisition time')
         return max(candidates, key=lambda m: stamp_ns(m.header))
 
-    def project(self, frame, token, active):
+    def project(self, frame, token, active, position_method='yolo_mask_gemini2_reference'):
         result = ObjectDetectionFrame(image_header=frame.header, request_id=frame.request_id,
             generation=frame.generation, tool_generation=token, worker_generation=frame.worker_generation,
             model_version=frame.model_version, timings_json=frame.timings_json)
         result.header.frame_id = self.output_frame
-        result.detections = [ObjectDetection(detection=d) for d in frame.detections]
+        result.detections = [ObjectDetection(detection=d, position_method=position_method) for d in frame.detections]
         try:
             if not self.registered:
                 raise ValueError('aligned RGB/depth must be explicitly configured: registered_depth')
@@ -148,10 +149,15 @@ class Projector:
             for measured in result.detections:
                 try:
                     d = measured.detection
-                    mask = np.frombuffer(bytes(d.mask.data), np.uint8).reshape(frame.height, frame.width)
                     diagnostic = {}
-                    point, _unused_kf_variance = locate(depth, d.xyxy, k, r, position,
-                        (np.eye(3), np.zeros(3)), {'depth_method': 'gemini2_reference'}, diagnostic, mask)
+                    if position_method == 'box_foreground_surface_v1':
+                        point, diagnostic = locate_box(depth, d.xyxy, k, r, position)
+                    elif position_method == 'yolo_mask_gemini2_reference':
+                        mask = np.frombuffer(bytes(d.mask.data), np.uint8).reshape(frame.height, frame.width)
+                        point, _unused_kf_variance = locate(depth, d.xyxy, k, r, position,
+                            (np.eye(3), np.zeros(3)), {'depth_method': 'gemini2_reference'}, diagnostic, mask)
+                    else:
+                        raise ValueError('unsupported position method')
                     measured.position.x, measured.position.y, measured.position.z = map(float, point)
                     measured.depth_m = diagnostic['depth_m']
                     measured.depth_spread_m = diagnostic['spread_m']

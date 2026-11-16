@@ -95,3 +95,26 @@ HMM；无需为此扩展到未经授权的仿真或飞行任务。
 
 计时区分输入传输、前向与同步、输出传输；保留既有聚合字段时注明重叠关系。
 worker 正常退出调用后端 close；关闭幂等，关闭后拒绝继续执行。
+
+## Transformers 完整 safetensors 与文本条件模型
+
+直接使用锁定的 Transformers 架构依赖，不复制模型实现。完整 safetensors 可能省略
+共享 Parameter 的重复键；在严格加载失败时，先用官方架构的
+`named_parameters(remove_duplicate=False)` 核对对象身份，只补齐可证明指向同一
+Parameter 的别名，再严格加载。不得用 `strict=False` 隐藏独立权重缺失；回归同时
+验证完整文件通过、删除一个独立权重仍失败。记录快照 config 声明的历史版本与
+实际锁定对照版本，不能将同环境 direct API 对照说成历史环境复现。
+
+文本条件模型的请求显式携带 prompt 和阈值；声明大小写、末尾标点、token 上限、
+超限拒绝或截断、框筛选与短语解码规则。model_version 包含权重、配置、tokenizer、
+处理器和上述参数语义；每次请求的阈值与原始/规范化 prompt 在响应中回显。开放词表
+phrase 不能冒充闭集类别或跟踪身份。boxes-only 模型返回空 mask，不生成矩形伪掩膜；
+复用检测消息时核对框是否裁边以及空短语语义，不能套用分割模型的 mask 校验。
+
+公共 TorchBackend 可用 `state_loader(path)` 接入 safetensors，用 `None` 声明正的可变
+维度；schema/Predictor 仍负责图像和token的上限，固定维度及旧加载路径须回归。
+离线 PNG 带完全不透明 alpha 时，对照 direct API 的 RGB 转换并无损编码 RGB 传输，
+保留原文件哈希和转换说明，不裁切或修改 RGB 像素。网络不可达时失败，不自动下载权重。
+
+无提交授权的工作交付可保留直接 setup/启动入口、待登记配置与组件清单，明确
+`setup_models.py` 会拒绝未登记 ID；manifest 和正式实例链接仍待实现提交后登记。

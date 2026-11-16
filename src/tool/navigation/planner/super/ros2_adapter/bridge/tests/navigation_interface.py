@@ -186,6 +186,99 @@ class NavigationInterfaceTest(unittest.TestCase):
         finally:
             other.destroy()
 
+    def wait_for(self, predicate, timeout=5.):
+        deadline = time.monotonic() + timeout
+        while not predicate():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.01)
+
+    def test_running_target_update_keeps_execution(self):
+        self.nav.to_point(0, 8, 2, wait=False)
+        self.wait_for(lambda: self.adapter.enabled)
+        task, client, handle = self.adapter.task, self.adapter.client, self.nav._handle
+        self.nav.to_point(0, 12, 2, wait=False)
+        self.assertEqual(self.adapter.goal, [0., 12., 2.])
+        self.assertEqual(self.adapter.task, task)
+        self.assertIs(self.adapter.client, client)
+        self.assertIs(self.nav._handle, handle)
+        from types import SimpleNamespace
+        old_feedback = self.nav.feedback
+        self.nav._on_feedback(SimpleNamespace(goal_id=None, feedback='old-session'))
+        self.assertIs(self.nav.feedback, old_feedback)
+        self.assertFalse(client.cancel_started)
+        self.wait_for(lambda: self.nav.feedback and self.nav.feedback.target_revision == 2)
+        self.assertAlmostEqual(self.nav.feedback.distance_remaining, 12.)
+        self.nav.cancel()
+
+    def test_update_identity_revision_and_validation(self):
+        from uav_planner_interfaces.srv import UpdateNavigationTarget
+        self.nav.to_point(0, 8, 2, wait=False)
+        self.wait_for(lambda: self.adapter.enabled)
+        request = UpdateNavigationTarget.Request(target_revision=2)
+        request.target.header.frame_id = 'drone0/odom'
+        def update():
+            return self.nav._wait(self.nav._updates.call_async(request), 2.)
+        self.assertEqual(update().code, 'NOT_OWNER')
+        request.goal_id = self.nav._handle.goal_id
+        request.target_revision = 1
+        self.assertEqual(update().code, 'STALE_TARGET')
+        request.target_revision = 2
+        request.target.header.frame_id = 'wrong'
+        self.assertEqual(update().code, 'INVALID_GOAL')
+        self.assertEqual(self.adapter.goal, [0., 8., 2.])
+        self.assertEqual(self.adapter.navigation.target_revision, 1)
+        self.nav.cancel()
+
+    def test_rejected_update_keeps_accepted_destination_revision(self):
+        self.nav.to_point(0, 8, 2, wait=False)
+        self.wait_for(lambda: self.adapter.enabled)
+        with self.assertRaisesRegex(RuntimeError, 'INVALID_GOAL'):
+            self.nav.to_point(0, 9, 2, frame_id='wrong', wait=False)
+        self.assertEqual(self.nav._target_revision, 1)
+        self.assertEqual(self.adapter.goal, [0., 8., 2.])
+        self.nav.to_point(0, 12, 2, wait=False)
+        self.assertEqual(self.nav._target_revision, 3)
+        self.assertEqual(self.adapter.goal, [0., 12., 2.])
+        self.nav.cancel()
+
+    def test_hold_arrival_renew_resume_and_cancel(self):
+        self.nav.to_point(0, 0, 2, wait=False, arrival_behavior='hold', target_timeout=10.)
+        self.wait_for(lambda: self.adapter.enabled)
+        self.adapter.client.complete = True
+        self.wait_for(lambda: self.nav.feedback and self.nav.feedback.arrived)
+        self.assertFalse(self.nav.done)
+        handle = self.nav._handle
+        self.assertTrue(self.nav.wait_until_arrived(timeout=1.))
+        self.nav.to_point(0, 0, 2, wait=False)
+        self.assertTrue(self.adapter.navigation.holding)
+        self.nav.to_point(0, 12, 2, wait=False)
+        self.assertIs(self.nav._handle, handle)
+        self.assertTrue(self.adapter.enabled)
+        self.assertFalse(self.adapter.navigation.holding)
+        self.nav.cancel()
+
+    def test_cancel_while_holding_and_reject_late_update(self):
+        from uav_planner_interfaces.srv import UpdateNavigationTarget
+        self.nav.to_point(0, 0, 2, wait=False, arrival_behavior='hold', target_timeout=10.)
+        self.wait_for(lambda: self.adapter.enabled)
+        self.adapter.client.complete = True
+        self.wait_for(lambda: self.nav.feedback and self.nav.feedback.arrived)
+        old_id = self.nav._handle.goal_id
+        self.nav.cancel()
+        self.assertEqual(self.nav.result.code, 'CANCELED')
+        request = UpdateNavigationTarget.Request(goal_id=old_id, target_revision=2)
+        response = self.nav._wait(self.nav._updates.call_async(request), 2.)
+        self.assertFalse(response.accepted)
+        self.assertEqual(response.code, 'NO_ACTIVE_TASK')
+
+    def test_target_expiry_and_immutable_policies(self):
+        self.nav.to_point(0, 8, 2, wait=False, arrival_behavior='hold', target_timeout=.3)
+        self.wait_for(lambda: self.adapter.enabled)
+        with self.assertRaises(ValueError):
+            self.nav.to_point(0, 10, 2, wait=False, arrival_behavior='complete')
+        self.assertEqual(self.wait_result().code, 'TARGET_TIMEOUT')
+        self.assertTrue(self.nav.result.stop_confirmed)
+
     def test_task_timeout_uses_existing_stop(self):
         self.nav.to_point(0, 4, 2, wait=False, timeout=.15)
         result = self.wait_result()

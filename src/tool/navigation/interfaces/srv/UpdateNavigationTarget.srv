@@ -1,0 +1,12 @@
+# Updates only the destination of an owned, active NavigateToPose task.
+unique_identifier_msgs/UUID goal_id
+# Strictly increasing per task; initial goal has target_revision=1.
+uint64 target_revision
+geometry_msgs/PoseStamped target
+uint8 orientation_mode
+---
+# Acceptance updates the destination; it does not acknowledge a new execution plan.
+bool accepted
+string code
+string reason
+uint64 target_revision

@@ -1,0 +1,150 @@
+{
+  "status": "partial",
+  "scope": "Inference Engine only, saved full real pickup PNG, no Tool/Tracking or flight",
+  "baseline_commit": "e92c47332f30aab521591ed656777bf7825b4d8c",
+  "branch": "feat/target-tracking",
+  "python": "3.10.12",
+  "frameworks": {
+    "transformers": "4.40.1",
+    "torch": "2.6.0+cu124"
+  },
+  "original_config_transformers": "4.40.0.dev0 (historical environment not reproduced)",
+  "model_version": "a582d4cebaa628f841a7914b9543262b7f89d82428498ecf73d8d204cfb81530",
+  "image_sha256": "2d5e19dd3762b50eacf55949a44622b97d2a037eac25fa96967cef1aa26303f7",
+  "input": {
+    "size": [
+      640,
+      480
+    ],
+    "source": "opaque RGBA PNG converted losslessly to full RGB; no crop",
+    "prompt": "car. truck. pickup truck.",
+    "box_threshold": 0.3,
+    "text_threshold": 0.25,
+    "source_stamp": "positive replay test stamp, not reconstructed acquisition time"
+  },
+  "numerical": {
+    "passed": true,
+    "thresholds": {
+      "raw_atol": 1e-05,
+      "raw_rtol": 1e-05,
+      "pixel_atol": 0.02,
+      "confidence_atol": 1e-05
+    },
+    "raw": {
+      "logits": {
+        "shape": [
+          1,
+          900,
+          256
+        ],
+        "finite_max_absolute_error": 0.0,
+        "nonfinite_positions_match": true
+      },
+      "pred_boxes": {
+        "shape": [
+          1,
+          900,
+          4
+        ],
+        "finite_max_absolute_error": 0.0,
+        "nonfinite_positions_match": true
+      }
+    },
+    "all_queries": 900,
+    "all_selected_boxes": [
+      {
+        "xyxy": [
+          102.0797119140625,
+          193.0026397705078,
+          540.053466796875,
+          364.85833740234375
+        ],
+        "confidence": 0.397558331489563,
+        "category": "car pickup truck"
+      },
+      {
+        "xyxy": [
+          102.46537780761719,
+          192.97616577148438,
+          539.8402099609375,
+          364.865966796875
+        ],
+        "confidence": 0.3826340138912201,
+        "category": "truck"
+      }
+    ]
+  },
+  "latency_ms": {
+    "direct_forward": 80.63737500924617,
+    "baseline_worker": 111.49834099342115,
+    "http_roundtrip": 126.12921200343408,
+    "ros_roundtrips": [
+      3196.463592990767,
+      199.65525099541992,
+      2787.7689220185857
+    ],
+    "ros_worker_totals": [
+      115.4169229848776,
+      118.91273100627586,
+      112.52642501494847
+    ],
+    "performance_acceptance_threshold": null
+  },
+  "tests": {
+    "cuda_load_warmup": "passed",
+    "external_cwd_idempotent_cpu_repeat": "passed",
+    "strict_loading_regression": "1/1",
+    "cuda_backend": "5/5",
+    "contract_and_readiness": "4/4",
+    "common_runtime_host": "2/2",
+    "selection": "3/3",
+    "http_real_cuda": {
+      "passed": true,
+      "invalid_requests": 12,
+      "timeout": {
+        "timed_out": true,
+        "busy_observed": true,
+        "busy_rejections": [
+          429,
+          429,
+          429,
+          429,
+          429,
+          429,
+          429,
+          429,
+          429,
+          429
+        ],
+        "drained": true,
+        "recovery": true
+      }
+    },
+    "dds_real_cuda": {
+      "passed": true,
+      "independent_client_image": "osrf/ros:humble-desktop-full-jammy",
+      "adapter_image": "onboard_computer:v0.1.0",
+      "normal_calls": 3,
+      "invalid_requests": 4,
+      "recovery": true
+    },
+    "cards": {
+      "new_card": "passed v1 validator",
+      "repository": "fails pre-existing legacy cards; left unchanged"
+    },
+    "cleanup": {
+      "ros": true,
+      "worker": true
+    }
+  },
+  "manifest_registration": "registered as grounding-dino-tiny by explicit user request after Engine validation; implementation and registration uncommitted",
+  "limitations": [
+    "full-image DDS latency about 3 seconds; no real-time guarantee",
+    "saved-image Engine validation, no live sensor/Tool/Tracking/depth/flight/board acceptance",
+    "optional custom kernel loading emits warning; official portable GPU attention explicitly selected",
+    "historical Transformers 4.40.0.dev0 environment not compared",
+    "repository-wide card validation has pre-existing failures"
+  ],
+  "evidence_directory": "log/grounding-dino-inference",
+  "process_record": "skill/temp/grounding-dino-inference/README.md"
+}

@@ -1,13 +1,14 @@
 # Object Detection Tool: public single observation
 
-Version 0.3.0 provides RGB-only detection and optional RGB-D positioning through
-the AS2 Module. Real AirSim/CUDA calls and static near-target measurements have
-been checked; see [validation](../../../deployment/object_detection/VALIDATION-tool.md)
-for evidence and current limits.
+Version 0.4.0 provides query-based RGB detection and optional RGB-D positioning
+through the AS2 Module, using deployment-selected YOLO or Grounding DINO. Current
+checks cover real CUDA saved-data replay and ROS contracts; earlier YOLO live
+AirSim evidence predates this schema. See [query validation](../../../deployment/object_detection/VALIDATION-query.md)
+for current results and incomplete platform acceptance.
 
 ```python
 drone.load_module("object_detection")
-response = drone.object_detection.detect(category="person", timeout=2.0)
+response = drone.object_detection.detect(query="person", timeout=2.0)
 if response.success:
     for item in response.result.detections:
         print(item.detection.category, item.detection.confidence)
@@ -25,23 +26,34 @@ callbacks. `ready` means service discovery only, not camera/model readiness.
 
 `tools/object_detection/observe` uses `DetectSnapshot`:
 
-- Request: `category`, a finite positive `timeout` in wall-clock seconds, and
+- Request: `query`, a finite positive `timeout` in wall-clock seconds, and
   `estimate_position` (bool, default false). Set it true to attempt 3D positioning.
-- Each request chooses `person`, `car`, `truck` or `bus`; other categories return
-  UNSUPPORTED. This reflects the deployed YOLO profile, not a universal class list.
+- `detector_backend` is selected in deployment configuration: `yolo` (default) or
+  `grounding_dino`. Query content never switches models or triggers fallback.
+- YOLO strips/lowercases query and exactly resolves `person`, `car`, `truck`, `bus`.
+  No aliases/plurals/punctuation mapping: other queries return `UNSUPPORTED_QUERY`.
+- DINO strips/lowercases query and appends a final `.` only if absent. The text is
+  forwarded with deployment thresholds (box .30, text .25 by default). No phrase
+  equality filtering or relabeling is applied; all grounded boxes are retained.
+- Empty/whitespace/control-character queries are rejected as `INVALID_QUERY` before
+  capture (the Python module raises ValueError for empty text).
 - The adapter captures the first RGB frame **received after acceptance**. It never
-  reuses a cached earlier frame. This is a receipt guarantee, not proof that a
-  buffered camera acquired the image after the call; acquisition stamps are preserved.
+  reuses a cached earlier frame. Nonpositive, duplicate, backward, future and
+  preacceptance acquisition stamps are rejected in the configured ROS clock domain.
+  Original source stamps are preserved; publisher clock correctness is a deployment condition.
 - Camera, registered geometry and output frame are deployment bindings. The caller
   supplies neither an image nor internal IDs/generations. Depth/calibration/TF
   are required only for the positioning option.
 - Response: success/code/reason plus ObjectObservation, with RGB/depth acquisition
-  headers, position_requested, model identity and detections. In 2D the header
+  headers, position_requested, model identity and detections. `original_query` preserves
+  the supplied text; `normalized_query` records the backend interpretation;
+  `detector_backend`, request ID and caller/tool/worker generations identify the call.
+  `detection.category` remains the actual model label/phrase, which may differ from query. In 2D the header
   is the RGB optical frame/stamp; depth_header is empty.
 - SUCCEEDED includes valid empty detections. PARTIAL is also success: 2D completed
   but at least one position is unavailable. Check every position_valid; ignore
   position/depth values when false. reason/position_error retain measurement failures.
-- BUSY, NOT_READY, STOPPED, INVALID_REQUEST, UNSUPPORTED, TIMEOUT and DETECTION_FAILED
+- BUSY, NOT_READY, STOPPED, INVALID_REQUEST, INVALID_QUERY, UNSUPPORTED_QUERY, TIMEOUT and DETECTION_FAILED
   are failed calls. No retries or request queue are introduced.
 - Timeout covers waiting for RGB, inference and measurement. The client includes
   discovery in its budget and allows a bounded 0.5s response transport margin.
@@ -62,19 +74,25 @@ Agent lifecycle operation.
 Use the existing fixed Humble image and an external overlay:
 
 ```bash
-bash deployment/object_detection/build_tool_overlay.sh
+bash deployment/object_detection/build_query_overlay.sh
 ```
 
-The script builds interfaces, ROS adapters, AS2 Python API and this module; it
-prepares locked CPython3.10 dependencies locally and does not rebuild the image.
-Within the same image/overlay environment, source AS2 and
-`log/object-detection-tool/workspace/install/setup.bash`, add the workspace's
-`python_deps` to PYTHONPATH and set
-`AS2_MODULES_PATH=<workspace>/install/share/uav_object_detection_python_api/modules`.
-Load this module together with navigation by joining module directories with `:`.
-Deploy the independent YOLO worker and ROS inference facade as before, then run
-`uav_object_detection` with `deployment/object_detection/params.example.yaml`.
-The namespace determines the public service address.
+The query overlay builds Inference, Detect and Tracking schemas, all adapters and
+Python modules, plus the locked AS2 Python API in `onboard_computer:v0.1.1`.
+Source ROS, AS2 and `log/object-detection-query/workspace/install/setup.bash` in
+**every** consumer; this is a breaking schema change, with no public `category`
+compatibility field. Stop old consumers before loading it. Set `AS2_MODULES_PATH`
+to the installed detection and tracking `share/<package>/modules` directories,
+joined with `:`. The AS2 API also needs its existing locked Python dependencies
+(this build prepares them in the workspace's `python_deps`; add it to PYTHONPATH).
+
+For YOLO use `params.example.yaml`; for DINO use
+`deployment/object_detection/params.grounding-dino.example.yaml` and the independent
+worker/facade in the [model README](../../basic_function/inference/models/grounding_dino/README.md).
+The DINO example uses a 10s inference budget; choose the public observation timeout
+explicitly (e.g. 15s for offline replay). These are deployment budgets, not latency
+or Tracking freshness guarantees. Worker/model identity changes fail closed and
+require explicit adapter/Tool restart and new caller sessions.
 
 Card v1 and concrete Demo binding: `cards/tool/object-detection.yaml` and
 `deployment/object_detection/component.yaml`. Runtime/accuracy evidence and limits
@@ -84,13 +102,13 @@ For positioning, call:
 
 ```python
 response = drone.object_detection.detect(
-    category="person", timeout=2.0, estimate_position=True)
+    query="car", timeout=2.0, estimate_position=True)
 ```
 
 ## Existing RGB-D implementation
 
 The public operation defaults to RGB-only detection (`estimate_position=False`):
-category, confidence, box and instance mask. No camera calibration, depth camera
+actual model label/phrase, confidence, box and optional instance mask. DINO has no mask. No camera calibration, depth camera
 or historical TF is required, and no projection is performed.
 `ObjectObservation.position_requested` distinguishes unrequested positioning from
 a failed positioning attempt. In 2D, header equals image_header, depth_header is
@@ -102,9 +120,10 @@ consumers; these remain for subsequent 3D calls until process exit. A later 2D
 call still skips projection and never depends on their availability.
 Legacy DetectObjects and streaming retain their original RGB-D semantics.
 
-This Tool calls a separately deployed YOLO26n-seg Inference ROS service, selects
-the requested category (or the legacy stream configuration), measures depth inside each instance mask and reports
-unfiltered 3D positions. It subscribes to standard ROS RGB/depth/CameraInfo and
+This Tool calls the configured independent Inference ROS service. `backends.py`
+owns query resolution, typed request construction and output validation. YOLO
+retains the pinned mask depth policy (including its original center-ROI fallback);
+DINO uses the separate conservative box foreground policy described below. It subscribes to standard ROS RGB/depth/CameraInfo and
 queries historical TF; there is no AirSim API, settings.json, Elastic dependency,
 target KF, identity association, predicted velocity or motion-command publisher.
 
@@ -187,3 +206,27 @@ RGB and real CUDA inference, but deliberately synthetic depth/TF. It checks wire
 semantics and known geometry, not sensor accuracy. Tests in tests/ exercise actual
 ROS messages/TF2, unit conversion, capture-time interpolation, missing inputs and
 cancellation. See model validation.json for executed checks and remaining gaps.
+
+## Box-only positioning and query validation
+
+DINO keeps original unclipped XYXY pixels; only the depth sampling region is clipped
+to the image. `position_method=box_foreground_surface_v1` identifies an estimated
+visible foreground surface point, **not an object center or ground truth**. No
+segmentation mask or localization covariance is invented. YOLO positions carry
+`yolo_mask_gemini2_reference`; RGB-only results have an empty position_method.
+
+Box-depth v1 uses the inner half of the box: at least 20 valid pixels, at least 60%
+valid coverage, axial Z in (0.2,50)m. The nearest supported 0.25m histogram bin
+(at least max(5,10% of valid pixels)) seeds a +/-0.25m cluster; it must contain at
+least 20 pixels and 60% of valid ROI samples, with p90-p10 <=0.5m and >=60% support
+in the middle quarter. The remaining box ring needs >=20 valid samples and median
+at least 0.5m behind foreground. Missing/competing depths, flat background, no
+center support and unavailable calibration/TF invalidate positioning, preserving
+2D boxes and a per-object reason. This conservative policy can reject real objects.
+Projection retains the same registered geometry, depth-capture stamp and exact
+historical TF checks as YOLO; a frame name is never substituted for a transform.
+
+Current query/backend evidence and replay commands:
+[query validation](../../../deployment/object_detection/VALIDATION-query.md).
+Existing YOLO live evidence predates this schema; DINO live sensing, 3D accuracy,
+moving-target consumption and flight remain unverified. Overall status is partial.

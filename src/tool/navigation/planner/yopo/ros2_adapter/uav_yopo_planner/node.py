@@ -253,6 +253,7 @@ class YopoPlanner(Node):
         self.generation += 1
         self.queued_goal = None
         self.goal = vector(msg.pose.position)
+        self.target_revision = 1
         self.task = 'yopo-' + uuid.uuid4().hex
         self.timeline = Timeline()
         self.goal_handle = None
@@ -420,10 +421,15 @@ class YopoPlanner(Node):
         assign(request.relative_goal, rotation.T @ (self.goal-initial[0]))
         self.last_image = seconds(self.depth.header.stamp)
         self.inference = dict(future=self.infer_client.call_async(request), generation=self.generation,
+                              target_revision=self.target_revision, goal=self.goal.copy(),
                               sent=time.monotonic(), expired=False, request=request,
                               epoch=epoch, initial=initial, yaw=yaw, rotation=rotation)
 
     def inferred(self, context, now):
+        # Drain superseded GPU work without applying its terminal state/yaw or
+        # counting it as a planner failure. Keep the accepted execution intact.
+        if not np.array_equal(context['goal'], self.goal):
+            return
         try:
             result = context['future'].result()
             request = context['request']
@@ -444,7 +450,7 @@ class YopoPlanner(Node):
             candidate = result.candidates[result.best_index]
             terminal = np.array([vector(candidate.position), vector(candidate.velocity), vector(candidate.acceleration)]) @ context['rotation'].T
             terminal[0] += context['initial'][0]
-            curve = Curve.create(context['epoch'], context['initial'], terminal, result.duration_s, context['yaw'], self.goal)
+            curve = Curve.create(context['epoch'], context['initial'], terminal, result.duration_s, context['yaw'], context['goal'])
             self.submit(curve, now)
         except Exception as error:
             self.failure('INFERENCE_RESULT:' + str(error))

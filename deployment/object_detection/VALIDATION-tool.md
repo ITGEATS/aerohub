@@ -1,5 +1,7 @@
 # Object Detection Tool 0.3.0：交付与验证
 
+> 以下为历史版本证据；当前 query 接口及调用示例见 [Detect README](../../src/tool/object_detection/README.md)。历史 category 字段及 CLI 不适用于当前 schema。
+
 2026-11-15：当前版本可用于单机任务的按次目标检测，默认RGB-only，可选RGB-D定位。
 公共AS2 Module、真实AirSim相机输入和CUDA推理调用链已接通，静态近距定位已通过
 预声明评分。飞行、全距离精度及长期网络可靠性保持未验收状态。

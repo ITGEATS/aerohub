@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-setup(name='uav_object_detection', version='0.1.0', packages=find_packages(),
+setup(name='uav_object_detection', version='0.4.0', packages=find_packages(),
       data_files=[('share/ament_index/resource_index/packages', ['resource/uav_object_detection']),
                   ('share/uav_object_detection', ['package.xml']),
                   ('share/uav_object_detection/licenses', ['LICENSES/gemini2-depth-NOTICE.txt',

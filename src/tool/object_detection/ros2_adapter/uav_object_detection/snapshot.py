@@ -5,6 +5,7 @@ import time
 import uuid
 
 from sensor_msgs.msg import Image
+from .backends import QueryError
 from rclpy.callback_groups import ReentrantCallbackGroup
 from uav_object_detection_interfaces.srv import DetectObjects, DetectSnapshot
 from uav_object_detection_interfaces.msg import ObjectObservation
@@ -17,6 +18,8 @@ class SnapshotAdapter:
         self.condition = threading.Condition()
         self.waiting = False
         self.image = None
+        self.last_stamp_ns = 0
+        self.accepted_ns = 0
         self.subscription = node.create_subscription(
             Image, image_topic, self.on_image, node.camera_qos)
         self.server = node.create_service(
@@ -25,7 +28,11 @@ class SnapshotAdapter:
 
     def on_image(self, image):
         with self.condition:
-            if self.waiting and self.image is None:
+            stamp = image.header.stamp.sec * 10**9 + image.header.stamp.nanosec
+            if stamp <= 0 or stamp <= self.last_stamp_ns or stamp > self.node.get_clock().now().nanoseconds:
+                return
+            self.last_stamp_ns = stamp
+            if self.waiting and self.image is None and stamp >= self.accepted_ns:
                 self.image = image
                 self.condition.notify_all()
 
@@ -37,8 +44,10 @@ class SnapshotAdapter:
     def observe(self, request, response):
         if not math.isfinite(request.timeout) or request.timeout <= 0:
             return self.fail(response, 'INVALID_REQUEST', 'timeout must be finite and positive')
-        if request.category not in ('person', 'car', 'truck', 'bus'):
-            return self.fail(response, 'UNSUPPORTED', 'category unsupported by deployed detector')
+        try:
+            normalized_query = self.node.backend.resolve(request.query)
+        except QueryError as error:
+            return self.fail(response, error.code, str(error))
         if not self.gate.acquire(blocking=False):
             return self.fail(response, 'BUSY', 'Previous observation has not finished')
         deadline = time.monotonic() + request.timeout
@@ -46,6 +55,7 @@ class SnapshotAdapter:
             token = self.node.generation
         with self.condition:
             self.image = None
+            self.accepted_ns = self.node.get_clock().now().nanoseconds
             self.waiting = True
         done = threading.Event()
         outcome = {}
@@ -74,7 +84,7 @@ class SnapshotAdapter:
                     raise TimeoutError('Observation deadline expired')
                 task = DetectObjects.Request(request_id=uuid.uuid4().hex,
                                              generation=token, image=image)
-                outcome['frame'] = self.node.infer(task, category=request.category,
+                outcome['frame'] = self.node.infer(task, query=request.query,
                                                    observation_active=active,
                                                    estimate_position=request.estimate_position)
             except Exception as error:
@@ -111,6 +121,9 @@ class SnapshotAdapter:
         response.success = True
         response.code = 'SUCCEEDED' if frame.valid or not frame.detections else 'PARTIAL'
         response.reason = frame.error
-        response.result = ObjectObservation(position_requested=request.estimate_position, header=frame.header, image_header=frame.image_header,
+        response.result = ObjectObservation(original_query=request.query, normalized_query=normalized_query,
+            detector_backend=self.node.backend_name, request_id=frame.request_id, generation=frame.generation,
+            tool_generation=frame.tool_generation, worker_generation=frame.worker_generation,
+            position_requested=request.estimate_position, header=frame.header, image_header=frame.image_header,
             depth_header=frame.depth_header, model_version=frame.model_version, detections=frame.detections)
         return response
