@@ -432,3 +432,75 @@ capability_types:
       coordinate_frame: fixed_navigation_frame
       axes: ENU
       timestamp: latest_measurement_included
+
+  - id: planning/trajectory/timed-segment/3d
+    name: Timed fleet trajectory segment
+    description: Absolute-epoch trajectory segments with per-vehicle sampled position, velocity and acceleration; valid_from plus each point time_from_start determines execution time.
+    transport:
+      protocol: ros2_topic
+      schema: uav_planner_interfaces/msg/TimedTrajectorySegment
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s, acceleration: m/s^2, yaw: rad, time: s}
+      coordinate_frame: configured_common_navigation_frame
+      axes: ENU
+      timestamp: generated_at_and_absolute_valid_from
+
+  - id: planning/trajectory/ego-v2-minco/3d
+    name: EGO v2 MINCO peer trajectory
+    description: Fifth-order MINCO boundary PVA, inner positions, segment durations and clearance with stable vehicle and trajectory IDs. Publisher history is 10; the native receiver retains 100 samples.
+    transport:
+      protocol: ros2_topic
+      schema: traj_utils/msg/MINCOTraj
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s, acceleration: m/s^2, duration: s, clearance: m}
+      coordinate_frame: configured_common_navigation_frame
+      axes: ENU
+      timestamp: absolute_ROS_start_time
+
+  - id: task/ego-planner-v2/status
+    name: EGO adapter task status
+    description: EGO adapter JSON status with task state, revisions and stop confirmation; the payload contract is defined by the adapter, not a generic text-health equivalence.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
+  - id: planning/failure
+    name: Planner failure event
+    description: Planner failure carrying task_id, reason and detail; no embedded timestamp or generic lifecycle status.
+    transport:
+      protocol: ros2_topic
+      schema: uav_planner_interfaces/msg/PlannerFailure
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time

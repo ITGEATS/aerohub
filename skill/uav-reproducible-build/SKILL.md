@@ -59,3 +59,7 @@ description: 为无人机算法及 AS2 扩展建立固定工具镜像内的可�
 记录外部工作区、源文件与生成构建胶水；该工作区不作为源码的唯一保存位置。
 
 ROS shell 环境脚本不一定支持 Bash nounset。入口可在 source ROS/AS2/colcon setup 时暂不启用 `set -u`，加载后再启用；用真实目标镜像构造节点，而不只做 Python 语法检查。Python ROS 节点避免以 `handle`、`clients` 等 Node 只读属性命名自己的状态；目标 rclpy 的真实构造检查能检出这类问题。
+
+## 同名 ROS 包隔离
+
+不同算法包含同名 ROS 包时，源码目录分开不能消除包发现与运行时解析冲突。构建时隔离包发现范围、build 和 install，运行时检查所加载 overlay 的包前缀，避免选中另一个算法的同名包。

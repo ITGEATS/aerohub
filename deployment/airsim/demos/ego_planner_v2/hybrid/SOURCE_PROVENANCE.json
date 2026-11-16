@@ -1,0 +1,178 @@
+{
+  "baseline_pr_head": "9d92fe0cb76983c15f08d6a1611e59fc7539c5e8",
+  "source_scope": "historically verified mixed compute implementation; paths and explicit configuration adapted for delivery",
+  "files": [
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/audit_crossing.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/audit_crossing.py",
+      "source_sha256": "32248d5ac8758104a73b4591496fcd125056686f0f6fb3f563bade264f528dfa",
+      "delivered_sha256": "32248d5ac8758104a73b4591496fcd125056686f0f6fb3f563bade264f528dfa"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/audit_fault.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/audit_fault.py",
+      "source_sha256": "177b72d128955962239b8569e2e024458c967179baab39f19583e7168d8e55f8",
+      "delivered_sha256": "177b72d128955962239b8569e2e024458c967179baab39f19583e7168d8e55f8"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/audit_flight.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/audit_flight.py",
+      "source_sha256": "1de51d783f7da8187bc9232ea139cd384c3e18aa3b8500926f3922814df558a0",
+      "delivered_sha256": "1de51d783f7da8187bc9232ea139cd384c3e18aa3b8500926f3922814df558a0"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/audit_flight_session.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/audit_flight_session.py",
+      "source_sha256": "a9c3cd28cf17e8511c3a5ec743c477bba3d7442036ba02ac805a10b03b6b7b9c",
+      "delivered_sha256": "a9c3cd28cf17e8511c3a5ec743c477bba3d7442036ba02ac805a10b03b6b7b9c"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/audit_ground.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/audit_ground.py",
+      "source_sha256": "e7304ad1a6a5a9ca7545deaed107fef29f916fa366ccdac37688e2d2c8432375",
+      "delivered_sha256": "e7304ad1a6a5a9ca7545deaed107fef29f916fa366ccdac37688e2d2c8432375"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/camera.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/camera.py",
+      "source_sha256": "e4bf18bdc3c1ca258bf48c0e036376e6ec00c51e744ff9eda79d93eaab5a32a8",
+      "delivered_sha256": "25fa1345c83360fa905201ac28ed946b3f959ea9e07371f15bbc370e64854bf0"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/crossing_client.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/crossing_client.py",
+      "source_sha256": "c376a925c0b567c72ec82f440733b05c6adb3bc1d716b060e931afb442b7cb5b",
+      "delivered_sha256": "c376a925c0b567c72ec82f440733b05c6adb3bc1d716b060e931afb442b7cb5b"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/dds_exec.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/dds_exec.py",
+      "source_sha256": "65a2a6071aa850ff6adcbc58192c4879d02c480deeca7a25d8c3fb4af16d0859",
+      "delivered_sha256": "65a2a6071aa850ff6adcbc58192c4879d02c480deeca7a25d8c3fb4af16d0859"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/fault_client.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/fault_client.py",
+      "source_sha256": "57044b2c1be1d1fcc3a0a18f84349f642ddc271bfacaa4c8579ff2737db4c5d4",
+      "delivered_sha256": "57044b2c1be1d1fcc3a0a18f84349f642ddc271bfacaa4c8579ff2737db4c5d4"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/fault_injector.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/fault_injector.py",
+      "source_sha256": "73fb03d5915c4adcd6f7821ee744389844f56a963bef264da67a8f0167226f22",
+      "delivered_sha256": "73fb03d5915c4adcd6f7821ee744389844f56a963bef264da67a8f0167226f22"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/fault_launch.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/fault_launch.py",
+      "source_sha256": "7a6e0e4faa4573f77fb32ad540b1d61d7ed87f9691299647a2f773147ca73f00",
+      "delivered_sha256": "7a6e0e4faa4573f77fb32ad540b1d61d7ed87f9691299647a2f773147ca73f00"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/flight_client.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/flight_client.py",
+      "source_sha256": "5d0ab626c4256708716aba2f8a73fdb6772808153010de2a7ede163c31759f27",
+      "delivered_sha256": "5d0ab626c4256708716aba2f8a73fdb6772808153010de2a7ede163c31759f27"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/flight_run.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/flight_run.py",
+      "source_sha256": "dca395cb2fe1679b5f1ebd6424bcf2108250d9bbf9789221b0ced72b923aa347",
+      "delivered_sha256": "43d43c8093806dc52f78df81051e859b5cf365fb2df1847e96cf7df161cb7649"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/hybrid_plan.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/hybrid_plan.py",
+      "source_sha256": "21eb8a8270caa45a6e5ccfbffdaca0f6db416a5656850740dbe42cf772d7f5d2",
+      "delivered_sha256": "a8889147b63c25b1e95b4c4948c67d20cd1d22f302c1cb62e52518bc45978fc8"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/observe.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/observe.py",
+      "source_sha256": "b031ab2809ffd0e2f30e71c366f8072e8aadf203f0dc1a97de63f16f6901052c",
+      "delivered_sha256": "b031ab2809ffd0e2f30e71c366f8072e8aadf203f0dc1a97de63f16f6901052c"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/plot_flight.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/plot_flight.py",
+      "source_sha256": "131643f45f5e039fe6bf5d7ea2a0552e3b2f792a9a9a6a87b7596b5e133322f5",
+      "delivered_sha256": "131643f45f5e039fe6bf5d7ea2a0552e3b2f792a9a9a6a87b7596b5e133322f5"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/run.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/run.py",
+      "source_sha256": "00698e8d6fc1010d74b206264a6a4cf9860264b93bea17d03b88b6314f7732f8",
+      "delivered_sha256": "fb51e2a91ab82bf10829870fb0042e80e97a1d240f834fd9972b84813547c398"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/tests/test_crossing_audit.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/test_crossing_audit.py",
+      "source_sha256": "34f213c5ada30c78fe754e7b046db66d631756d0e4ec7d447b6299d4255b41c0",
+      "delivered_sha256": "34f213c5ada30c78fe754e7b046db66d631756d0e4ec7d447b6299d4255b41c0"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/tests/test_fault_audit.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/test_fault_audit.py",
+      "source_sha256": "c3a91d970476a381709cb7f6ec835ae9a66947e27967e275b27c161f3cf50492",
+      "delivered_sha256": "c3a91d970476a381709cb7f6ec835ae9a66947e27967e275b27c161f3cf50492"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/tests/test_flight_audit.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/test_flight_audit.py",
+      "source_sha256": "84fc4f00d097352a9e1700effedfe54016f6aad93ba2f86689e81a361012a9f0",
+      "delivered_sha256": "84fc4f00d097352a9e1700effedfe54016f6aad93ba2f86689e81a361012a9f0"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/hybrid/tests/test_plan.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/airsim/demos/ego_planner_v2/test_plan.py",
+      "source_sha256": "fc8a3d2a701b5e02ce719db1245cab30c093ccdb3b036e243e133e96588044fc",
+      "delivered_sha256": "67c843446de5fdf234e5f8a14e4d27b4935ef409b8e143f3f31e5fcaae81679e"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/robopi/runtime.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/robopi_single/runtime.py",
+      "source_sha256": "a4c3861ef7d8bb44bf01cbd8fd7fbdd6b032e2ffdf8f1e6eeacb10b89e512b99",
+      "delivered_sha256": "a4c3861ef7d8bb44bf01cbd8fd7fbdd6b032e2ffdf8f1e6eeacb10b89e512b99"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/robopi/interfaces.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/robopi_single/interfaces.py",
+      "source_sha256": "5cb49dc13d79e4cd347b7117f260d7eef435bdc86ebd3f0859e62b50b018f313",
+      "delivered_sha256": "5cb49dc13d79e4cd347b7117f260d7eef435bdc86ebd3f0859e62b50b018f313"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/robopi/audit_ego.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/robopi_single/audit_ego.py",
+      "source_sha256": "74f459f71664b6c79d5a883b371e4fb6ead58ca1c6b63e8894c5ce1f837e4f62",
+      "delivered_sha256": "74f459f71664b6c79d5a883b371e4fb6ead58ca1c6b63e8894c5ce1f837e4f62"
+    },
+    {
+      "destination": "deployment/airsim/demos/ego_planner_v2/robopi/check_clock.py",
+      "source": "ego-hybrid-remaining-20261114/final-source-snapshot/deployment/robopi_single/check_clock.py",
+      "source_sha256": "8d0cd3995a8befc31c900fa3274da9e9777fcc750774db9fb301988c88b5660b",
+      "delivered_sha256": "8d0cd3995a8befc31c900fa3274da9e9777fcc750774db9fb301988c88b5660b"
+    },
+    {
+      "destination": "src/behavior/follow_path/src/follow_path_extended.cpp",
+      "source": "migration/dependencies/aerohub/src/behavior/follow_path/src/follow_path_extended.cpp",
+      "source_sha256": "71798e9a1eee80310fc6ef851f63a9b2fbbbd72ab30f9aa78ffc9801e8fdb2e6",
+      "delivered_sha256": "1c3ed69620177c44a73b7bfcf254b9e851f530e0e61293ca1d1f26bd852356cf"
+    }
+  ],
+  "mechanical_and_entry_changes": [
+    "hybrid subdirectory and current repository shared swarm",
+    "external workspace with source manifest verification",
+    "single participant allocation, mission IDs outside compute pool",
+    "clock synchronization opt-in; unchanged flight gate",
+    "shared in-repository MessagePack fallback",
+    "dev cfb685c: navigation source layout and explicit hybrid_board/onboard_computer schema"
+  ],
+  "excluded": [
+    "relaxed long-distance demo",
+    "loose formation demo",
+    "dual compute on one RoboPi",
+    "withdrawn Skill patches"
+  ],
+  "limits": "Hashes identify files; historical flights do not validate this relocated source tree or the current AS2 gitlinks.",
+  "delivered_hash_basis": "Git blob bytes after repository line-ending normalization; source_sha256 preserves the original snapshot bytes."
+}

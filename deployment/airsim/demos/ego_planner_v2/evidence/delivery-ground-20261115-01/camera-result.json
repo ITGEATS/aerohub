@@ -1,0 +1,115 @@
+{
+  "passed": true,
+  "checks": {
+    "updated_continuously": true,
+    "camera_perturbation_readback": true,
+    "follows_live_world_centroid": true,
+    "downward": true,
+    "rendered_png": true
+  },
+  "updates": 123,
+  "duration_s": 45.60899999999674,
+  "requested_budget_s": 45.0,
+  "max_position_error_m": 9.834766387939453e-07,
+  "origins": {
+    "Drone0": [
+      0,
+      0,
+      0
+    ],
+    "Drone1": [
+      0,
+      -4,
+      0
+    ]
+  },
+  "before": {
+    "pose": {
+      "position": {
+        "x_val": 0.0,
+        "y_val": -2.0,
+        "z_val": -25.0
+      },
+      "orientation": {
+        "w_val": 0.7071067094802856,
+        "x_val": 0.0,
+        "y_val": -0.7071067690849304,
+        "z_val": 0.0
+      }
+    },
+    "fov": 89.90362548828125,
+    "proj_mat": {
+      "matrix": [
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          10.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    }
+  },
+  "perturbed": {
+    "pose": {
+      "position": {
+        "x_val": 5.0,
+        "y_val": -2.0,
+        "z_val": -25.0
+      },
+      "orientation": {
+        "w_val": 0.7071067094802856,
+        "x_val": 0.0,
+        "y_val": -0.7071067690849304,
+        "z_val": 0.0
+      }
+    },
+    "fov": 89.90362548828125,
+    "proj_mat": {
+      "matrix": [
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          10.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    }
+  },
+  "scope": "Live-centroid feedback and camera-only perturbation recovery; movement coverage must be established from the recorded scene poses"
+}

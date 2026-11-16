@@ -1,0 +1,2 @@
+# Per-machine connection settings; tracked examples remain portable.
+config.local.json
