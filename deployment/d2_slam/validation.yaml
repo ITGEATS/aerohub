@@ -1,0 +1,42 @@
+schema_version: 0.1
+scenario: d2-slam-three-vehicle-airsim-acceptance
+platform:
+  simulator: AirSim 1.8.1, visible window
+  flight_controller: PX4 SITL from flight_board:v0.1.0
+  compute: onboard_computer:v0.1.0 with an external workspace overlay
+  topology: three independent pc_simulation compute containers from deployment/swarm
+duration:
+  minimum_airborne_seconds: 45.0
+  minimum_truth_movement_m: 4.0
+  minimum_candidate_movement_m: 3.0
+gates:
+  candidate_output_rate_min_hz: 5.0
+  candidate_maximum_gap_s: 0.5
+  horizontal_ate_rmse_max_m: 1.0
+  position_ate_rmse_max_m: 1.5
+  position_error_p95_max_m: 2.0
+  candidate_samples_min: 100
+  nonempty_landmark_samples_min: 20
+  collaboration_events_min: 20
+  collaboration_remote_vehicle_count_min: 2
+  authority_canonical_maximum_gap_s: 0.1
+  overhead_centroid_displacement_min_m: 1.0
+alignment:
+  method: fixed-scale planar rigid alignment for scoring only
+  scale: 1.0
+  input_to_algorithm: false
+authority_rule: >-
+  Every vehicle must pass the same shadow run before D2SLAM may provide the
+  AS2 map-to-odom correction. Authority keeps PX4 local odometry as the
+  high-rate odom-to-base state and uses D2SLAM only for global correction.
+required_faults:
+  - one vehicle RGB/depth/IMU interruption with detected candidate loss and controlled fleet landing
+  - one D2VINS process exit with detected candidate loss and controlled fleet landing
+  - two peer D2VINS processes paused with remote-frame loss detected while the remaining local estimator stays live
+required_evidence:
+  - locked source revisions, image IDs, workspace state and visible AirSim window
+  - real three-vehicle sensor, GPU algorithm, odometry and landmark streams
+  - remote-frame events proving every estimator receives both peers
+  - AirSim truth and fixed-scale ATE metrics for every vehicle
+  - native AS2 plugin authority output and independent landmark consumer
+  - fault timelines, fleet landing/disarm and owned-resource cleanup

@@ -47,3 +47,9 @@ Behavior 返回停止确认，再从新的实测状态建立规划初值并刷�
 ## Sim(3) 对齐与降级
 
 单目 SLAM 依赖 Sim(3) 对齐时，冻结条件不能只有样本数和拟合 RMSE；还必须检查总基线、水平基线及多方向激励，避免在纯升降或近单一直线运动中冻结弱可观测变换。全局校正输入中断或算法退出后，插件保持最后一个已接受的 `map -> odom`，拒绝陈旧新值，同时由新鲜局部里程计继续提供 `odom -> base_link` 和 twist；该降级语义必须通过运动中故障注入验证。
+
+## 高频本地状态与低频协同校正
+
+协同 SLAM 的 peer 优化与 landmark 输出频率不应决定控制状态频率。插件将每个全局 pose 与时间邻近的 local odometry 配对，计算并保持 `map -> odom`；每个新 local sample 都以原采样 stamp 提交保持的校正、`odom -> base_link` 和 body twist。独立 smoke 使用非恒等校正检查组合结果，端到端 authority 则测量飞行窗口内 canonical source stamp 与本地 arrival gap。
+
+不要把初始化等待、验证器阻塞或仿真时钟跳步混入控制 freshness。发布权检查还应确认运行图中选中的 `plugin_name`、canonical topic 与 TF 只有一个宿主；shadow 通过后才切换 authority，并要求相同源码、镜像和标定。
