@@ -1,5 +1,6 @@
 """ProjectAirSim ROS YOPO task; native collision scoring remains unavailable."""
 import argparse
+import os
 import math
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
 from rclpy.qos import qos_profile_sensor_data
 from as2_msgs.action import Takeoff, Land
+from action_wait import wait_action_stage
 from rosgraph_msgs.msg import Clock
 from as2_msgs.msg import PlatformInfo
 from geometry_msgs.msg import PoseStamped, TwistStamped
@@ -20,7 +22,9 @@ from sensor_msgs.msg import Image
 from tf2_ros import Buffer, TransformListener, TransformException
 import tf2_geometry_msgs
 import signal
-from urllib.request import Request, build_opener, ProxyHandler
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
 
 
 class Mission(Node):
@@ -38,7 +42,7 @@ class Mission(Node):
         self.depth = None
         self.create_subscription(Image, '/drone0/sensor_measurements/yopo_front/depth_planar/image',
                                  lambda m: setattr(self, 'depth', m), qos_profile_sensor_data)
-        self.http = build_opener(ProxyHandler({}))
+        self.display = ProjectAirSimExtensionClient(port=int(os.environ.get('AEROHUB_HUD_PORT','9011')))
         self.hud_started = False
         self.result = dict(success=False, motion_requested=False, arrived_5m=False, stopped=False,
                            land_success=False, disarmed=False, collision_coverage='unverified: native collision topic not bridged')
@@ -50,6 +54,7 @@ class Mission(Node):
         self.goal_pub = self.create_publisher(PoseStamped, '/drone0/yopo/goal', 1)
         self.task_clients = []
         self.last_clock_ns = None
+        self.clock_received_at = None
         self.clock_samples = 0
         self.create_subscription(Clock, '/clock', self.on_clock, qos_profile_sensor_data)
         self.last_collision = 0.
@@ -63,9 +68,11 @@ class Mission(Node):
 
     def hud(self, event):
         try:
-            request = Request('http://127.0.0.1:9011/aerohub/mission/'+event, data=b'', method='POST')
-            with self.http.open(request, timeout=3) as response:
-                response.read()
+            if event == 'start':
+                label = {'IpcMission': 'IPC', 'DiffphysMission': 'DiffPhys'}.get(type(self).__name__, 'YOPO')
+                self.display.set_title(label)
+                self.display.set_title('120 m 赛道', side='right')
+            self.display.call('ControlRun', vehicle_id='Drone1', event=event)
         except Exception as error:
             self.result.setdefault('hud_errors', []).append(str(error))
 
@@ -74,6 +81,7 @@ class Mission(Node):
         if self.last_clock_ns is not None and stamp < self.last_clock_ns:
             raise RuntimeError('simulation clock moved backwards; stop flight validation')
         self.last_clock_ns=stamp
+        self.clock_received_at=time.monotonic()
         self.clock_samples+=1
 
     def graph_ready(self):
@@ -120,12 +128,14 @@ class Mission(Node):
 
     def action(self, kind, name, goal):
         client = ActionClient(self, kind, name); self.task_clients.append(client)
-        self.wait(client.server_is_ready)
-        accepted = client.send_goal_async(goal); self.wait(accepted.done)
+        wait_action_stage(self, client.server_is_ready, name, 'server discovery', 20)
+        accepted = client.send_goal_async(goal)
+        wait_action_stage(self, accepted.done, name, 'goal acceptance', 20)
         handle = accepted.result()
         if not handle.accepted:
             raise RuntimeError(name+' goal rejected')
-        future = handle.get_result_async(); self.wait(future.done, 60)
+        future = handle.get_result_async()
+        wait_action_stage(self, future.done, name, 'result', 60)
         result = future.result()
         if result.status != 4 or not getattr(result.result, 'takeoff_success' if kind is Takeoff else 'land_success'):
             raise RuntimeError(name+' failed: '+str(result))

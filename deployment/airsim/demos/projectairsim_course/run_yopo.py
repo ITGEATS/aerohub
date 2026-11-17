@@ -23,9 +23,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prepare-only',action='store_true')
     parser.add_argument('--speed', type=float, default=5., choices=[3.,5.])
+    parser.add_argument('--reset-sim',action='store_true',help='直接停止本地赛道仿真，无需降落')
     args=parser.parse_args()
     if running(c.PX4) and re.search(r'arming_state:\s*2\b',c.status()):
-        raise RuntimeError('PX4仍解锁，先等待降落上锁。')
+        raise RuntimeError('PX4仍解锁；放弃本轮请运行本命令加 --reset-sim，无需降落。')
     active=c.capture(['docker','ps','--format','{{.Names}}']).splitlines()
     if any(n=='aerohub-wmm5-flight' or n.startswith('aerohub-manual5-flight-') for n in active):
         raise RuntimeError('SUPER任务仍在运行。')
@@ -79,6 +80,7 @@ def main():
     else:raise RuntimeError('worker未就绪。')
     base=['docker','run','-d','--init','--network','host','--ipc','host','-e','ROS_DOMAIN_ID=188',
           '-v',str(ROOT)+':/repo','-v',str(out)+':/evidence']
+    base+=['-e','AEROHUB_HUD_PORT='+str(c.HUD_PORT)]
     setup=('source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && '
            'source /root/aerostack2_ws/install/setup.bash && source /opt/uav_execution_ws/install/setup.bash && '
            'source /repo/log/yopo-single/ros_ws/install/setup.bash && '
@@ -110,6 +112,7 @@ def main():
         sp.run(['docker','stop','--timeout','150',flight],check=False)
     finally:
         (out/'mission-console.log').write_text(c.capture(['docker','logs',flight]))
+        (out/'compute-console.log').write_text(c.capture(['docker','logs',compute]))
         final=c.status();(out/'px4-final-status.txt').write_text(final)
         if not re.search(r'arming_state:\s*2\b',final):
             c.run(['docker','stop','--timeout','20',compute])
@@ -124,6 +127,11 @@ def main():
     else:raise RuntimeError('无result.json，未完成。')
 
 if __name__=='__main__':
+    import sys
+    if '--reset-sim' in sys.argv[1:]:
+        from reset_sim import reset
+        reset()
+        raise SystemExit(0)
     with (ROOT/'log/projectairsim/course-flight.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         main()

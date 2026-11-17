@@ -1,5 +1,5 @@
 """ROS-only DiffPhys course task, with native Takeoff/FollowReference/Land."""
-import json,math,time,signal
+import json,math,time,signal,os
 from pathlib import Path
 import rclpy
 from rclpy.action import ActionClient
@@ -9,6 +9,7 @@ from as2_msgs.msg import YawMode,ControlMode
 from std_msgs.msg import Bool,String
 from std_srvs.srv import SetBool
 from yopo_mission import Mission
+from action_wait import wait_action_stage
 
 class DiffphysMission(Mission):
     def __init__(self):
@@ -40,7 +41,10 @@ class DiffphysMission(Mission):
         self.result['motion_requested']=True
         self.wait(lambda:self.platform.armed)
         self.service(SetBool,'/drone0/set_offboard_mode',SetBool.Request(data=True));self.wait(lambda:self.platform.offboard)
-        self.action(Takeoff,'/drone0/TakeoffBehavior',Takeoff.Goal(takeoff_height=3.,takeoff_speed=.5))
+        self.action(Takeoff,'/drone0/TakeoffBehavior',Takeoff.Goal(takeoff_height=2.,takeoff_speed=.5))
+        if os.environ.get('DIFFPHYS_LAND_TEST') == '1':
+            self.result['scope']='takeoff_land_only'
+            return
         until=time.monotonic()+3;self.wait(lambda:time.monotonic()>until)
         Path('/evidence/need-hover').touch()
         self.wait(lambda:Path('/evidence/hover.json').exists(),30)
@@ -113,15 +117,21 @@ class DiffphysMission(Mission):
                 f=self.action_handle.cancel_goal_async()
                 try:self.wait(f.done,5)
                 except Exception as exc:self.result['cancel_error']=str(exc)
-            if self.hud_started:self.hud('finish')
+            if self.hud_started:
+                self.hud('finish')
+                try:self.display.show_message('降落中，请保持仿真窗口开启',duration_seconds=0)
+                except Exception as exc:self.result.setdefault('hud_errors',[]).append(str(exc))
             from as2_msgs.action import Land
             try:
                 if self.platform and self.platform.armed:
                     self.action(Land,'/drone0/LandBehavior',Land.Goal(land_speed=.5));self.result['land_success']=True
-                    self.wait(lambda:not self.platform.armed,30)
+                    wait_action_stage(self,lambda:not self.platform.armed,'/drone0/LandBehavior','disarm feedback',30)
             except Exception as exc:self.result['recovery_error']=str(exc)
             self.result['disarmed']=bool(self.platform and not self.platform.armed)
-            self.result['success']=bool(self.result.get('arrived') and self.result['land_success'] and self.result['disarmed'] and not self.result.get('error'))
+            if self.hud_started:
+                try:self.display.show_message('已降落上锁' if self.result['disarmed'] else '降落未完成，请保留仿真窗口',duration_seconds=0)
+                except Exception as exc:self.result.setdefault('hud_errors',[]).append(str(exc))
+            self.result['success']=bool((self.result.get('arrived') or self.result.get('scope')=='takeoff_land_only') and self.result['land_success'] and self.result['disarmed'] and not self.result.get('error'))
             Path('/evidence/result.json').write_text(json.dumps(self.result,indent=2))
             self.samples.close();self.events.close()
 

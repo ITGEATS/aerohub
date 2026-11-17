@@ -12,6 +12,7 @@ import argparse
 import subprocess as sp
 import sys
 import time
+from hud_port import choose_hud_port
 
 ROOT = Path(__file__).resolve().parents[4]
 PROFILE = ROOT / 'log/projectairsim/package-course-wmm/profile.json'
@@ -19,6 +20,7 @@ RUNTIME = PROFILE.parent / 'runtime'
 PX4 = 'aerohub-course-wmm-px4'
 IMAGE = 'uav/apps-super-forest:onboard-v0.1.1'
 SOURCE = Path(__file__).resolve().parent
+HUD_PORT = 9011
 ENV = dict(os.environ, DISPLAY=os.environ.get('DISPLAY', ':1'))
 # Respect the caller's desktop credentials; discover GDM only for the current UID.
 if 'XAUTHORITY' not in ENV:
@@ -37,12 +39,29 @@ def status():
                     '--instance', '20', 'vehicle_status', '-n', '1'])
 
 def manager(action):
+    global HUD_PORT
+    # Keep the original PX4/robot configuration; replace only the packaged display runtime.
+    profile = json.loads(PROFILE.read_text())
+    binary = Path(os.environ.get('COURSE_BINARY', str(ROOT/'log/projectairsim/hud-v1/package/Linux/Blocks/Binaries/Linux/Blocks'))).expanduser().resolve()
+    if action == 'start':
+        if not binary.is_file():
+            raise FileNotFoundError(f'新 HUD 场景包不存在：{binary}；可用 COURSE_BINARY 指定已构建的包')
+        profile['binary'] = str(binary)
+        HUD_PORT = choose_hud_port(profile['display']['port'])
+        profile['display']['port'] = HUD_PORT
+        print(f'HUD 本轮端口：{HUD_PORT}', flush=True)
+        RUNTIME.mkdir(parents=True, exist_ok=True)
+        launch_profile = RUNTIME/'hud-profile.json'
+        launch_profile.write_text(json.dumps(profile, indent=2))
+    else:
+        launch_profile = PROFILE
     run([sys.executable, ROOT/'simulator/manager/manager.py', action,
-         '--profile', PROFILE, '--run-dir', RUNTIME], env=ENV, cwd=ROOT)
+         '--profile', launch_profile, '--run-dir', RUNTIME], env=ENV, cwd=ROOT)
 
 def wait_ports_free(timeout=90):
     profile = json.loads(PROFILE.read_text())
-    ports = list(profile['ports'].values()) + [profile['display']['port']]
+    ports = list(profile['ports'].values())
+    # HUD uses a free per-launch port; only fixed simulator ports require waiting.
     deadline = time.monotonic() + timeout
     while True:
         sockets = []
@@ -73,6 +92,7 @@ def wait_ports_free(timeout=90):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prepare-only', action='store_true', help='只复位场景与飞控，不起飞')
+    parser.add_argument('--reset-sim',action='store_true',help='直接停止本地赛道仿真，无需降落')
     args = parser.parse_args()
     # Check ownership and active missions before changing the existing runtime.
     active = capture(['docker', 'ps', '--format', '{{.Names}}']).splitlines()
@@ -92,7 +112,8 @@ def main():
         'runs': 1, 'speed_m_s': 5, 'acceleration_m_s2': 2,
         'goal_enu_m': [0,120,2], 'arrival_tolerance_m': 1.5,
         'collision_coverage': 'unverified native collision topic not bridged',
-        'package': 'BlocksPlannerCourse-linux-v7-wmm'}, indent=2))
+        'package': str(Path(os.environ.get('COURSE_BINARY', str(ROOT/'log/projectairsim/hud-v1/package/Linux/Blocks/Binaries/Linux/Blocks'))).expanduser().resolve()),
+        'scene_profile': str(PROFILE)}, indent=2))
     # Correct the local historical fallback's hardcoded system id for this vehicle.
     mission = out/'app/mission.py'
     mission.write_text(mission.read_text().replace('target_system=61,', 'target_system=21,'))
@@ -132,7 +153,7 @@ def main():
                'source /opt/super_ws/install/setup.bash && source /opt/super_app_ws/install/setup.bash && '
                'exec python3 /course/app/mission.py')
         run(base+['--name',flight,'-e','SUPER_APP_ROOT=/course/app','-e','SUPER_EVIDENCE_ROOT=/course',
-                  '-e','SUPER_CASE=course','-e','SUPER_HUD_PORT=9011','-v',str(out)+':/course',
+                  '-v',str(ROOT)+':/repo:ro','-e','SUPER_CASE=course','-e','SUPER_HUD_PORT='+str(HUD_PORT),'-v',str(out)+':/course',
                   '-v',str(ROOT/'src/tool/navigation/planner/super/ros2_adapter/bridge/uav_super_adapter/polynomial.py')+
                   ':/opt/super_app_ws/install/lib/python3.10/site-packages/uav_super_adapter/polynomial.py:ro',
                   '--entrypoint','bash',IMAGE,'-lc',cmd])
@@ -178,6 +199,10 @@ def main():
     print('证据目录：', out)
 
 if __name__ == '__main__':
+    if '--reset-sim' in sys.argv[1:]:
+        from reset_sim import reset
+        reset()
+        raise SystemExit(0)
     import fcntl
     # Prevent simultaneous terminal invocations from racing during the reset.
     with (ROOT/'log/projectairsim/course-flight.lock').open('w') as lock:

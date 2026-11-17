@@ -7,7 +7,7 @@ ROOT=c.ROOT;APP=Path(__file__).resolve().parent
 IMAGE='uav/apps-super-forest:repo-native-20261109'
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--prepare-only',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--prepare-only',action='store_true');parser.add_argument('--reset-sim',action='store_true',help='直接停止本地赛道仿真，无需降落');args=parser.parse_args()
     active=c.capture(['docker','ps','--format','{{.Names}}']).splitlines()
     if any('flight-' in n or n.startswith('aerohub-ipc-course-') for n in active):raise RuntimeError('已有任务运行，拒绝切换')
     if c.PX4 in active and re.search(r'arming_state:\s*2\b',c.status()):raise RuntimeError('PX4仍解锁')
@@ -31,6 +31,7 @@ def main():
     else:raise RuntimeError('PX4未就绪')
     (out/'px4-preflight.txt').write_text(status)
     base=['docker','run','-d','--init','--network','host','--ipc','host','-e','ROS_DOMAIN_ID=188','-e','IPC_NATIVE=1','-e','AS2_BEHAVIORS=takeoff,land','-e','OPENBLAS_NUM_THREADS=1','-e','OMP_NUM_THREADS=1','-e','MKL_NUM_THREADS=1','-v',str(ROOT)+':/repo:ro','-v',str(ROOT/'log/ipc/control-overlay')+':/overlay:ro','-v',str(ROOT/'log/ipc/native-deps')+':/native:ro','-v',str(out)+':/evidence']
+    base+=['-e','AEROHUB_HUD_PORT='+str(c.HUD_PORT)]
     setup='source /root/aerostack2_ws/install/setup.bash && source /overlay/install/setup.bash && source /native/ros-install/local_setup.bash && export LD_LIBRARY_PATH=/native/install/lib:$LD_LIBRARY_PATH && '
     compute='aerohub-ipc-course-compute-'+tag;flight='aerohub-ipc-course-flight-'+tag
     extra=['-e','IPC_GROUND_ONLY=1'] if args.prepare_only else []
@@ -59,5 +60,10 @@ def main():
     if not args.prepare_only and not report.get('success'):raise SystemExit(1)
 
 if __name__=='__main__':
+    import sys
+    if '--reset-sim' in sys.argv[1:]:
+        from reset_sim import reset
+        reset()
+        raise SystemExit(0)
     with (ROOT/'log/projectairsim/course-flight.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);main()

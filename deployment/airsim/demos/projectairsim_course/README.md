@@ -1,6 +1,7 @@
 # ProjectAirSim 赛道单轮测试
 
-使用已打包的 `BlocksPlannerCourse-linux-v7-wmm`、原版 flight_board PX4 和现有 AS2 执行层。
+使用新 HUD 赛道包、原版 flight_board PX4 和现有 AS2 执行层。
+PX4、磁场和传感器配置仍来自 `log/projectairsim/package-course-wmm/profile.json`。
 每次执行命令，停止上一轮已上锁的飞控，重启场景和 SITL，从起点飞一轮。
 不在飞行中热换算法。启动器使用同一个文件锁，避免两个终端同时重置同一场景。
 
@@ -102,8 +103,14 @@ HUD 的 FINISHED 表示计时结束，失败也可能结束计时；不是到达
 运行者看到的画面可用于判断本轮现象，但缺少原生碰撞事件时不宣称自动无碰撞验收通过。
 磁场修正已通过地面航向检查；各算法飞行结论独立记录。
 
-停止后 HUD HTTP 端口可能保留 TIME_WAIT。入口按实际 bind 检查端口释放，最长等待90秒；
-不因无 LISTEN 就认为可立即重启，也不杀未知占用进程。超时按具体端口检查归属。
+HUD 优先使用配置端口（赛道默认9011）；每次启动以不启用 `SO_REUSEADDR` 的 bind
+检查端口。有旧监听或 TIME_WAIT 时立即选择系统分配的空闲端口，不等待旧 HTTP 连接回收，
+也不终止未知占用进程。实际端口写入 `runtime/hud-profile.json`、`runtime/display.json`
+和运行状态，并同步传给遥测、SUPER 与 YOPO/IPC/DiffPhys 任务容器；启动时打印该端口。
+固定仿真通信端口仍等待释放，最长90秒，超时按具体端口检查归属。
+原运行命令无需增加端口参数。
+2026-11-16 已实测9011仍被占用时自动选用33609，打包场景启动至HUD HTTP就绪约3.0秒，
+全程未起飞；结果保存在 `log/projectairsim/hud-port-verification.json`。
 
 旧入口及算法契约见 [YOPO](../yopo_single/README.md)、[IPC](../ipc_navigation/README.md)、
 [DiffPhys](../diffphys_forest/README.md)。这些旧入口仍针对 AirSimNH，不能直接用于本包。
@@ -162,7 +169,7 @@ python3 deployment/airsim/demos/projectairsim_course/run_diffphys.py
 ProjectAirSim标准深度发布为BEST_EFFORT，Planner显式`camera_reliable:=false`匹配；
 CameraInfo采用RELIABLE/TRANSIENT_LOCAL匹配一次性标定，不能直接套旧相机的QoS。
 
-原生Takeoff3m后，实测本轮PX4悬停油门；策略通过既有FollowReference ATTITUDE执行。
+原生Takeoff2m后（2026-11-16 调整；目标高度仍为地面相对3m，当前配置尚未实飞验收），实测本轮PX4悬停油门；策略通过既有FollowReference ATTITUDE执行。
 进入目标6m范围后取消策略，确认Action结束及POSITION模式，再原生GoTo2.5m/s收敛到
 地面相对ENU [0,120,3]，误差≤1.5m、速度≤0.3m/s驻留2仿真秒，最后Land/disarmed。
 目标速度是策略输入，不表示严格实测上限；独立记录峰值和实际分布。
@@ -187,6 +194,118 @@ DiffPhys 大图传输使用随入口提供的 `diffphys-dds.xml`：桥、标准�
 | YOPO 3m/s、起飞2m | 到达5m门、停车、Land、上锁通过；速度中位2.981、峰值3.268m/s；后半程升高，不代表恒高 | yopo-course-20261114-190858-790815 |
 | DiffPhys 5m/s、起飞3m | 策略控制量被拒后watchdog退出；Land、上锁通过；未到终点 | diffphys-course-20261114-191143 |
 
+输入与接管高度的离线实验发现见 [DiffPhys 输入对照记录](diffphys-input-findings.md)；该轮实验产物已按要求清理。
 DiffPhys仍需解决掉高与控制量超限。原生碰撞事件及完整故障矩阵未验收，不宣称完整复现成功。
 准备与运行均使用仓库锁定子模块、标准模型目录和现有Inference启动脚本；已移除赛道专属源码/模型路径配置。
 历史失败、配置变迁和详细结果见 [验证记录](validation.md)。
+
+## 新 HUD 重跑（2026-11-16）
+
+四套 `run_*.py` 共用的启动层默认选择
+`log/projectairsim/hud-v1/package/Linux/Blocks/Binaries/Linux/Blocks`。
+可通过 `COURSE_BINARY` 指定另一个已构建且包含相同赛道与新 HUD 的可执行文件。
+启动时在 runtime 下生成 `hud-profile.json`，只替换二进制路径，不覆盖原 WMM profile，
+也不更改算法速度、相机输入或执行门限。这里只替换已有包，不自动构建或烘焙。
+
+Manager 的遥测进程依据实际展开场景登记 streaming 视角，优先选择 Drone1 Chase RGB；
+Tab/G 可切换车辆视角和动态 Global。登记与遥测只使用原生 service 连接，
+不启动占用 topic 连接的独立 display_session，不与传感器 bridge 争用 Pair0。
+
+四套任务通过 SDK-free 扩展 RPC 对显式 `Drone1` 调用 ControlRun。
+提交导航目标时进入 RUNNING 并启动计时；结束任务时进入 FINISHED 并冻结计时，
+与当前观察视角无关。左标题显示算法名，右标题显示“120 m 赛道”。
+FINISHED 仍不代表到点或成功；最终结果以 result.json 为准。
+SUPER 任务容器新增仓库只读挂载，以加载同一份公共扩展客户端。
+
+本次完成 Python 语法、8 项既有 HUD 客户端/视角回归及部署配置替换检查；
+尚未执行新包与 PX4/ROS 联合运行、实际画面或飞行验证。
+录屏前先逐套执行 `--prepare-only` 检查，确认画面、输入和 PX4 就绪，再运行完整任务。
+SUPER 的 prepare-only 仅检查场景与 PX4，不代表其 Planner 已就绪。
+
+YOPO 就绪诊断：`mission.jsonl` 的 `ready_checks` 分别记录相机几何、观测、推理、
+Action、modify 和 stop 接口。CameraInfo 使用 RELIABLE/TRANSIENT_LOCAL 接收桥的
+持久化标定，避免 Planner 晚启动后只收到深度而收不到标定；相机平移按
+`camera_x_m: 0.46` 校验。任务结束保留 `compute-console.log` 供核查。
+
+## DiffPhys 失败会话阻塞重跑
+
+`run_diffphys.py` 遇到仍运行的任务客户端时拒绝切换场景；任务退出但 PX4
+仍解锁时保留算力执行链。这两种情况不能只凭容器存在就视为无用残留。
+先查看 `log/projectairsim/diffphys-course-current.json` 对应目录中的
+`result.json` 与 `px4-final-status.txt`。任务运行中用 Ctrl+C 请求恢复并等待退出。
+
+如果上一轮已失败退出，决定放弃当前仿真状态、从起点重来，执行：
+
+```bash
+python3 deployment/airsim/demos/projectairsim_course/run_diffphys.py --reset-sim
+python3 deployment/airsim/demos/projectairsim_course/run_diffphys.py
+```
+
+`--reset-sim` 统一调用本目录的 `reset_sim.py`，明确放弃共享赛道仿真，
+不执行降落，也不把失败改成成功。范围和证据保留规则见
+[放弃当前赛道仿真并重新运行](#放弃当前赛道仿真并重新运行)。
+正常启动仍要求明确的 PX4 上锁反馈，空白或未知状态不会按已上锁处理。
+
+2026-11-16 的 `diffphys-course-20261116-151202` 在倾角超过 0.6 rad 后失败，
+恢复报 `condition timeout: {}`，最终仍解锁。因此其“已有任务运行”提示对应的是
+保留的失败执行链，并非锁文件残留。重置只解决下一轮启动阻塞，不能解决策略倾角超限。
+
+### 降落期间保留仿真窗口
+
+HUD 的 `FINISHED` 仅结束导航计时，随后仍须完成原生 Land 和上锁。
+DiffPhys 此时显示“降落中，请保持仿真窗口开启”，确认上锁后改为“已降落上锁”。
+请以终端结果中的 `land_success: true` 和 `disarmed: true` 为关闭窗口依据。
+PX4 lockstep 依赖场景持续提供仿真输入；提前关闭窗口会让落地判定、Action 结果和
+上锁流程停在当时状态，保留的算力容器无法在没有场景的情况下继续完成降落。
+
+2026-11-16 `diffphys-course-20261116-152608`：GoTo 已到点，Land 于
+15:27:04（本地时间）接受并运行；15:27:13 场景日志记录窗口销毁、
+`All Windows Closed`、`RequestExit(0)`。最终 PX4 为 `ground_contact: True`、
+`maybe_landed: True`、`landed: False`，仍解锁。日志证明窗口退出先于恢复超时，
+无法据此确定窗口关闭事件由谁或什么触发。退出期间的 HTTP ensure 在退出请求之后出现，
+不能将它认定为退出原因。原始场景日志另存于该轮 `scene-exit.log`。
+
+可单独验证起飞、降落和上锁，跳过 DiffPhys 策略与120m赛道：
+
+```bash
+python3 deployment/airsim/demos/projectairsim_course/run_diffphys.py --takeoff-land-only
+```
+
+该模式结果使用 `scope: takeoff_land_only`，不代表导航成功。
+`diffphys-course-20261116-153241` 已在有屏 ProjectAirSim + PX4 SITL 上通过该测试：
+`success: true`、`land_success: true`、`disarmed: true`。
+这次短流程不替代终点处完整导航与降落验收。
+Action 超时现在区分服务发现、目标接收、执行结果阶段，报告时钟是否推进及当前平台状态，
+避免只留下 `condition timeout: {}`。
+
+## 放弃当前赛道仿真并重新运行
+
+四个入口均支持 `--reset-sim`，调用相同的 `reset_sim.py`。此选项只停止会话并退出，
+不启动新飞行。无需先降落、上锁，也不要求任务客户端先退出；它在获取飞行锁之前执行。
+例如放弃 YOPO 失败会话并改为3m/s重跑：
+
+```bash
+python3 deployment/airsim/demos/projectairsim_course/run_yopo.py --reset-sim
+python3 deployment/airsim/demos/projectairsim_course/run_yopo.py --speed 3
+```
+
+重置范围为本地赛道共享 SITL、场景、按明确名称规则识别的四个 demo 任务及算力容器，
+以及 PID 和启动时刻均匹配记录的推理进程。它可以结束其他算法的当前赛道运行，
+用于明确放弃这一共享仿真实例；不操作真实飞控或未知容器。任务、算力容器并行停止，
+短超时后由 Docker 结束进程，不等待原任务的降落恢复。原始失败结果不改写，
+证据目录新增 `simulation-reset.json`。所有入口使用相同重置语义，不再保留 DiffPhys 专用重置实现。
+正常 Ctrl+C 仍请求降落恢复；明确放弃仿真时直接用 `--reset-sim`。
+
+## 整理后的验证边界
+
+启动辅助与故障会话管理回归：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s deployment/airsim/demos/projectairsim_course/tests -v
+```
+
+当前13项通过，覆盖Action等待阶段提示、启动状态检查、HUD端口选择和
+仿真重置范围（Docker/Manager操作使用mock）。端口测试需要本机socket权限。
+本次仓库整理未重跑飞行，也未验证YOPO标定适配的完整动力学闭环；
+不能将辅助测试通过提升为上述算法赛道复现成功。

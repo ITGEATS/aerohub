@@ -7,7 +7,9 @@ from pathlib import Path
 import signal
 import subprocess
 import time
-from urllib.request import Request, ProxyHandler, build_opener
+import sys
+sys.path.insert(0, '/repo')
+from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
 
 import rclpy
 from rclpy.node import Node
@@ -35,11 +37,13 @@ class Mission(Node):
         if not port or (event == 'finish' and not getattr(self, 'display_timer_running', False)):
             return
         try:
-            request = Request(f'http://127.0.0.1:{int(port)}/aerohub/mission/{event}', data=b'')
-            with build_opener(ProxyHandler({})).open(request, timeout=2) as response:
-                response.read()
+            display = ProjectAirSimExtensionClient(port=int(port), timeout=2)
+            if event == 'start':
+                display.set_title('SUPER')
+                display.set_title('120 m 赛道', side='right')
+            display.call('ControlRun', vehicle_id='Drone1', event=event)
             self.display_timer_running = event == 'start'
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             self.result.setdefault('display_errors', []).append(f'{event}: {exc}')
             self.get_logger().warning(f'HUD {event} failed: {exc}')
 
