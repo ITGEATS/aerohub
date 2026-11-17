@@ -18,7 +18,7 @@ from rcl_interfaces.msg import SetParametersResult
 from uav_planner_interfaces.msg import TimedTrajectorySegment, VehicleTrajectory, TimedTrajectoryPoint
 from uav_planner_framework.follow_path_client import FleetFollowPathClient
 from uav_planner_framework.ros_conversions import seconds_to_time, time_to_seconds
-from .polynomial import Polynomial, InsufficientCoverage
+from .polynomial import Polynomial, InsufficientCoverage, yaw_polynomial
 from .navigation import SuperNavigation
 
 
@@ -26,7 +26,7 @@ class SuperAdapter(Node):
     def __init__(self):
         super().__init__('super_timed_path_adapter')
         for key,value in [('vehicle_id','drone0'),('frame_id','drone0/odom'),
-                          ('goal',[0.,0.,2.]),('navigation_action',False),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
+                          ('goal',[0.,0.,2.]),('navigation_action',False),('target_yaw_enabled',False),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
             self.declare_parameter(key,value)
         self.vehicle = self.get_parameter('vehicle_id').value
         self.frame = self.get_parameter('frame_id').value
@@ -52,6 +52,8 @@ class SuperAdapter(Node):
         self.task = ''
         self.late_updates = 0
         self.last_curve = {}
+        self.submitted_segment = None
+        self.coverage_handoffs = 0
         self.create_subscription(TrajectorySetpoints,'motion_reference/trajectory',self.on_reference,qos_profile_sensor_data)
         self.create_subscription(Odometry,'sensor_measurements/odom',self.on_pose,qos_profile_sensor_data)
         self.create_subscription(PolynomialTrajectory,'/planning_cmd/poly_traj',self.on_plan,qos_profile_sensor_data)
@@ -149,6 +151,7 @@ class SuperAdapter(Node):
             self.queued = None
             self.last_plan = self.last_command = self.last_wall = 0.
             self.first_start = None
+            self.submitted_segment = None
             self.reference_ready = False
             self.started = time.monotonic()
             response.success = True
@@ -177,21 +180,50 @@ class SuperAdapter(Node):
         self.last_curve = {'source_start':curve.start,'source_end':curve.end,
                            'submitted_from':start,'endpoint':endpoint,'end_velocity':velocity,
                            'is_final':segment.is_final,'pieces':len(curve.durations)}
-        trajectory = VehicleTrajectory(vehicle_id=self.vehicle,valid_fields=3)
-        for absolute in curve.times(start):
+        use_yaw = (self.get_parameter('target_yaw_enabled').value and self.navigation is not None
+                   and self.navigation.reserved and self.navigation.handle is not None
+                   and self.navigation.handle.request.orientation_mode == self.navigation.handle.request.TARGET_YAW)
+        yaw_curve = yaw_polynomial(msg,start,curve.end) if use_yaw else None
+        trajectory = VehicleTrajectory(vehicle_id=self.vehicle,valid_fields=7 if use_yaw else 3)
+        times = curve.times(start)
+        if yaw_curve is not None:
+            times = sorted({round(t*1e9):t for t in times+[yaw_curve.start+d for d in yaw_curve.ends
+                if start < yaw_curve.start+d < curve.end]}.values())
+        for absolute in times:
             point = TimedTrajectoryPoint()
             seconds_to_time(absolute-start,point.time_from_start)
             for name,vector in zip(('position','velocity','acceleration'),curve.sample(absolute)):
                 target = getattr(point,name)
                 target.x,target.y,target.z = vector[1],vector[0],-vector[2]
+            if yaw_curve is not None:
+                # Scalar yaw is ENU here; segment positions are fleet NED.
+                point.yaw = math.pi/2-yaw_curve.sample(absolute)[0][0]
             trajectory.points.append(point)
         segment.vehicle_trajectories = [trajectory]
         return segment
+
+    def submit_segment(self, segment):
+        start_ns=round(time_to_seconds(segment.valid_from)*1e9)
+        previous=getattr(self,'submitted_segment',None)
+        if self.client.revision and previous is not None and start_ns>previous['end_ns']:
+            detail=f"previous_end_ns={previous['end_ns']} incoming_start_ns={start_ns}"
+            if previous['final'] and self.navigation and self.navigation.handoff_final_coverage():
+                self.coverage_handoffs=getattr(self,'coverage_handoffs',0)+1
+                self.get_logger().info('Final coverage handoff: '+detail)
+                return
+            self.fail('TRAJECTORY_COVERAGE_GAP',detail)
+            return
+        self.client.submit(segment)
+        if not self.client.failed:
+            duration_ns=round(time_to_seconds(segment.vehicle_trajectories[0].points[-1].time_from_start)*1e9)
+            self.submitted_segment=dict(end_ns=start_ns+duration_ns,final=segment.is_final)
 
     def tick(self):
         if self.client:
             self.client.tick(self.now_seconds())
         if self.enabled and self.client.complete:
+            if self.queued is not None and self.navigation:
+                self.navigation.handoff_final_coverage(completed=True)
             self.enabled = False
             self.queued = None
         if self.enabled:
@@ -202,7 +234,7 @@ class SuperAdapter(Node):
             elif self.queued is not None and (self.client.revision==0 or self.reference_ready) and self.client.ready and not self.client.pending and time_to_seconds(self.queued.header.stamp) <= self.now_seconds():
                 msg,self.queued = self.queued,None
                 try:
-                    self.client.submit(self.convert(msg))
+                    self.submit_segment(self.convert(msg))
                 except InsufficientCoverage:
                     # Keep the currently accepted plan. Its original expiry and
                     # final/result semantics remain authoritative.
@@ -217,6 +249,7 @@ class SuperAdapter(Node):
             'complete':self.client.complete if self.client else False,
             'settling':self.vehicle in self.client.settling_vehicles if self.client else False,
             'stop_confirmed':self.client.quiescent if self.client and self.client.cancel_started else False,
+            'coverage_handoffs':getattr(self,'coverage_handoffs',0),'submitted_segment':getattr(self,'submitted_segment',None),
             'reference_ready':self.reference_ready,'source_flags':self.flags,'late_updates':self.late_updates,'last_curve':self.last_curve})))
 
 

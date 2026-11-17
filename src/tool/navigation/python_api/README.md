@@ -190,3 +190,13 @@ NavigationModule、SUPER/YOPO Adapter，以及受影响的 FollowPath 执行消�
 真实仿真闭环仍需单独验证。
 
 本轮检查记录与未完成矩阵见 [目标更新接口验证](VALIDATION-target-update-20261115.md)。
+
+
+### System Tool初版的运动占用
+
+SUPER托管NavigateToPose已接入 `uav_motion_resource`，与System Tool起降在同车
+命名空间和同一motion目录下互斥。需重建并加载新增依赖，并按
+[System部署](../../../../deployment/system/README.md)挂载持久化目录。
+停止未确认或进程退出后保留占用记录。本次仅修改SUPER入口；YOPO与其他历史
+控制入口尚未接入，前述“没有跨进程控制权仲裁”仍适用于这些未覆盖入口。
+当前改动尚未完成SUPER接口回归及飞行验收，不提升已有验证等级。

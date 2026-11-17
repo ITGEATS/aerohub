@@ -79,7 +79,11 @@ public:
     modify_ = create_service<Timed::Impl::SendGoalService>(
       "follow_timed_path/_behavior/modify", [this](Timed::Impl::SendGoalService::Request::SharedPtr req, Timed::Impl::SendGoalService::Response::SharedPtr res) {
         res->accepted = false;
-        if (!timed_ || paused_ || needs_replan_) {return;}
+        if (!timed_ || paused_ || needs_replan_) {
+          RCLCPP_WARN(get_logger(), "Timed execution modify rejected inactive: now=%.9f incoming=%lu active=%lu timed=%d paused=%d replan=%d",
+            now().seconds(), req->goal.path.revision, timeline_.active.revision, timed_, paused_, needs_replan_);
+          return;
+        }
         try {
           timeline_.update(convert(req->goal.path), now().seconds(), continuity_, velocity_continuity_,
             acceleration_continuity_, yaw_continuity_);
@@ -138,6 +142,8 @@ private:
     return has_pose_ && age>=0 && age<=pose_timeout_;
   }
   bool finish(bool success, const std::string & reason, bool canceled=false) {
+    RCLCPP_INFO(get_logger(), "Timed execution finish: now=%.9f revision=%lu success=%d reason=%s pending=%zu end=%.9f",
+      now().seconds(), timeline_.active.revision, success, reason.c_str(), timeline_.pending.size(), timeline_.active.end());
     auto result=std::make_shared<Timed::Result>();
     result->success=success; result->reason=reason; result->revision=timeline_.active.revision;
     const bool stopped = hover_.sendHover();

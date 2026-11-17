@@ -22,6 +22,7 @@ PYDEPS
 export PYTHONPATH="/work/python_deps${PYTHONPATH:+:$PYTHONPATH}"
 MAKEFLAGS=-j2 colcon build --merge-install --parallel-workers 2 --base-paths \
   /repo/as2/aerostack2/as2_python_api \
+  /repo/src/tool/system/motion_resource \
   /repo/src/tool/navigation/interfaces /repo/src/tool/navigation/framework \
   /repo/src/behavior/follow_path /repo/src/tool/navigation/python_api \
   /repo/src/tool/navigation/planner/super/ros2_adapter/bridge \

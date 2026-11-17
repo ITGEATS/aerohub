@@ -173,6 +173,7 @@ class FleetFollowPathClient:
             return
         try:
             if not future.result().accepted:
+                self.node.get_logger().warning(f"Timed execution modify response rejected vehicle={vehicle} revision={self.revision} results={sorted(self.results)}")
                 self._fail(f"FOLLOW_PATH_UPDATE_REJECTED:{vehicle}")
                 return
             self.pending.discard(vehicle)
@@ -184,6 +185,7 @@ class FleetFollowPathClient:
             return
         try:
             result = future.result()
+            self.node.get_logger().info(f"Timed execution terminal vehicle={vehicle} status={result.status} success={result.result.success} revision={result.result.revision} reason={result.result.reason}")
             if result.status != GoalStatus.STATUS_SUCCEEDED or not result.result.success:
                 self._fail(f"FOLLOW_PATH_FAILED:{vehicle}:{result.result.reason}")
                 return

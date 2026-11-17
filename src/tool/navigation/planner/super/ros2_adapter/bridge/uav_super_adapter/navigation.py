@@ -7,6 +7,8 @@ import copy
 import math
 import time
 
+from uav_motion_resource.lease import MotionLease
+
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -22,6 +24,8 @@ class SuperNavigation:
     def __init__(self, adapter):
         self.node = adapter
         self.reserved = False
+        self.motion = MotionLease(adapter.get_namespace())
+        self.motion_stopped = False
         self.handle = None
         self.finished = None
         self.odom = None
@@ -57,6 +61,9 @@ class SuperNavigation:
             return GoalResponse.REJECT
         if self.node.client and not self.node.client.quiescent:
             return GoalResponse.REJECT
+        if not self.motion.acquire('navigation.super'):
+            return GoalResponse.REJECT
+        self.motion_stopped = False
         self.reserved = True
         return GoalResponse.ACCEPT
 
@@ -66,8 +73,17 @@ class SuperNavigation:
             return 'INVALID_GOAL', 'Target frame must be ' + self.node.frame
         if not all(math.isfinite(v) for v in (p.x, p.y, p.z)):
             return 'INVALID_GOAL', 'Target position must be finite'
-        if request.orientation_mode not in (request.UNCONSTRAINED, request.KEEP_YAW):
-            return 'UNSUPPORTED', 'SUPER execution currently holds the takeover yaw'
+        if request.orientation_mode == request.TARGET_YAW:
+            if not self.node.get_parameter('target_yaw_enabled').value:
+                return 'UNSUPPORTED', 'target_yaw_enabled is false'
+            q = request.target.pose.orientation
+            norm = sum(v*v for v in (q.x,q.y,q.z,q.w))
+            if not math.isfinite(norm) or abs(norm-1.) > 1e-3:
+                return 'INVALID_GOAL', 'Target yaw requires a finite unit quaternion'
+            if abs(q.x)>1e-6 or abs(q.y)>1e-6:
+                return 'UNSUPPORTED', 'TARGET_YAW requires a yaw-only quaternion'
+        elif request.orientation_mode not in (request.UNCONSTRAINED, request.KEEP_YAW):
+            return 'UNSUPPORTED', 'Only target yaw, not full attitude, is supported'
         if request.arrival_behavior not in (request.COMPLETE, request.HOLD):
             return 'INVALID_GOAL', 'Unknown arrival behavior'
         if request.arrival_behavior == request.HOLD and not request.use_target_timeout:
@@ -118,15 +134,30 @@ class SuperNavigation:
             self.begin_stop()
             return await self.finished
         finally:
+            self.motion.release(self.motion_stopped)
             self.handle = None
             self.reserved = False
             self.phase = 'idle'
 
     def publish_target(self):
         target = copy.deepcopy(self.target)
-        target.pose.orientation = copy.deepcopy(self.odom.pose.pose.orientation)
+        if self.handle.request.orientation_mode != self.handle.request.TARGET_YAW:
+            target.pose.orientation = copy.deepcopy(self.odom.pose.pose.orientation)
         target.header.stamp = self.node.get_clock().now().to_msg()
         self.publisher.publish(target)
+
+    def handoff_final_coverage(self, *, completed=False):
+        # A final segment may have completed before a later target's plan is
+        # ready. It is not a rolling replacement when their epochs don't overlap.
+        h=self.handle
+        if (not self.reserved or h is None or h.is_cancel_requested or
+            self.outcome is not None or self.stop_started is not None or
+            (h.request.arrival_behavior != h.request.HOLD and not completed) or
+            (completed and (self.node.client is None or not self.node.client.complete))):
+            return False
+        self.resume_after_stop=True
+        self.begin_stop()
+        return True
 
     def restart_execution(self):
         # Reacquire execution only after the old FollowTimedPath stop gate.
@@ -148,7 +179,7 @@ class SuperNavigation:
             error = ('NO_ACTIVE_TASK', 'No active navigation task')
         elif request.goal_id != h.goal_id:
             error = ('NOT_OWNER', 'Goal UUID does not own this task')
-        elif h.is_cancel_requested or self.stop_started is not None or self.outcome is not None:
+        elif h.is_cancel_requested or self.outcome is not None or (self.stop_started is not None and not self.resume_after_stop):
             error = ('STOPPING', 'Navigation is stopping')
         elif self.node.now_seconds() < self.started or self.node.now_seconds() - self.started > self.timeout:
             error = ('TIMEOUT', 'Navigation task deadline expired')
@@ -168,17 +199,24 @@ class SuperNavigation:
             return response
         p = request.target.pose.position
         changed = list(self.node.goal) != [p.x, p.y, p.z]
+        if h.request.orientation_mode == h.request.TARGET_YAW:
+            a,b = self.target.pose.orientation,request.target.pose.orientation
+            # q and -q represent the same rotation.
+            changed = changed or abs(a.z*b.z+a.w*b.w) < 1.-1e-10
         self.target = copy.deepcopy(request.target)
         self.node.goal = [p.x, p.y, p.z]
         self.target_revision = response.target_revision = request.target_revision
         self.last_target = self.node.now_seconds()
         if changed:
             self.stable_since = None
-            if self.holding:
+            if self.holding and self.stop_started is None:
                 self.restart_execution()
-            else:
-                self.publish_target()
-                self.phase = 'planning'
+            elif self.stop_started is None:
+                if self.node.client is not None and self.node.client.complete:
+                    self.handoff_final_coverage(completed=True)
+                else:
+                    self.publish_target()
+                    self.phase = 'planning'
         response.accepted, response.code = True, 'ACCEPTED'
         response.reason = 'Destination accepted; execution planning is asynchronous'
         return response
@@ -197,6 +235,7 @@ class SuperNavigation:
         return pose
 
     def finish(self, success, code, reason, stopped):
+        self.motion_stopped = stopped
         result = NavigateToPose.Result(success=success, code=code, reason=reason,
                                       final_pose=self.current_pose(), stop_confirmed=stopped)
         if self.handle.is_cancel_requested and code == 'CANCELED':

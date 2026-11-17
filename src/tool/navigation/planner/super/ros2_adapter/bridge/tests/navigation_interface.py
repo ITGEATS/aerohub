@@ -241,6 +241,29 @@ class NavigationInterfaceTest(unittest.TestCase):
         self.assertEqual(self.adapter.goal, [0., 12., 2.])
         self.nav.cancel()
 
+    def test_completed_action_routes_new_target_after_confirmed_stop(self):
+        self.nav.to_point(0,0,2,wait=False,timeout=10.)
+        self.wait_for(lambda:self.adapter.enabled)
+        old=self.adapter.client;handle=self.nav._handle
+        def delayed_stop():
+            old.cancel_started=True
+            old.quiescent=False
+        old.close=delayed_stop
+        old.complete=True
+        self.nav.to_point(0,.2,2,wait=False)
+        self.assertIs(self.nav._handle,handle)
+        self.assertTrue(old.cancel_started)
+        self.assertFalse(self.adapter.enabled)
+        self.nav.to_point(0,.4,2,wait=False)
+        self.assertIs(self.adapter.client,old)
+        self.assertEqual(self.adapter.goal,[0.,.4,2.])
+        old.quiescent=True
+        self.wait_for(lambda:self.adapter.client is not old and self.adapter.enabled)
+        self.assertIs(self.nav._handle,handle)
+        self.wait_for(lambda:self.goals and abs(self.goals[-1].pose.position.y-.4)<1e-9)
+        self.assertFalse(self.nav.done)
+        self.nav.cancel()
+
     def test_hold_arrival_renew_resume_and_cancel(self):
         self.nav.to_point(0, 0, 2, wait=False, arrival_behavior='hold', target_timeout=10.)
         self.wait_for(lambda: self.adapter.enabled)
