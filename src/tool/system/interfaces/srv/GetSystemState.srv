@@ -1,0 +1,16 @@
+---
+std_msgs/Header header
+bool fresh
+bool connected
+bool armed
+bool offboard
+int8 platform_state
+bool busy
+string motion_owner
+string phase
+# Own state in the platform localization frame; usable only when fresh=true.
+geometry_msgs/PoseStamped pose
+geometry_msgs/TwistStamped twist
+# Local navigation pose is distinct from self_localization's global frame.
+bool navigation_pose_fresh
+geometry_msgs/PoseStamped navigation_pose

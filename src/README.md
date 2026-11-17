@@ -29,6 +29,11 @@ src/
 - AS2、PX4 和仿真器依赖保留原位置。Demo Mission 脚本和部署编排仍在 `deployment/`，卡片仍在 `cards/`。
 - RGB-D Object Detection Tool 位于 `tool/object_detection/`，对应用提供单次观测接口和 AS2 Module；YOLO 模型适配保留在 `basic_function/inference/models/yolo26n_seg/`，不承担任务编排。
 
+System Tool 初版位于 `tool/system/`，提供托管起飞、降落和系统状态查询；
+任务侧通过Tool客户端调用，算力侧封装原生Behavior和平台准备。
+它与SUPER托管Navigation接入同一车辆运动占用包，尚未覆盖其他Planner或底层直连。
+实现与验证边界见 [System Tool](tool/system/README.md)。
+
 ## 路径迁移
 
 | 原路径 | 新路径 |
