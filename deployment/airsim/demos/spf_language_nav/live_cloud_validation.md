@@ -73,3 +73,9 @@ Function Action 与 Tool 结果复核；请求 timeout 与任务 timeout 独立�
 后续按用户要求收回 SPF 控制：`vlm_client.py` 的 `RESULT_MAX_AGE_S=30.0` 是当前唯一来源，
 已移除该配置文件、ROS 参数及启动快照逻辑。上面的飞行证据对应修改前的同值配置版本，
 不能称为常量版本重新执行了飞行。
+
+## 后续健康与退出维护
+
+3c3cde9 提交后修复 sensor 继承健康检查不匹配，以及 Humble executor 未等待线程池
+导致的测试退出警告。实际地面 healthy/unhealthy/recovered 与 21 次零异步异常回归
+证据和版本范围见 Demo README。此维护没有重跑语义导航飞行，不改变上文单周期结论。

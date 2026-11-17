@@ -40,4 +40,4 @@ resources:
 validation:
   evidence: deployment/airsim/demos/spf_language_nav/validation.json
   current_contract: deployment/airsim/demos/spf_language_nav/live_cloud_validation.md
-  limitations: [single-live-navigation-cycle-only, model-empty-responses, sensor-healthcheck-mismatch, live-stale-and-provider-down-faults-not-tested, minimal-acceptance-scope-per-2026-11-16-ruling, single-vehicle-only, not-comparable-to-paper-numbers, board-deployment-alternative-route]
+  limitations: [single-live-navigation-cycle-only, model-empty-responses, live-stale-and-provider-down-faults-not-tested, minimal-acceptance-scope-per-2026-11-16-ruling, single-vehicle-only, not-comparable-to-paper-numbers, board-deployment-alternative-route]

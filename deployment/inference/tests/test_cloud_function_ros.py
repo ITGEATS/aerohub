@@ -21,9 +21,11 @@ import yaml
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.task import Future
 from sensor_msgs.msg import Image
 from uav_inference_interfaces.action import InferVisionLanguage
 from uav_inference.vision_language_node import VisionLanguageNode
+from uav_inference.executor_shutdown import shutdown_executor
 from uav_spf_planner.prompt import build_prompt
 from uav_spf_planner.vlm_client import VlmQueryClient
 from aerohub_inference.app import create_app
@@ -61,7 +63,9 @@ class CloudFunctionContract(unittest.TestCase):
                 self.end_headers()
                 try:
                     self.wfile.write(json.dumps({'choices':[{'message':{'content':owner.text}}]}).encode())
-                except BrokenPipeError:
+                except (BrokenPipeError, ConnectionResetError):
+                    # Timeout/cancel tests intentionally let the caller close
+                    # its connection before the delayed provider reply.
                     pass
 
             def log_message(self, *args):
@@ -98,6 +102,16 @@ class CloudFunctionContract(unittest.TestCase):
         self.function = VisionLanguageNode()
         self.driver = Node('cloud_function_driver')
         self.executor = MultiThreadedExecutor(num_threads=5)
+        self.async_errors = []
+        original_set_exception = Future.set_exception
+
+        def record_exception(future, error):
+            self.async_errors.append(error)
+            return original_set_exception(future, error)
+
+        monitor = patch.object(Future, 'set_exception', record_exception)
+        monitor.start()
+        self.addCleanup(monitor.stop)
         self.executor.add_node(self.function)
         self.executor.add_node(self.driver)
         self.ros_thread = threading.Thread(target=self.executor.spin, daemon=True)
@@ -119,8 +133,7 @@ class CloudFunctionContract(unittest.TestCase):
         deadline=time.monotonic()+4
         while self.function._busy and time.monotonic()<deadline:
             time.sleep(.025)
-        self.executor.shutdown(timeout_sec=5)
-        self.ros_thread.join(timeout=2)
+        shutdown_executor(self.executor, self.ros_thread)
         self.function.close()
         self.client.destroy()
         self.function.destroy_node()
@@ -133,6 +146,7 @@ class CloudFunctionContract(unittest.TestCase):
         self.provider_thread.join()
         self.env.stop()
         self.workspace.cleanup()
+        self.assertFalse(self.async_errors, self.async_errors)
 
     def publish_image(self):
         if not self.publish_enabled:

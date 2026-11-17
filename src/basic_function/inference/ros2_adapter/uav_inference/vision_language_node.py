@@ -15,13 +15,14 @@ import numpy as np
 import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from uav_inference_interfaces.action import InferVisionLanguage
 
 from .model_client import ModelClient, WorkerError
+from .executor_shutdown import shutdown_executor
 
 
 def jpeg_image(msg):
@@ -187,10 +188,10 @@ def main():
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        executor.shutdown()
+        shutdown_executor(executor)
         node.close()
         node.destroy_node()
         rclpy.try_shutdown()

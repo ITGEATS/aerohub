@@ -121,13 +121,24 @@ SPF 客户端在 `vlm_client.py` 使用常量 `RESULT_MAX_AGE_S = 30.0`（秒）
 
 - 模型空响应：30 秒有效期实验中 5 次请求仅 1 次形成执行，4 次 empty_response。
   需记录脱敏的供应商 finish_reason/用量和分阶段时延，诊断原因；不能直接认定为网络或 token 上限。
-- sensor 健康检查：独立 ROS sensor 容器继承了 flight supervisor 的 healthcheck，导致
-  实际采图正常但 Docker unhealthy；需按实际进程和数据更新重做检查并验证失效检测。
 - 验收：真实平台 stale/Inference 掉线恢复、运动中取消、左右转向与多指令重复可靠性
   尚未完成。完整 AS2 DroneInterface 的 NavigationModule 加载调用也未实测。
-- ROS 测试退出：Function 断言通过后偶有 rclpy Destroyable 异步销毁警告，需排查未排空的回调/future；目前不据此证明退出路径无缺陷。
 - 当前常量版本通过 ROS 回归；已有单周期飞行使用相同 30 秒值的前一配置版本。
   无语义到达检测是已确认的 timeout-only 契约；本地 SPF CUDA/Houmo 尚未实现，均不伪装为已支持。
 
 任务指标 `cycle_completion_ratio` 是完成执行周期数/推理尝试数，不等于模型解析成功率；
 旧证据中的 `parse_ratio` 保持原样，新入口已更正名称。
+
+## 健康检查与退出修复（3c3cde9 后续）
+
+sensor 入口通过轻量 wrapper 复用固定镜像的原 SensorNode；RGB 和 CameraInfo 完成
+发布并出现新的采样 stamp 后才更新健康状态，5 秒没有新采样则失败，正常退出清理状态。
+Docker 使用专属检查，原镜像不重建。它验证本节点发布进展，跨容器实际消费仍须另测。
+实际 AirSim 地面验证 healthy → 暂停采集 unhealthy → 恢复 healthy 已通过，未解锁。
+
+固定 Humble 的 MultiThreadedExecutor.shutdown 未 join Python 回调线程池，排队订阅
+可能在 destroy_node 后执行。Function 的退出桥接先停止 spin、等待线程池，再销毁实体；
+版本相关的内部字段访问集中在 executor_shutdown.py。测试捕获异步 Future 异常并断言
+为零，不靠忽略警告。原复现 21 次产生 1 个 InvalidHandle，修复后同一复现 21 次为零。
+证据：`log/spf/inference-cloud/exit-warning-red.txt`、`exit-warning-final-02.txt`，
+以及 `log/spf/live-20261117T085008Z/sitl-health-fix/sensor-health-regression.json`。

@@ -77,12 +77,15 @@ def prefix(output):
     return 'spf-nav-' + hashlib.sha256(str(output).encode()).hexdigest()[:8] + '-'
 
 
-def launch(output, role, image, args, env=(), mounts=(), entrypoint=None):
+def launch(output, role, image, args, env=(), mounts=(), entrypoint=None, healthcheck=None):
     command = ['docker', 'run', '-d', '--name', prefix(output) + role,
                '--label', 'aerohub.spf.output=' + str(output),
                *common(output), *env, *mounts]
     if entrypoint:
         command += ['--entrypoint', entrypoint]
+    if healthcheck:
+        command += ['--health-cmd', healthcheck, '--health-interval', '2s',
+                    '--health-timeout', '2s', '--health-start-period', '10s', '--health-retries', '2']
     command += [image, *args]
     run(command)
 
@@ -349,10 +352,11 @@ def start(output, observe=False):
         time.sleep(.5)
     launch(output, 'sensor', FLIGHT, ['-lc',
            'source /opt/ros/humble/setup.bash && source /opt/platform_sensors/install/setup.bash && '
-           'exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args '
+           'exec python3 /repo/deployment/airsim/demos/spf_language_nav/spf_sensor.py --ros-args '
            '-p settings_file:=/config/settings.json -p rpc_host:=' + winip + ' -p rpc_port:=%d ' % RPC_PORT +
            '-p vehicle_name:=PX4 -p vehicle_namespace:=drone0 -p camera_rate_hz:=10.0 -p use_sim_time:=true'],
-           mounts=['-v', str(output / 'settings.json') + ':/config/settings.json:ro'], entrypoint='bash')
+           mounts=['-v', str(output / 'settings.json') + ':/config/settings.json:ro'], entrypoint='bash',
+           healthcheck='python3 /repo/deployment/airsim/demos/spf_language_nav/spf_sensor.py healthcheck')
     launch_compute(output)
     launch_inference(output)
 

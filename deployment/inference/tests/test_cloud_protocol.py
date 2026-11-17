@@ -42,5 +42,3 @@ def test_gemini_payload_generation_config():
     assert p["generationConfig"] == {"temperature": 0.4, "topP": 0.95,
                                      "topK": 40, "maxOutputTokens": 8192}
     assert p["contents"][0]["parts"][1]["inline_data"]["mime_type"] == "image/jpeg"
-
-
