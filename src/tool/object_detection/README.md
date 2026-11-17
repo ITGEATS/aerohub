@@ -230,3 +230,15 @@ Current query/backend evidence and replay commands:
 [query validation](../../../deployment/object_detection/VALIDATION-query.md).
 Existing YOLO live evidence predates this schema; DINO live sensing, 3D accuracy,
 moving-target consumption and flight remain unverified. Overall status is partial.
+
+## 连续最新帧通道
+
+`stream_enabled:=true`复用现有单一推理worker。相机只有一个ROS采集订阅，回调仅
+分发快照候选并覆盖容量1的最新待处理帧；不复制像素、不做推理、不等待GPU。
+独立worker由Event唤醒，拿走当前帧后在锁外推理，新图像仍可覆盖待处理槽。
+没有订阅overlay时不生成调试图。短互斥保护交换引用，不宣称无锁实时保证。
+
+输出仍为`perception/object_detection/detections`三维检测帧，保留源stamp、frame及
+生产世代。流式query/估距方式由部署固定，不能把该流当任意query的通用响应。
+DetectSnapshot保留“接受后的首帧”与超时/迟到隔离契约；与流式通道共享推理锁，
+同时请求可能BUSY，不会自动启动第二个worker或改变流式query。

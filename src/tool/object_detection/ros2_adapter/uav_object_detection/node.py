@@ -2,6 +2,8 @@
 """ROS RGB-D Object Detection Tool; no target KF, prediction or motion control."""
 from array import array
 import json
+import os
+import itertools
 import threading
 import time
 import uuid
@@ -25,6 +27,9 @@ from .backends import make_backend
 class ObjectDetectionTool(Node):
     def __init__(self):
         super().__init__('object_detection_tool')
+        self.timing_sequence=itertools.count()
+        self.timing_publisher=(self.create_publisher(String,'/diagnostics/vision_pipeline',100)
+            if self.declare_parameter('timing_enabled',False).value else None)
         self.query=self.declare_parameter('query','person').value
         self.backend_name=self.declare_parameter('detector_backend','yolo').value
         self.backend=make_backend(self.backend_name,
@@ -45,12 +50,19 @@ class ObjectDetectionTool(Node):
         self.tf_buffer = self.tf_listener = self.projector = None
         self.position_lock = threading.Lock()
         self.output_frame = output_frame
+        self.position_method = self.declare_parameter('position_method', 'backend_default').value
+        self.target_height_m = self.declare_parameter('target_height_m', 0.0).value
+        if self.position_method not in ('backend_default', 'known_height_vertical_v1'):
+            raise ValueError('unsupported position_method')
+        if self.position_method == 'known_height_vertical_v1' and not 0 < self.target_height_m < float('inf'):
+            raise ValueError('known height requires positive finite target_height_m')
         self.position_config = dict(
             sync_tolerance=self.declare_parameter('sync_tolerance', .05).value,
             transform_wait=self.declare_parameter('transform_wait', .25).value,
             scale_16u=self.declare_parameter('depth_scale_16u', .001).value,
             perspective=self.declare_parameter('depth_is_perspective', False).value,
-            registered=self.declare_parameter('registered_depth', False).value)
+            registered=self.declare_parameter('registered_depth', False).value,
+            known_height_m=self.target_height_m if self.position_method == 'known_height_vertical_v1' else None)
         self.position_topics = {
             kind: self.declare_parameter(kind, default).value
             for kind, default in [
@@ -64,14 +76,13 @@ class ObjectDetectionTool(Node):
         self.last_success=0.;self.error='waiting for camera';self.model={}
         self.last_call={}
         self.stop_event=threading.Event()
+        self.frame_available=threading.Event()
         group=ReentrantCallbackGroup()
         self.client=self.create_client(self.backend.service_type,self.backend.service_name,callback_group=group)
         self.frames=self.create_publisher(ObjectDetectionFrame,'perception/object_detection/detections',10)
         self.debug=self.create_publisher(String,'perception/object_detection/debug',10)
         self.health=self.create_publisher(String,'tools/object_detection/status',10)
         self.overlay=self.create_publisher(Image,'perception/object_detection/overlay',qos_profile_sensor_data)
-        if self.streaming:
-            self.create_subscription(Image,image_topic,self.on_rgb,self.camera_qos)
         self.create_subscription(String,self.backend.status_topic,lambda m:setattr(self,'model',json.loads(m.data)),10)
         self.create_service(DetectObjects,'tools/object_detection/detect',self.service,callback_group=group)
         self.create_service(SetBool,'tools/object_detection/enable',self.enable,callback_group=group)
@@ -81,6 +92,18 @@ class ObjectDetectionTool(Node):
         if self.streaming:
             self._ensure_position_inputs()
         self.worker=threading.Thread(target=self.work,daemon=True);self.worker.start()
+
+    def trace(self, stage, message=None, **details):
+        publisher=getattr(self,'timing_publisher',None)
+        if publisher is None:return
+        header=getattr(message,'image_header',None)
+        if header is None or (header.stamp.sec==0 and header.stamp.nanosec==0):
+            header=getattr(message,'header',None)
+        sample_ns=(header.stamp.sec*10**9+header.stamp.nanosec) if header is not None else None
+        event=dict(stage=stage,sample_ns=sample_ns,mono_ns=time.monotonic_ns(),
+            wall_ns=time.time_ns(),ros_ns=self.get_clock().now().nanoseconds,
+            node=self.get_name(),pid=os.getpid(),seq=next(self.timing_sequence),**details)
+        publisher.publish(String(data=json.dumps(event,separators=(',',':'))))
 
     def _ensure_position_inputs(self):
         """Activate RGB-D/TF consumers only for explicit 3D or legacy use."""
@@ -97,6 +120,8 @@ class ObjectDetectionTool(Node):
             # keeps TransformListener's reliable transient-local defaults.
             self.tf_listener = TransformListener(buffer, self, qos=qos_profile_sensor_data)
             for kind, topic in self.position_topics.items():
+                if self.position_method == 'known_height_vertical_v1' and kind != 'rgb_info_topic':
+                    continue
                 callback = (self.on_depth if kind == 'depth_topic' else
                             lambda msg, key=kind: self.on_info(
                                 'rgb' if key == 'rgb_info_topic' else 'depth', msg))
@@ -127,18 +152,27 @@ class ObjectDetectionTool(Node):
         with self.lock:return self.enabled and token==self.generation
 
     def on_rgb(self,msg):
+        self.trace('buffer_offer',msg)
+        overwritten_ns=None
         stamp=seconds(msg.header.stamp)
         with self.lock:
             if not self.enabled:return
             if stamp<=0 or stamp<=self.last_rgb:
                 self.rejected+=1;return
             self.last_rgb=stamp
-            if self.pending is not None:self.dropped+=1
+            if self.pending is not None:
+                self.dropped+=1
+                old=self.pending[1].header.stamp
+                overwritten_ns=old.sec*10**9+old.nanosec
             self.pending=(self.generation,msg)
+            self.frame_available.set()
+        self.trace('buffer_put',msg,overwritten_ns=overwritten_ns)
 
     def infer(self,request,query=None,observation_active=None,estimate_position=True):
         query = self.query if query is None else query
         self.backend.resolve(query)
+        if estimate_position and self.position_method == 'known_height_vertical_v1' and query.strip().lower() != 'person':
+            raise ValueError('known-height person configuration requires query=person')
         if not self.call_lock.acquire(blocking=False):raise ValueError('BUSY')
         try:
             with self.lock:
@@ -152,10 +186,12 @@ class ObjectDetectionTool(Node):
             self.last_call=dict(request_id=request.request_id,send_monotonic_s=started,
                 request_age_s=self.now()-seconds(request.image.header.stamp))
             inference_request=self.backend.request(request,query)
+            self.trace('model_request',request.image)
             future=self.client.call_async(inference_request);future.add_done_callback(lambda _:done.set())
             if not done.wait(self.timeout+.15):
                 future.cancel();raise ValueError('INFERENCE_TIMEOUT; no retry')
             result=future.result()
+            self.trace('model_response',request.image)
             self.last_call.update(receive_monotonic_s=time.perf_counter(),
                 response_age_s=self.now()-seconds(request.image.header.stamp),
                 roundtrip_ms=(time.perf_counter()-started)*1000)
@@ -172,7 +208,8 @@ class ObjectDetectionTool(Node):
             timing['tool_ros_roundtrip_ms']=(time.perf_counter()-started)*1000
             frame.timings_json=json.dumps(timing)
             if estimate_position:
-                measured=self.projector.project(frame,token,observation_active or self.active, self.backend.position_method)
+                self.trace('projection_begin',request.image)
+                measured=self.projector.project(frame,token,observation_active or self.active, self.backend.position_method if self.position_method == 'backend_default' else self.position_method)
             else:
                 measured=ObjectDetectionFrame(
                     header=frame.header, image_header=frame.header,
@@ -181,6 +218,7 @@ class ObjectDetectionTool(Node):
                     model_version=frame.model_version, timings_json=frame.timings_json,
                     valid=True, detections=[ObjectDetection(detection=d) for d in frame.detections])
             if not (observation_active or self.active)(token):raise ValueError('CANCELLED_GENERATION')
+            self.trace('projection_end',request.image,position_valid=sum(d.position_valid for d in measured.detections),detections=len(measured.detections),error=measured.error)
             return measured
         except Exception as exc:
             self.last_call['error']=str(exc)
@@ -196,26 +234,35 @@ class ObjectDetectionTool(Node):
         return response
 
     def work(self):
-        while not self.stop_event.wait(.005):
+        while not self.stop_event.is_set():
+            if not self.frame_available.wait(.1):continue
             with self.lock:
+                self.frame_available.clear()
                 if self.pending is None:continue
                 generation,msg=self.pending;self.pending=None
+            self.trace('buffer_take',msg)
             try:
+                self.trace('infer_begin',msg)
                 frame=self.infer(DetectObjects.Request(request_id=uuid.uuid4().hex,generation=generation,image=msg))
+                self.trace('infer_end',msg,valid=frame.valid,error=frame.error)
                 with self.lock:
                     if generation!=self.generation:continue
+                    self.trace('result_publish_begin',frame)
                     self.frames.publish(frame)
+                self.trace('result_publish',frame)
                 boxes=[dict(xyxy=list(m.detection.xyxy),category=m.detection.category,confidence=m.detection.confidence,
                     position_valid=m.position_valid,position=[m.position.x,m.position.y,m.position.z]) for m in frame.detections]
                 self.debug.publish(String(data=json.dumps(dict(stamp=seconds(msg.header.stamp),boxes=boxes,
                     generation=generation,model_version=frame.model_version,timings=json.loads(frame.timings_json)))))
-                image=array_image(msg)
-                for b in boxes:
-                    x1,y1,x2,y2=map(int,b['xyxy']);cv2.rectangle(image,(x1,y1),(x2,y2),(0,255,0),2)
-                    cv2.putText(image,b['category'],(x1,y1+14),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,255,0),1)
-                self.overlay.publish(Image(header=msg.header,width=msg.width,height=msg.height,encoding='bgr8',step=msg.width*3,data=array('B',image.tobytes())))
+                if self.overlay.get_subscription_count()>0:
+                    image=array_image(msg)
+                    for b in boxes:
+                        x1,y1,x2,y2=map(int,b['xyxy']);cv2.rectangle(image,(x1,y1),(x2,y2),(0,255,0),2)
+                        cv2.putText(image,b['category'],(x1,y1+14),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,255,0),1)
+                    self.overlay.publish(Image(header=msg.header,width=msg.width,height=msg.height,encoding='bgr8',step=msg.width*3,data=array('B',image.tobytes())))
                 self.processed+=1;self.last_success=time.monotonic();self.error=frame.error
             except Exception as exc:
+                self.trace('infer_error',msg,error=str(exc))
                 with self.lock:
                     if generation!=self.generation:continue
                     self.error=str(exc);self.rejected+=1

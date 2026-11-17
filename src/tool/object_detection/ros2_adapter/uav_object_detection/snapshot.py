@@ -27,14 +27,21 @@ class SnapshotAdapter:
             callback_group=ReentrantCallbackGroup())
 
     def on_image(self, image):
+        trace=getattr(self.node,'trace',lambda *args,**kwargs:None)
+        trace('detector_receive',image)
         with self.condition:
             stamp = image.header.stamp.sec * 10**9 + image.header.stamp.nanosec
             if stamp <= 0 or stamp <= self.last_stamp_ns or stamp > self.node.get_clock().now().nanoseconds:
+                trace('detector_drop',image,reason='invalid_duplicate_or_future_stamp')
                 return
             self.last_stamp_ns = stamp
             if self.waiting and self.image is None and stamp >= self.accepted_ns:
                 self.image = image
                 self.condition.notify_all()
+        # One camera subscription feeds both consumers. No inference, waiting or
+        # image copy in the producer callback; worker owns the popped frame.
+        if self.node.streaming:
+            self.node.on_rgb(image)
 
     @staticmethod
     def fail(response, code, reason):

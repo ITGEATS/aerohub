@@ -15,6 +15,7 @@ from uav_object_detection_interfaces.msg import ObjectDetection, ObjectDetection
 
 from .measurement import locate
 from .box_depth import locate_box
+from .height_range import locate_known_height
 
 
 def stamp_ns(header):
@@ -54,13 +55,14 @@ def intrinsics(info):
 
 class Projector:
     def __init__(self, buffer, output_frame, sync_tolerance=.05, transform_wait=.25,
-                 scale_16u=.001, perspective=False, registered=False):
+                 scale_16u=.001, perspective=False, registered=False, known_height_m=None):
         # Defaults retain stage2 pairing and SUPER-derived TF-arrival wait; no age gate.
         if any(not math.isfinite(v) or v <= 0 for v in (sync_tolerance, transform_wait, scale_16u)):
             raise ValueError('invalid synchronization/depth configuration')
         self.buffer, self.output_frame = buffer, output_frame
         self.sync_ns, self.wait = round(sync_tolerance*1e9), transform_wait
         self.scale, self.perspective, self.registered = scale_16u, perspective, registered
+        self.known_height_m = known_height_m
         self.lock = threading.RLock()
         self.reset()
 
@@ -101,6 +103,8 @@ class Projector:
             model_version=frame.model_version, timings_json=frame.timings_json)
         result.header.frame_id = self.output_frame
         result.detections = [ObjectDetection(detection=d, position_method=position_method) for d in frame.detections]
+        if position_method == 'known_height_vertical_v1':
+            return self._project_known_height(frame, result, token, active)
         try:
             if not self.registered:
                 raise ValueError('aligned RGB/depth must be explicitly configured: registered_depth')
@@ -171,4 +175,48 @@ class Projector:
             result.error = str(error)
             for d in result.detections:
                 d.position_valid, d.position_error = False, result.error
+        return result
+
+    def _project_known_height(self, frame, result, token, active):
+        """No depth subscription, RGB/depth pairing or depth fallback in this mode."""
+        result.header = Header(stamp=frame.header.stamp, frame_id=self.output_frame)
+        try:
+            with self.lock:
+                info = self._info_at('rgb', stamp_ns(frame.header))
+            if (info.width, info.height) != (frame.width, frame.height) or info.header.frame_id != frame.header.frame_id:
+                raise ValueError('RGB calibration/frame mismatch')
+            k = intrinsics(info)
+            started = time.monotonic()
+            while True:
+                if not active(token):
+                    raise ValueError('CANCELLED_GENERATION')
+                try:
+                    transform = self.buffer.lookup_transform(self.output_frame, frame.header.frame_id,
+                        Time(nanoseconds=stamp_ns(frame.header), clock_type=ClockType.ROS_TIME))
+                    break
+                except TransformException as error:
+                    if time.monotonic()-started >= self.wait:
+                        raise ValueError('capture-time TF wait expired: '+str(error)) from error
+                    time.sleep(.005)
+            r = rotation(transform.transform.rotation)
+            t = transform.transform.translation
+            for measured in result.detections:
+                try:
+                    if measured.detection.category.strip().lower() != 'person':
+                        raise ValueError('known-height prior applies only to person')
+                    point, diagnostic = locate_known_height(measured.detection.xyxy, k,
+                        (frame.width, frame.height), r, (t.x, t.y, t.z), self.known_height_m)
+                    measured.position.x, measured.position.y, measured.position.z = map(float, point)
+                    # Compatibility field is an estimate here; position_method records
+                    # its origin. No depth_header or valid_depth_pixels are fabricated.
+                    measured.depth_m = diagnostic['optical_z_m']
+                    measured.position_valid = True
+                except ValueError as error:
+                    measured.position_error = str(error)
+            result.valid = all(d.position_valid for d in result.detections)
+            result.error = '; '.join(d.position_error for d in result.detections if not d.position_valid)
+        except ValueError as error:
+            result.error = str(error)
+            for measured in result.detections:
+                measured.position_valid, measured.position_error = False, result.error
         return result
