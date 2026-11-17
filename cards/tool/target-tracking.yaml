@@ -1,9 +1,9 @@
 schema_version: "1.0"
 id: tool.target-tracking
-version: "0.2.0"
+version: "0.3.0"
 type: tool
 name: Target Tracking Tool
-description: Maintains one query-selected 3D target state using serial positioned observations and the locked YOPO-Tracker EKF. Does not navigate or control motion; nearest gated target is not a semantic identity guarantee. Consumes only valid 3D positions; box-based surface measurements are not object centers. Requires the separately deployed detector and its calibrated RGB-D and historical TF.
+description: Maintains one query-selected 3D target state using serial positioned observations and the locked YOPO-Tracker EKF. Default follow=false is observation-only; optional follow=true requests turn-only Navigation TARGET_YAW with frozen own position (current SUPER/YOPO reject this mode); nearest gated target is not a semantic identity guarantee. Consumes only valid 3D positions; box-based surface measurements are not object centers. Requires the separately deployed detector and its calibrated RGB-D and historical TF.
 implementation:
   component_id: aerohub.tool.target-tracking
   manifest: deployment/target_tracking/component.yaml
@@ -26,4 +26,4 @@ hardware_requirements:
 resource_access:
   reads: [tools/object_detection/observe]
   shared_writes: []
-  exclusive_writes: [local/target-tracking-session]
+  exclusive_writes: [local/target-tracking-session, delegated/vehicle.motion]

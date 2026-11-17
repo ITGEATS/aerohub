@@ -1,8 +1,9 @@
 # Target Tracking Tool
 
-独立、只观测的文本查询目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
+默认只观测的文本查询目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
 （`estimate_position=true`）→ 锁定 YOPO-Tracker EKF → Action 状态反馈。
-不调用导航、Behavior、运动参考或 Mission，不发布自身状态/TF。
+`follow=false` 不调用导航；`follow=true` 经 Navigation Tool 请求保持自身位置并转向人物。
+两种模式均不直接调用 Behavior、运动参考或平台服务，不发布自身状态/TF。
 
 源码分为 `interfaces/`、`ros2_adapter/`、`python_api/`。原算法与 MIT 许可证直接从
 已锁定参考子模块安装到 `share/uav_target_tracking/upstream/`，不改动、不复制 Fork。
@@ -73,3 +74,113 @@ Build all interfaces and consumers together with
 in detection, inference, tracking and clients. Current query regressions and saved
 CUDA replay are recorded in `deployment/object_detection/VALIDATION-query.md`.
 Live DINO tracking, identity/accuracy and flight remain unverified (partial).
+
+
+## Follow 选项（接口0.3.0）
+
+```python
+drone.target_tracking.track(query='person', timeout=20., follow=False)  # 默认只观测
+drone.target_tracking.track(query='person', timeout=20., follow=True)   # 请求转向人物
+```
+
+`follow` 是严格bool，只表示是否转向，不表示追逐或平移跟随。开启后，Tracking等待
+有效目标与同固定坐标系的新鲜自身位置和飞行状态，冻结首次请求时自身xyz，
+根据目标水平位置计算yaw；通过Navigation的TARGET_YAW＋HOLD请求，最多5Hz串行更新。
+没有有效目标时不提交运动，原有有限观察窗口到期TIMEOUT不代表已看到或已转向。
+
+Navigation独占运动资源；不能同时另起一个Navigation位置任务。今后要边飞边转向，
+须合并到同一个Navigation任务，不能两个入口分别争抢位置/yaw。
+目标失效、取消、超时或失败时取消自有Navigation并等待stop_confirmed；
+停止未知返回STOP_UNCONFIRMED并阻止本Tracking进程再次开启follow，不能自行抢占恢复。
+最终Action终态在Navigation清理后返回，Result新增stop_confirmed。
+
+**SUPER现可显式启用TARGET_YAW末端约束，但这不代表保持原位连续转向已支持；YOPO仍不支持。默认关闭或后端不支持时明确失败，不静默忽略。**
+此提交完成选项、Tool调用和生命周期，尚未完成SUPER转向执行和仿真转向验收。
+真实ROS替身测试通过不代表当前SUPER已能转向。应先使用follow=false完成观测。
+
+Action schema有变化，所有Tracking接口/服务端/客户端必须加载同一新overlay。
+独立构建和回归：
+
+```bash
+bash deployment/target_tracking/build_follow_overlay.sh
+bash deployment/target_tracking/test_follow_overlay.sh
+```
+
+新overlay默认在log/target-tracking-follow/workspace，旧query overlay只读复用；
+部署先加载旧query overlay再加载新follow overlay，TRACKING_WORKSPACE指向后者。
+详细证据见deployment/target_tracking/VALIDATION-follow.md。
+
+### 测量来源的不确定性
+
+ROS参数 `measurement_stddev_m` 默认0（保留锁定上游Rt=0.02m²）；显式有限正值
+在Adapter内设置各轴Rt=stddev²，不修改上游、不改变失跟时限和关联硬上限。
+值必须来自测量源分析，不应为某次轨迹通过随意扩大。各向同性只是当前显式先验，
+不是已校准概率保证；多测量来源混用时需要进一步传递每观测协方差。
+
+WestStreet known-height部署显式1m，依据之前独立身高测距约0.6–0.9m误差；
+默认深度路径不变。真实录制位置fixture说明原模型在跑姿跳变后失跟，按来源配置
+噪声的回放可保持有效，且过期仍拒绝；回放不等价于新一轮实时飞行成功。
+
+显式 `association_policy:=innovation_covariance_v1` 使用创新协方差
+`Sigma_pp + Rt` 的三维Mahalanobis关联（名义chi-square阈值11.34486673），同时
+保持上游`gate_max=3m`硬距离上限。需要显式正`measurement_stddev_m`，默认仍为
+`upstream`策略。它改变的是关联模型，不表示原门曾通过，也不是身份/遮挡保证。
+`tests/fixtures/weststreet_height_positions*.json` 来自独立真实失败轮；回放与实时
+验收分别记录，禁止通过调大噪声或改变失跟时限把旧失败轮改判通过。
+
+
+公开只读目标状态流为 `<UAV>/tools/target_tracking/state`（`TargetState`），语义与Action
+反馈一致，包括valid、observation_stamp、valid_until、session/generation；会话结束发布
+无效状态。平台相机指向可按部署显式绑定此流，不能把场景Actor身份/真值作为替代。
+相机指向不占无人机运动控制；现有 `follow=True` 的原地机头朝向语义不因此改变。
+
+### 短窗平均与跳点过滤（显式启用）
+
+`position_filter:=robust_linear_v1`在Adapter进入EKF前处理固定系三维位置，默认none
+不改变旧路径。最多5个原始采样、0.8s历史，以稳健局部线性趋势将样本对齐到当前
+原始采样时刻，再对残差做限幅平均。匀速5m/s测试保持当前值，不引入普通后向平均
+的固有滞后；真实加减速仍可能延迟，不能据测试宣称任意运动无延迟。
+
+至少3个历史点后，偏离预测>=3m的孤立测量被拒绝，作为本次无观测送给原EKF；
+不会重复上一个数值或刷新最后有效观测时间。无检测不生成值；多候选不互相平均，
+直接交给原关联，不加入平滑历史；保留仍在时间窗口内的历史，避免偶发额外候选
+导致重新预热并误判运动方向。长间隔/新会话清空历史，frame改变仍拒绝。
+此单候选处理不提供身份/遮挡保证，Rt保留原声明值，不因平滑自动缩小协方差。
+
+诊断流`tools/target_tracking/measurement_filter`为String JSON，包含原始stamp/frame、
+raw/filtered数组和过滤状态；原检测calls记录仍原样保留。真实回放中两段维持有效，
+但已有漏检/输入间隔失败段没有被滤波“救活”；时间门不变，不能将缺观测伪装成功。
+
+### 最新结果消费模式
+
+`observation_mode:=stream`消费既有三维检测topic，不调用DetectSnapshot；默认仍为
+snapshot。`stream_query`必须与部署检测器固定query一致，不同任务query拒绝。
+订阅回调仅更新容量1结果槽，任务循环取新序号的最新帧：无新结果不重复推进EKF。
+原始采样新鲜度、墙钟接收年龄、session开始时间和clock epoch均校验；生产者
+(tool/worker/model)世代变化结束会话。生产停止仍按原0.5s有效期失效。
+
+采集与推理是两个逻辑职责，ROS执行器另有通信线程；不宣称整个进程只有两个线程。
+流式下游仍需检查frame.valid/位置有效性，最新buffer不解决上游无图、测距拒绝或
+模型漏检。test_stream_ros.py在无快照服务环境验证实际DDS消费、失效及世代隔离。
+
+### 有噪声观测的软更新
+
+显式`association_policy:=soft_innovation_v1`配合`measurement_stddev_m:=1.0`、
+`position_filter:=none`，将平滑与鲁棒观测更新合并到同一个EKF，避免前置趋势门和
+跟踪关联门各自拒绝。默认upstream和已有innovation_covariance_v1行为不变。
+
+用创新协方差归一化残差，Huber权重`min(1,2.5/sqrt(score))`通过增大本帧测量
+协方差降低影响，而不是将几米残差直接判为无观测；再缩放Kalman增益，把位置
+修正限制到`target_max_speed*dt`、速度修正限制到
+`target_max_speed/max_blind_time*dt`。使用同一缩放增益的Joseph形式更新协方差。
+这些是单帧修正上限，不是绝对位置误差或飞行速度保证；噪声参数仍为模型假设。
+
+保留几何可达保护：`gate_max + target_max_speed*max_blind_time`，当前为8m，
+超出不作为当前轨迹的有效更新；多候选归一化残差分数相差<1时不强选。
+该策略不提供外观身份保证，长期偏置或相近人物仍需独立验证。不新建远处候选
+重捕获通道；沿用上游失跟后的确认流程。无观测、过期帧、错误坐标/时钟和世代
+不被伪造为新测量，0.5秒真实观测失效预算保持。
+
+诊断JSON的`association`记录残差、可达范围、权重、增益缩放与单帧修正大小。
+两段真实失败数据新增回归覆盖持续有噪声运动，另验单帧跳点、可控范围连续
+修正、远处异常、歧义候选、协方差数值与实际缺测停止；回放通过不替代飞行。

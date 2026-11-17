@@ -12,9 +12,97 @@ def load_ekf():
     spec.loader.exec_module(module)
     return module.EKF
 
+class InnovationAssociation:
+    """Adapter policy for an explicitly declared measurement noise source.
+
+    Nominal 3D chi-square(0.99) gating uses predicted AND measurement covariance.
+    The locked EKF hard distance cap remains enforced. This is a model assumption,
+    not a calibrated probability guarantee or replacement for identity tracking.
+    """
+    def check_valid(self, points):
+        points = np.atleast_2d(points)
+        residual = points-self.x[:3]
+        innovation = self.Sigma[:3,:3]+self.Rt
+        scores = np.einsum('ij,ij->i', residual, np.linalg.solve(innovation, residual.T).T)
+        distances = np.linalg.norm(residual, axis=1)
+        ids = np.flatnonzero((scores <= 11.344866730144373) & (distances < self.gate_max))
+        best = ids[np.argmin(scores[ids])] if ids.size else np.argmin(scores)
+        return ids, int(best)
+
+
+class SoftInnovationAssociation:
+    """Robust source-aware updates; distance is a soft weight within reach.
+
+    Reach uses the existing speed/blind-time budget, rather than the old 3m
+    rejection alone. Identity remains geometric, not appearance tracking.
+    """
+    def check_valid(self, points):
+        points = np.atleast_2d(points)
+        residual = points-self.x[:3]
+        innovation = self.Sigma[:3,:3]+self.Rt
+        scores = np.einsum('ij,ij->i', residual, np.linalg.solve(innovation,residual.T).T)
+        reach = self.gate_max+self.target_max_speed*self.max_blind_time
+        ids = np.flatnonzero(np.linalg.norm(residual,axis=1)<reach)
+        best = int(ids[np.argmin(scores[ids])]) if ids.size else int(np.argmin(scores))
+        # Multiple equally plausible candidates are not evidence of identity.
+        if ids.size>1:
+            ordered=np.sort(scores[ids])
+            if ordered[1]-ordered[0]<1.:
+                ids=np.empty(0,dtype=int)
+        self.update_audit=dict(candidate_count=len(points),reachable_count=len(ids),
+            residual_m=float(np.linalg.norm(residual[best])),reach_m=reach,
+            status='associated' if ids.size else 'unmatched')
+        return ids,best
+
+    def update(self, z):
+        residual=z-self.C@self.x
+        innovation=self.C@self.Sigma@self.C.T+self.Rt
+        score=float(residual@np.linalg.solve(innovation,residual))
+        weight=min(1.,2.5/max(math.sqrt(max(0.,score)),1e-9))
+        noise=self.Rt/(weight*weight)
+        gain=np.linalg.solve((self.C@self.Sigma@self.C.T+noise).T,
+                             (self.Sigma@self.C.T).T).T
+        correction=gain@residual
+        # Bound a single measurement's effect without throwing it away.
+        pos_limit=self.target_max_speed*self.dt
+        vel_limit=self.target_max_speed/self.max_blind_time*self.dt
+        scale=min(1.,pos_limit/max(np.linalg.norm(correction[:3]),1e-9),
+                     vel_limit/max(np.linalg.norm(correction[3:]),1e-9))
+        gain*=scale;correction*=scale
+        self.K=gain;self.x=self.x+correction
+        identity=np.eye(6)-gain@self.C
+        self.Sigma=identity@self.Sigma@identity.T+gain@noise@gain.T
+        self.update_audit.update(status='soft_update' if weight<1. or scale<1. else 'update',
+            weight=weight,correction_scale=scale,position_correction_m=float(np.linalg.norm(correction[:3])),
+            velocity_correction_mps=float(np.linalg.norm(correction[3:])))
+
+
 class Tracker:
-    def __init__(self, ekf_class=None, dt=0.1):
-        self.ekf = (ekf_class or load_ekf())(dt=dt)
+    def __init__(self, ekf_class=None, dt=0.1, *, measurement_stddev_m=None, association_policy="upstream", position_filter="none"):
+        if association_policy not in ('upstream', 'innovation_covariance_v1', 'soft_innovation_v1'):
+            raise ValueError('unknown association_policy')
+        base = ekf_class or load_ekf()
+        if association_policy != 'upstream':
+            if measurement_stddev_m is None:
+                raise ValueError('covariance association requires an explicit noise source')
+            policy = SoftInnovationAssociation if association_policy == "soft_innovation_v1" else InnovationAssociation
+            class SourceAwareEKF(policy, base):
+                pass
+            base = SourceAwareEKF
+        self.ekf = base(dt=dt)
+        if measurement_stddev_m is not None:
+            if not math.isfinite(measurement_stddev_m) or measurement_stddev_m <= 0:
+                raise ValueError('measurement_stddev_m must be finite and positive')
+            # Explicit source model, not a new association/expiry threshold.
+            # None preserves the locked upstream covariance exactly.
+            self.ekf.Rt = np.eye(3)*measurement_stddev_m**2
+        if position_filter not in ('none', 'robust_linear_v1'):
+            raise ValueError('unknown position_filter')
+        self.measurement_filter = None
+        if position_filter != 'none':
+            from .measurement_filter import ShortWindowFilter
+            self.measurement_filter = ShortWindowFilter()
+        self.measurement_audit = {}
         self.stamp = None
         self.observation_stamp = None
         self.frame = None
@@ -40,7 +128,16 @@ class Tracker:
             self.ekf.B[:3] = np.eye(3) * (dt ** 2 / 2)
             self.ekf.B[3:] = np.eye(3) * dt
         self.stamp, self.frame = stamp, frame
+        raw = points.copy()
+        if self.measurement_filter is not None:
+            points = self.measurement_filter.apply(points, stamp)
+        self.measurement_audit = dict(stamp=stamp, frame=frame,
+            policy='robust_linear_v1' if self.measurement_filter else 'none',
+            status=self.measurement_filter.last_status if self.measurement_filter else 'raw',
+            raw=raw.tolist(), filtered=points.tolist())
+        if hasattr(self.ekf,"update_audit"):self.ekf.update_audit={}
         ids, _, confirmed = self.ekf.predict_and_update(points)
+        self.measurement_audit["association"] = getattr(self.ekf,"update_audit",{})
         if self.ekf.blind_time == 0:
             self.observation_stamp = stamp
         return ('tracked' if ids.size else 'predicted') if confirmed else ('lost' if self.ekf.blind_time > self.ekf.max_blind_time else 'confirm')

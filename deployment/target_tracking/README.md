@@ -107,3 +107,12 @@ python3 deployment/target_tracking/airsim/run.py --estimate-position \
 本入口不是移动目标精度、遮挡恢复、跨设备部署或飞行验收。
 
 本次默认切换的实际测试与未执行项见 [DINO默认验证](VALIDATION-dino-default.md)。
+
+
+## 可选转向接口
+
+Tracking现提供显式 `follow` 选项，默认false只观测。true只请求保持位置并转向人物，
+不表示平移追逐。SUPER可显式启用末端TARGET_YAW，但保持原位转向尚未验收；YOPO仍不支持，默认未启用时明确失败；不能据选项
+存在宣称已完成转向。接口0.3.0须用新overlay，构建/测试与语义见
+[源码说明](../../src/tool/target_tracking/README.md#follow-选项接口030)和
+[验证记录](VALIDATION-follow.md)。本文上方DINO/Mountains内容保留为历史观测记录。
