@@ -1,0 +1,19 @@
+# Uses the RGB camera source configured on this vehicle's Inference Function.
+# Model identity is public; provider, credentials, endpoint and engine are private deployment bindings.
+string model_name
+string prompt
+# Finite positive monotonic seconds, including preprocessing and network wait.
+float64 timeout
+# Maximum ROS-clock age of the captured image, checked before and after inference.
+float64 max_result_age
+---
+bool success
+string error_code
+string message
+string model_name
+string text
+# Actual image acquisition header, never request/receipt time.
+std_msgs/Header observation_header
+float64 latency_ms
+---
+string phase

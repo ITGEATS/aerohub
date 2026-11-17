@@ -109,3 +109,8 @@ rosbag2_*/
 /gallery/node_modules/
 /gallery/.astro/
 /src/basic_function/inference/models/*/houmo/artifacts/
+
+# Cloud Inference local config and legacy secret filenames
+/config/inference.cloud.local.yaml
+/config/inference.cloud.secrets.env
+/config/.inference.cloud.*

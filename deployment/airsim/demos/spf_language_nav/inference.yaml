@@ -1,0 +1,5 @@
+/drone0/vision_language_inference:
+  ros__parameters:
+    use_sim_time: true
+    endpoint: http://127.0.0.1:8013
+    camera_topic: sensor_measurements/FrontCamera/rgb/image
