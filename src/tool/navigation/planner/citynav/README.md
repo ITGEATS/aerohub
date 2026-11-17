@@ -120,10 +120,17 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
 
 1. 许可证缺口：CODE_LICENSE 文件缺失（徽章断链），对外分发前向上游确认；组内使用
    按 MIT 意图执行。[记录 2026-11-17]
-2. 权重直链可达性：groundingdino_swint_ogc.pth（~660 MB）、sam_vit_h_4b8939.pth
-   （~2.4 GB）；不可达由用户提供。
-3. glm-4v-flash 多图上限：`query_viewpoint_api` 单请求 5 图实测；超限则逐视角串行
-   （偏离 D16）。
+2. ~~权重直链可达性~~ [已闭环 2026-11-17：SAM 直链 200（2564550879 B）、DINO GitHub
+   release 直连失败走 gh-proxy.com 成功，均落
+   `src/basic_function/inference/models/grounded_sam/weights/`]。
+   **新增 D17（后端替换）**：本机 RTX 5060（sm_120）与上游 torch 2.0.1+cu118 不兼容，
+   且原版 GroundingDINO CUDA 算子无工具链不可编译、无 CPU 路径——原版实现本机不可
+   运行。grounding 后端固定为 HF transformers GroundingDINO（权重同源）+ 官方
+   segment_anything，现代 torch cu128 真实 GPU；legacy 段经服务调用（D18），阶段
+   4 前置于阶段 1（D19）。与原版数值对照不可行，边界如实声明。
+3. ~~glm-4v-flash 多图上限~~ [已实测 2026-11-17：单请求上限 5 图（第 6 图报 1210），
+   恰好覆盖 viewpoint 路线查询需求；captioner 逐图调用不受限，
+   `log/citynav/llm/multiview-test-20261117.json`]。
 4. 场景服务器最小桩协议：`ping`/`reopen_scenes` 返回值形状以
    `AirVLNSimulatorClientTool.py` 消费侧为准逐字段核对。
 5. Blocks settings.json `front_0` 相机命名与分辨率（对齐上游 512×512 或记录偏离）。
