@@ -36,15 +36,21 @@
 - **高度下限 D12**：上游无高度保护（论文场景目标在视线高度）；Blocks 场景橙球
   贴地，VLM 语义深度点低于地平线导致无界下降蹭地（run z5 与 Ground 碰撞），
   AS2 段执行层对 t>0 轨迹点钳制 `min_altitude_m`（Demo 1.2m；Legacy/默认参数
-  保真分支不含）。完整偏离清单 D1-D12 见迁移方案文档（本地工作文档，以本
+  保真分支不含）。完整偏离清单 D1-D13 见迁移方案文档（本地工作文档，以本
   README、Demo README 与 validation.json 为准）。
 - 上游无完成定义：语言目标由外部循环持续驱动，无到达判定。
+- **共享导航接口对齐 D13**：轨迹执行走共享 `uav_planner_interfaces`
+  （`src/tool/navigation/interfaces`，与 YOPO/SUPER 同一 FollowTimedPath 契约）；
+  收口状态携带共享 NavigateToPose Result 码表（SUCCEEDED/CANCELED/TIMEOUT/
+  NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED）+ `detail` 内部子原因 +
+  `stop_confirmed`。语言目标无法表达为位姿，故不提供 NavigateToPose 位姿入口，
+  调用面保持 `spf/goal`(String JSON)+`spf/cancel`。
 
 ## 2. 职责映射与目录归属
 
 | SPF 部分 | aerohub 层归属 | 目录 |
 | --- | --- | --- |
-| 语言指令 → 每步位移决策 | Planner（Navigation Tool 实现基础） | `src/planner/spf/` |
+| 语言指令 → 每步位移决策 | Planner（Navigation Tool 实现基础） | `src/tool/navigation/planner/spf/` |
 | 反投影 + 动作分解（算法本体） | Planner 适配层内实现 | `ros2_adapter/uav_spf_planner/` |
 | 云端 VLM 调用 | 外部推理依赖，代理节点承载 | `vlm_proxy/uav_spf_vlm_proxy/`（PC 侧） |
 | 轨迹执行 | 原生扩展 Behavior（复用，不新建） | `src/behavior/follow_path/` FollowTimedPath |

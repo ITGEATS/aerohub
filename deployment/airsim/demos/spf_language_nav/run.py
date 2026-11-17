@@ -214,9 +214,10 @@ def start(output, observe=False):
     (output / 'fleet.yaml').write_text(
         'vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: %d\n' % PX4_SYSTEM_ID)
     source_manifest = {'files': {}, 'spf_upstream': capture(
-        ['git', '-C', ROOT / 'src/planner/spf/upstream', 'rev-parse', 'HEAD']).strip()}
-    for folder in [APP, ROOT / 'src/planner/spf/ros2_adapter', ROOT / 'src/planner/spf/vlm_proxy',
-                   ROOT / 'src/planner/interfaces', ROOT / 'src/behavior/follow_path']:
+        ['git', '-C', ROOT / 'src/tool/navigation/planner/spf/upstream', 'rev-parse', 'HEAD']).strip()}
+    for folder in [APP, ROOT / 'src/tool/navigation/planner/spf/ros2_adapter',
+                   ROOT / 'src/tool/navigation/planner/spf/vlm_proxy',
+                   ROOT / 'src/tool/navigation/interfaces', ROOT / 'src/behavior/follow_path']:
         for path in folder.rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts and '.pytest_cache' not in path.parts:
                 source_manifest['files'][str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -376,7 +377,9 @@ def prepare(output):
          '--entrypoint', 'bash', ONBOARD, '-lc',
          'source /opt/ros/humble/setup.bash && source /root/aerostack2_ws/install/setup.bash && '
          'cd ' + work + ' && colcon build --base-paths '
-         '/repo/src/planner/interfaces /repo/src/planner/spf/ros2_adapter /repo/src/planner/spf/vlm_proxy '
+         '/repo/src/tool/navigation/interfaces '
+         '/repo/src/tool/navigation/planner/spf/ros2_adapter '
+         '/repo/src/tool/navigation/planner/spf/vlm_proxy '
          '/repo/src/behavior/follow_path '
          '--packages-select uav_planner_interfaces uav_spf_planner uav_spf_vlm_proxy '
          'uav_follow_path_execution '

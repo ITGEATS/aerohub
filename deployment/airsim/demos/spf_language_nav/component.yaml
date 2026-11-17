@@ -2,10 +2,10 @@ schema_version: '0.1'
 id: aerohub.planner.spf-single
 version: '0.1.0'
 source:
-  upstream: src/planner/spf/upstream
+  upstream: src/tool/navigation/planner/spf/upstream
   revision: 5621bcf43e9826d60df014541dd0498e743a92bd
-  integration: [src/planner/spf/ros2_adapter, src/planner/spf/vlm_proxy]
-  license: 'Proprietary Software License (upstream); internal non-commercial research use only, no external distribution (permanent compliance statement in src/planner/spf/README.md)'
+  integration: [src/tool/navigation/planner/spf/ros2_adapter, src/tool/navigation/planner/spf/vlm_proxy]
+  license: 'Proprietary Software License (upstream); internal non-commercial research use only, no external distribution (permanent compliance statement in src/tool/navigation/planner/spf/README.md)'
 provides: [planner.spf-single]
 cards: [cards/planner/spf-single.yaml]
 roles:

@@ -32,6 +32,16 @@ from .vlm_client import VlmQueryClient
 
 STATES = ("IDLE", "RUNNING", "STOPPING", "STOPPED", "FAULT")
 
+# D13: final status carries the shared navigation result vocabulary
+# (uav_planner_interfaces/action/NavigateToPose Result.code) so a future
+# Mission/Tool layer consumes SPF tasks uniformly with YOPO/SUPER; the
+# internal sub-reason stays in `detail`.
+SHARED_CODES = {"task_complete": "SUCCEEDED", "cancelled": "CANCELED",
+                "not_ready": "NOT_READY", "goal_timeout": "TIMEOUT",
+                "vlm_failures": "EXECUTION_FAILED",
+                "goal_rejected": "EXECUTION_FAILED",
+                "segment_failed": "EXECUTION_FAILED"}
+
 
 def quat_to_yaw(q) -> float:
     """纯 stdlib：ENU 逆时针 yaw（与 AirSim NED yaw 数值一致）。"""
@@ -341,7 +351,9 @@ class SpfPlannerNode(Node):
             time.sleep(0.1)
         with self._lock:
             self._state = "FAULT"
-        self._publish_status("fault", reason=f"{reason}_stop_gate_timeout")
+        self._publish_status("fault", reason="STOP_UNCONFIRMED",
+                             detail=f"{reason}_stop_gate_timeout",
+                             stop_confirmed=False)
 
     def _finish(self, state: str, reason: str):
         with self._lock:
@@ -352,7 +364,9 @@ class SpfPlannerNode(Node):
             self._state = state
             self._job = None
             self._stop_requested = False
-        self._publish_status(state, reason=reason, cycles_done=cycles)
+        self._publish_status(state, reason=SHARED_CODES.get(reason, "EXECUTION_FAILED"),
+                             detail=reason, cycles_done=cycles,
+                             stop_confirmed=(state == "STOPPED"))
 
     def _make_timed_path(self, plan, revision, is_final) -> TimedPath:
         now = self.get_clock().now().to_msg()

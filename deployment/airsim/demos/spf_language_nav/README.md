@@ -1,8 +1,8 @@
 # SPF 语言导航 Demo（spf_language_nav）
 
-算法组件：`src/planner/spf/`（契约与状态见其 README）。
+算法组件：`src/tool/navigation/planner/spf/`（契约与状态见其 README）。
 迁移方案为本地工作文档（`.trae/documents/`，不随仓库分发）；接口、偏离与
-验收边界以本 README、`src/planner/spf/README.md` 和 [validation.json](validation.json) 为准。
+验收边界以本 README、`src/tool/navigation/planner/spf/README.md` 和 [validation.json](validation.json) 为准。
 
 ## 拓扑（WSL2 适配四方）
 
@@ -59,5 +59,5 @@ preflight 拒锁数分钟）——每个用例独立 start→mission→stop；
   重试退避 5s/连续失败上限 6 为容错配置。
 - Blocks 场景与论文 TravelUAV 差异：目标语义（orange ball）替代 crane 类指令；
   橙球贴地导致 VLM 语义深度下降指令蹭地，执行层加高度下限 D12（min_altitude_m 1.2）。
-- 单机；多机外溢声明见 `src/planner/spf/README.md` §6。
+- 单机；多机外溢声明见 `src/tool/navigation/planner/spf/README.md` §6。
 - test_ros_planner.py 独立 DDS 生命周期测试未建（实际由 live smoke/formal 任务覆盖，如实记录）。
