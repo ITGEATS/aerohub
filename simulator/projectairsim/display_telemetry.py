@@ -4,6 +4,11 @@ import argparse
 import json
 import math
 import time
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from simulator.projectairsim.display_session import views_from_scene
+from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
 from urllib.error import URLError
 from urllib.request import Request, ProxyHandler, build_opener
 
@@ -21,6 +26,12 @@ def main():
     args = parser.parse_args()
     with open(args.scene) as stream:
         scene = json.load(stream)
+    views, _ = views_from_scene(scene)
+    display = ProjectAirSimExtensionClient(port=args.display_port)
+    display.call('RegisterViews', views=views)
+    chase = next((v for v in views if v['vehicle_id'] == args.vehicle and v['camera_id'] == 'Chase'), None)
+    if chase:
+        display.set_view(chase['vehicle_id'], chase['camera_id'], chase['image_type'])
     client = ProjectAirSimClient(args.address, args.topic_port, args.service_port)
     client.connect_services()
     open_local = build_opener(ProxyHandler({})).open

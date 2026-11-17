@@ -27,6 +27,9 @@ private:
     bool bRouterInitialized = false;
     bool bTargetInitialized = false;
     bool bHavePreviousPosition = false;
+    float StartupRampSeconds = 1.f;
+    float StartupElapsedSeconds = 0.f;
+    bool bStarting = false;
     FVector PreviousPosition = FVector::ZeroVector;
     FVector Velocity = FVector::ZeroVector;
     int32 Port = 19892;

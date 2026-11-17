@@ -21,27 +21,37 @@ if [[ -n ${PROJECTAIRSIM_ROS_IMAGE:-} ]]; then
     dds_mounts=(-v "$PROJECTAIRSIM_DDS_PROFILE:/dds-profile.xml:ro"
       -e FASTRTPS_DEFAULT_PROFILES_FILE=/dds-profile.xml)
   fi
+  pointing_mounts=()
+  if [[ -n ${PROJECTAIRSIM_TRACKING_OVERLAY:-} ]]; then
+    pointing_mounts=(-v "$PROJECTAIRSIM_TRACKING_OVERLAY:/tracking-overlay:ro"
+      -e PROJECTAIRSIM_TRACKING_OVERLAY=/tracking-overlay)
+  fi
   exec docker run --rm --init --network host --ipc host \
     --label aerohub.component=projectairsim-adapter \
     -e "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}" \
+    -e "AEROHUB_VISION_TIMING=${AEROHUB_VISION_TIMING:-0}" \
     -e "PROJECTAIRSIM_ADDRESS=${PROJECTAIRSIM_ADDRESS:-127.0.0.1}" \
     -e "PROJECTAIRSIM_TOPIC_PORT=${PROJECTAIRSIM_TOPIC_PORT:-8989}" \
+    -e "PROJECTAIRSIM_TOPIC_RELAY_PORT=${PROJECTAIRSIM_TOPIC_RELAY_PORT:-}" \
     -e "PROJECTAIRSIM_SERVICE_PORT=${PROJECTAIRSIM_SERVICE_PORT:-8990}" \
     -e "PROJECTAIRSIM_ROS_ARGS=${PROJECTAIRSIM_ROS_ARGS:-[]}" \
     -e "PROJECTAIRSIM_SENSOR_TOPIC_ROOT=${PROJECTAIRSIM_SENSOR_TOPIC_ROOT:-/ProjectAirsim}" \
     -e PROJECTAIRSIM_ROS_SETUP=/overlay/setup.bash \
-    "${mounts[@]}" "${dds_mounts[@]}" \
+    "${mounts[@]}" "${dds_mounts[@]}" "${pointing_mounts[@]}" \
     -v "$overlay:/overlay:ro" -v "$bridge_script:/adapter.sh:ro" \
     --entrypoint bash "$PROJECTAIRSIM_ROS_IMAGE" /adapter.sh
 fi
 set +u
 source /opt/ros/humble/setup.bash
 source "$PROJECTAIRSIM_ROS_SETUP"
+if [[ -n ${PROJECTAIRSIM_TRACKING_OVERLAY:-} ]]; then
+  source "$PROJECTAIRSIM_TRACKING_OVERLAY/install/local_setup.bash"
+fi
 set -u
 mapfile -t extra < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ.get("PROJECTAIRSIM_ROS_ARGS", "[]"))))')
 bridge_command=(ros2 run projectairsim_ros2_cpp projectairsim_ros2_cpp_node --ros-args \
   -p "address:=${PROJECTAIRSIM_ADDRESS:-127.0.0.1}" \
-  -p "port_topics:=${PROJECTAIRSIM_TOPIC_PORT:-8989}" \
+  -p "port_topics:=${PROJECTAIRSIM_TOPIC_RELAY_PORT:-${PROJECTAIRSIM_TOPIC_PORT:-8989}}" \
   -p "port_services:=${PROJECTAIRSIM_SERVICE_PORT:-8990}" \
   -p publish_tf:=false "${extra[@]}")
 if [[ -z ${PROJECTAIRSIM_SENSOR_RUNTIME:-} ]]; then

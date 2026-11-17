@@ -62,3 +62,18 @@ description: 将已确认的 ProjectAirSim／Unreal 场景及所需 HUD 编译�
 原生传感器或 SimLibs 源码变化时，先按同一 UE 工具链定向重编译与测试，确认插件
 实际链接的新库，再做游戏打包；仅重 Cook 不能带入静态库改动。磁场参考配置和
 原版 PX4 不解锁地面检查的已验证步骤见 Blocks 操作参考，空中地图/避障仍单独验收。
+
+已有LevelSequence驱动目标需平滑启动时，可在场景控制插件的世界tick内渐增
+SetPlayRate，让原路径与动画同步，避免远程逐帧RPC或重烘焙地图。仅定向BuildPlugin，
+安装前核对源码差异、BuildId及工程未运行，保留对应旧文件。用真实场景分别检查
+播放速率、实际位置差分速度、重复启动不重置、暂停/复位和续跑语义；动画时间缩放
+不等于新增起跑动画。场景运动验证通过仍不替代无人机追踪闭环验证。
+
+## 复用采集相机作为 HUD 第一视角
+
+相机已开启 capture、关闭 streaming 时，HUD 视图列表可能为空，使 Tab 无效。
+检查 RegisterViews 的实际列表与组件，而非再增加 Chase/Depth 采集。可显式使用
+`views_from_scene(..., include_captured_views=True)` 登记已有启用的采集组件。
+`SetView` 的返回值为布尔确认；随后用 `GetDisplayState` 检查 camera、global、
+view_available。RPC 状态不等于实际键盘与画面验证：在目标游戏窗口验证
+Tab/G/Tab，并保存画面。WestStreet 2026-11-17 已验证此观察路径，无新增传感器采集。

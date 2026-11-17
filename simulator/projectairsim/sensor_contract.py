@@ -68,9 +68,11 @@ def streams(scene, runtime, topic_root="/ProjectAirsim"):
                             if c.get("capture-enabled", False)]
                 if not captures:
                     continue
-                if any(sensor.get("gimbal", {}).get(k, False)
-                       for k in ("lock-roll", "lock-pitch", "lock-yaw")):
-                    raise ValueError(f"{sid}: stabilized camera requires dynamic TF")
+                gimbal = sensor.get("gimbal", {})
+                stabilized = any(gimbal.get(k, False) for k in ("lock-roll", "lock-pitch", "lock-yaw"))
+                if stabilized and (not gimbal.get('lock-roll') or not gimbal.get('lock-pitch')
+                                   or gimbal.get('lock-yaw') or gimbal.get('gimbal-id')):
+                    raise ValueError(f"{sid}: unsupported dynamic TF gimbal mode")
                 frame += "_optical"
                 for capture in captures:
                     image_type = capture["image-type"]
@@ -80,7 +82,9 @@ def streams(scene, runtime, topic_root="/ProjectAirsim"):
                     result.append(dict(kind="image", source=f"{source}/{sid}/{native}",
                         target=f"{output}/{sid}/{common}/image", frame=frame,
                         parent=f"{ns}/base_link", transform=extrinsic(config, optical=True),
-                        capture=capture))
+                        capture=capture, gimbal_origin=config if stabilized else None,
+                        pose_source=f"{topic_root}/{scene['id']}/robots/{name}/actual_pose",
+                        pointing_target=f"/{ns}/tools/target_tracking/state" if sensor.get("aerohub-pointing",False) else None))
             elif kind == "imu":
                 # Native IMU samples vehicle kinematics and ignores sensor pose.
                 if any(config.values()):

@@ -47,6 +47,7 @@ bool UAerohubSceneControlWorld::FindTarget()
     if (!bTargetInitialized) {
         auto* Player = FoundSequence->GetSequencePlayer();
         Player->Pause();
+        Player->SetPlayRate(1.f); bStarting = false; StartupElapsedSeconds = 0.f;
         Player->SetPlaybackPosition(FMovieSceneSequencePlaybackParams(0.f, EUpdatePositionMethod::Jump));
         Freeze(true);
         bTargetInitialized = true; bHavePreviousPosition = false;
@@ -70,6 +71,9 @@ TSharedPtr<FJsonObject> UAerohubSceneControlWorld::State() const
         : Sequence->GetSequencePlayer()->IsPlaying() ? TEXT("running") : TEXT("paused"));
     if (bAvailable) {
         auto* Player = Sequence->GetSequencePlayer();
+        Data->SetNumberField(TEXT("play_rate"), Player->GetPlayRate());
+        Data->SetNumberField(TEXT("startup_ramp_seconds"), StartupRampSeconds);
+        Data->SetBoolField(TEXT("starting"), bStarting);
         Data->SetNumberField(TEXT("time_seconds"), Player->GetCurrentTime().AsSeconds());
         Data->SetNumberField(TEXT("duration_seconds"), Player->GetDuration().AsSeconds());
         const auto Location = Runner->GetActorLocation();
@@ -89,6 +93,8 @@ void UAerohubSceneControlWorld::InitializeRouter()
     if (!Config.IsEmpty() && FFileHelper::LoadFileToString(Text, *Config)
         && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Settings) && Settings.IsValid()) {
         double Value;
+        if (Settings->TryGetNumberField(TEXT("startup_ramp_seconds"), Value)
+            && FMath::IsFinite(Value) && Value >= 0. && Value <= 10.) StartupRampSeconds = float(Value);
         if (Settings->TryGetNumberField(TEXT("port"), Value) && Value >= 1 && Value <= 65535) Port = int32(Value);
     }
     Router = FHttpServerModule::Get().GetHttpRouter(Port, true);
@@ -117,9 +123,17 @@ void UAerohubSceneControlWorld::InitializeRouter()
                 else {
                     auto* Player = Sequence->GetSequencePlayer();
                     if (Method == TEXT("ControlActor")) {
-                        if (Event == TEXT("start")) { Freeze(false); if (!Player->IsPlaying()) Player->Play(); }
+                        if (Event == TEXT("start")) {
+                            if (!Player->IsPlaying()) {
+                                StartupElapsedSeconds = 0.f;
+                                bStarting = StartupRampSeconds > 0.f;
+                                Player->SetPlayRate(bStarting ? 0.f : 1.f);
+                                Freeze(false); Player->Play();
+                            }
+                        }
                         else {
                             Player->Pause();
+                            bStarting = false; StartupElapsedSeconds = 0.f; Player->SetPlayRate(1.f);
                             if (Event == TEXT("reset")) Player->SetPlaybackPosition(FMovieSceneSequencePlaybackParams(0.f, EUpdatePositionMethod::Jump));
                             Freeze(true); Velocity = FVector::ZeroVector; bHavePreviousPosition = false;
                         }
@@ -140,6 +154,14 @@ void UAerohubSceneControlWorld::Tick(float DeltaSeconds)
     if (!GetWorld()->HasBegunPlay()) return;
     if (!bRouterInitialized) InitializeRouter();
     if (FindTarget()) {
+        auto* Player = Sequence->GetSequencePlayer();
+        if (bStarting && Player->IsPlaying()) {
+            StartupElapsedSeconds += FMath::Max(DeltaSeconds, 0.f);
+            const float Alpha = FMath::Clamp(StartupElapsedSeconds / StartupRampSeconds, 0.f, 1.f);
+            // Smoothstep: zero acceleration at both ends, unchanged route and loop.
+            Player->SetPlayRate(Alpha * Alpha * (3.f - 2.f * Alpha));
+            if (Alpha >= 1.f) bStarting = false;
+        }
         const auto Position = Runner->GetActorLocation();
         Velocity = bHavePreviousPosition && DeltaSeconds > SMALL_NUMBER && Sequence->GetSequencePlayer()->IsPlaying()
             ? (Position-PreviousPosition)/DeltaSeconds : FVector::ZeroVector;

@@ -22,7 +22,7 @@ COMPONENTS = {
 }
 
 
-def views_from_scene(scene):
+def views_from_scene(scene, *, include_captured_views=False):
     """Adapt locked native sensor captures to public UE component identities."""
     views, images = [], []
     for actor in scene.get('actors', []):
@@ -41,7 +41,7 @@ def views_from_scene(scene):
                 label, component, topic = COMPONENTS[kind]
                 identity = dict(vehicle_id=actor['name'], camera_id=sensor['id'],
                                 image_type=label, component=component)
-                if capture.get('streaming-enabled', False):
+                if capture.get('streaming-enabled', False) or (include_captured_views and capture.get('capture-enabled',False)):
                     views.append(identity)
                 if capture.get('capture-enabled', False):
                     source = f"/Sim/{scene['id']}/robots/{actor['name']}/sensors/{sensor['id']}/{topic}"
