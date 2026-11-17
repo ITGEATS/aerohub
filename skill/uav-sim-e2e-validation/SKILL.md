@@ -160,6 +160,20 @@ PC flight_board 提供 PX4、传感器和时钟，AirSim 为宿主进程。部�
 
 长距离任务需依据距离、配置速度与绕行余量设置独立导航等待预算，并记录CLI实际传入值；增加导航超时不改变推理/提交预算、轨迹连续性、定位新鲜度或停止门槛。速度报告区分配置速度尺度与飞行阶段测量值，用同一状态源的速度向量范数统计中位/峰值，注明时间窗口。落地后的AirSim `has_collided`可报告Landscape地形接触；保留对象、时间、法线及原始标志，分别报告飞行障碍碰撞与降落接触，不把原始true静默改为false。
 
+## AirSim Blocks 碰撞门控与会话复用约束（2026-11-16 SPF 教训）
+
+Blocks WindowsNoEditor 的 msgpack-rpc 面与新版 AirSim 客户端不一致：`simGetCameraPose`、`resetLastCollision` 不存在（`rpclib: server could not find function`），`simGetImages` 压缩字节在 `image_data_uint8` 键。调用前用一次探测确认方法可用，不能按 Python 客户端源码假定 RPC 面完整。
+
+`has_collided` 在整个 Blocks 会话粘滞，且 spawn/传送本身即可置位——起飞前基线可能已为 true，正常触地也会置位。因此导航期碰撞门控必须：起飞后采集基线（含 `time_stamp`），任务期间周期轮询，仅当 `time_stamp` 相对基线变化才记为新碰撞事件；绝不在 Land 之后单次查询判 FAIL。2026-11-16 SPF run x/y 曾因"降落后查询"把触地/残留误判为碰撞失败，掩盖了实际成功的导航闭环。
+
+同一 Blocks 会话通常只有第一个 mission 能可靠 arm：完整 land/disarm 后再次 teleport 会触发 PX4 `GPS Horizontal Pos Drift too high` 等 preflight 拒绝并持续数分钟。每个用例应独立 start→mission→stop，不在同会话连续跑多任务；arm 重试循环加退避只能兜底，不消除该约束。
+
+区分"评分缺陷"与"链路缺陷"：门控 FAIL 时先对照原始样本流（状态序列、位置轨迹、收口 reason）判断是链路失败还是评分实现错误。最终 STOPPED 状态必须保留任务计数器（如 cycles_done）——快照在清空内部状态前取值，否则监控端把已完成任务读成零完成。
+
+观察视图随动成功只以任务期间质心序列移动（track.jsonl）加俯视帧为准；`--once` 健康检查仅证明相机存在与摆放连通，静态初始相机姿态不得申报为跟踪成功（AGENTS 要求）。
+
+替代云端 VLM（付费模型不可用时）的失败常表现为 ~2s 内快速回错（空响应/限流），与超时不同：重试必须带退避间隔，连续失败预算相应放宽，并把解析率作为记录指标在跑前锁定口径中声明；事后不得为凑通过率临时改动门槛。
+
 ## 多速率状态与有屏证据
 
 状态估计同时包含低频全局校正与高频局部控制状态时，分别定义并测量两种 freshness：全局校正间隔反映视觉/SLAM 更新能力，高频 canonical pose、twist 和 TF 间隔决定控制可用性，不得用较宽的全局门槛替代控制门槛。频率证据使用专用轻量订阅器记录到达时间和消息时间；订阅全部高带宽话题且自身过载的采集器漏消息时，不能据此判定发布端不新鲜。

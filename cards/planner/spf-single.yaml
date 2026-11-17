@@ -1,0 +1,52 @@
+schema_version: '0.1'
+id: planner.spf-single
+name: SPF language-navigation single-vehicle planning
+version: '0.1.0'
+type: planner
+description: Training-free VLM language navigation; each closed-loop cycle observes the FPV image, asks a cloud VLM for a 2D point plus semantic depth, back-projects it and executes one rotate+forward timed segment through the existing FollowTimedPath execution Behavior.
+component:
+  id: aerohub.planner.spf-single
+  manifest: deployment/airsim/demos/spf_language_nav/component.yaml
+  shared_process_group: spf-compute
+  coupled_capabilities: []
+usage:
+  mode: goal-topic-with-status-and-cancel-service
+  selection_phase: deployment
+  invocation_interface: 'std_msgs/String JSON {instruction, max_cycles, max_duration_s} on <namespace>/spf/goal'
+  switching_constraints: [complete-stop-before-changing-execution-provider, speed-gate-stop-before-land]
+inputs:
+  - topic: '<namespace>/spf/goal'
+    frame: '<vehicle>/odom fixed ENU'
+    sensors: 'self_localization/pose fresh; FrontCamera camera_info measured pinhole intrinsics drive back-projection (D3, replaces upstream hardcoded 108-degree FOV)'
+    observation: 'FPV image consumed by the workstation-side VLM proxy only; the compute role exchanges request JSON and small result JSON (query/result pair matched by request_id, image stamp bound, max_result_age_s 6.0)'
+outputs:
+  - action: '<namespace>/follow_timed_path'
+    semantics: 'one standalone is_final goal per SPF cycle (rotate point when |theta|>10 degrees, then forward+climb segment T=max(d_xy/v, min_command_duration)); no direct Motion Reference publication'
+  - topic: '<namespace>/spf/status|events'
+    semantics: 'state machine snapshot with task_id/revision/cycles_done/vlm_attempts; counters preserved in the final STOPPED status'
+preconditions:
+  - Airborne through a separately completed native TakeoffBehavior.
+  - VLM proxy container ready with a reachable cloud endpoint (substitute model glm-4v-flash, deviation D11).
+  - Sim clock bridge running; matching AS2 execution overlay loaded.
+resources:
+  reads: [FPV-camera-via-proxy, localization, CameraInfo, cloud-VLM-API]
+  writes: [single-vehicle-FollowTimedPath-session]
+  conflicts: [other-motion-Behaviors-on-same-vehicle]
+  enforcement: 'exclusive FollowTimedPath session per vehicle; timed/native FollowPath mutually exclusive in the execution server; no GPU required (VLM is cloud-side)'
+lifecycle:
+  startup: 'deploy on compute role; workstation publishes goals only to ready capabilities'
+  readiness: 'spf/status.ready plus fresh pose/camera_info/clock'
+  feedback: 'spf/status state RUNNING with revision and cycles_done; vlm_failure events carry error_code'
+  completion: 'cycles/duration exhausted -> final segment executed to completion -> STOPPED reason task_complete (D7); task separately lands'
+  cancel_or_stop: 'Trigger spf/cancel -> stop request -> speed<0.2 m/s held 1 s -> STOPPED; 10 s gate timeout -> FAULT recovered only by native Land'
+  failure: 'six consecutive VLM failures (backoff 5 s each, D11 robustness config), stale observation or clock reset -> stop'
+  recovery: 'mission attempts native Land even after task failure; confirm disarmed before cleanup'
+type_specific:
+  depth: 'VLM semantic level 1-10 mapped to metres (depth/10*2, default 4) exactly as upstream (D9); no LiDAR ranging'
+  step: 'upstream min_command_duration 2.0 s retained (D5); demo runs base_velocity 1.0 -> 2 m steps for the Blocks corridor'
+  altitude_floor: 'min_altitude_m 1.2 clamps commanded t>0 points (D12) because the Blocks target is ground-level; upstream-faithful branches keep the unbounded mapping'
+  synchronization: 'single vehicle; multi-vehicle spillover declared in src/planner/spf/README.md but not implemented'
+validation:
+  stage: pc-sim-e2e-minimal
+  evidence: [deployment/airsim/demos/spf_language_nav/validation.json, log/spf/pc-e2e/run-20261116z6/formal1, log/spf/pc-e2e/run-20261116z7/cancel1]
+  limitations: [minimal-acceptance-scope-per-2026-11-16-ruling, substitute-VLM-D11-not-comparable-to-paper-numbers, single-vehicle-only, not-RoboPi-or-real-flight-acceptance, not-a-general-Mission-or-Tool-runtime]
