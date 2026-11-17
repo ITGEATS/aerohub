@@ -69,7 +69,8 @@ max_step_size=60、vlm_name="sam"）。每 episode 主循环（`CityNavAgent()` 
 不设 `ros1_proxy/`：agent 本体无任何 ROS 进程（requirements 中 ROS1 pip 包属上游
 仿真器侧产物，裁剪，偏离 D12）。
 landmark 抽取（决策 7 代决）：Blocks 无标注可消费，landmark 序列由 LLM 从指令抽取
-（论文方法本身，提示词逐字取 `src/llm/prompt_builder.py`），偏离 D3。
+（论文方法本身，提示词逐字取 `upstream/utils/landmark_extraction.py` L35-47——
+`src/llm/prompt_builder.py` 不含抽取 builder，2026-11-17 阶段 3 勘误），偏离 D3。
 记忆图（决策 6 代决）：不用作者 pkl（坐标绑定 AirVLN 场景），改**在线建图 + 跨任务
 复用**（任务 1 落盘、任务 2 命中 exploit），偏离 D4。
 

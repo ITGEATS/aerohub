@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>uav_citynav_llm_proxy</name><version>0.1.0</version>
+  <description>CityNavAgent workstation cloud LLM proxy (five-view image cache + OpenAI-compatible REST, upstream prompts verbatim)</description>
+  <maintainer email="dev@example.com">Aerohub</maintainer><license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend><exec_depend>std_msgs</exec_depend>
+  <test_depend>ament_copyright</test_depend><test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend><test_depend>python3-pytest</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

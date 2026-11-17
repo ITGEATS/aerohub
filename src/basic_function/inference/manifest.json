@@ -16,6 +16,10 @@
     "yolo26n-seg": {
       "directory": "src/basic_function/inference/models/yolo26n_seg",
       "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"
+    },
+    "clip": {
+      "directory": "src/basic_function/inference/models/clip",
+      "description": "CLIP ViT-L/14 image-text cosine similarity scoring for CityNav memory exploit node evaluation"
     }
   }
 }
