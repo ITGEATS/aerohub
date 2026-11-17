@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-16",
+  "scope": "minimal acceptance per the 2026-11-16 user ruling (locked BEFORE the scored runs): one instruction x one full instance, 3 consecutive SPF cycles, no flight collision under EnableCollisions, native Land + disarm convergence; cancel fault injection; overhead tracking view evidence; compute role in the onboard-computer container. NOT the full M0-M8 reproduction matrix; the claim level is partial-verification-passed (minimal end-to-end acceptance), not reproduction-success.",
+  "thresholds_locked_pre_run": {
+    "m5_minimal": "1 instruction x 1 instance, cycles_done >= 3 consecutive, collision events empty during navigation, land+disarm PASS",
+    "m6_minimal": "cancel Trigger -> STOPPED with speed gate within 10 s; stale/vlm-down explicitly out of scope (NOT-EXECUTED)",
+    "m7": "centroid-tracking view enabled per AGENTS; proof = moving centroid series + captured overhead frames, never a static initial camera",
+    "m8": "formal task completes in onboard-computer container (either-environment ruling) + import closure audit",
+    "recorded_only": ["per-step displacement error vs nominal", "net approach ratio", "VLM parse ratio (legacy M1 metric, substitute model D11)"]
+  },
+  "validated_runs": [
+    {
+      "path": "log/spf/pc-e2e/run-20261116z6/formal1",
+      "success": true,
+      "gates": "readiness/teleport/takeoff/cycles/stop_state/land/disarm/collision all PASS",
+      "cycles_done": 3,
+      "vlm_attempts": 3,
+      "parse_ratio": 1.0,
+      "final_status_reason": "task_complete",
+      "collision_events_during_navigation": 0,
+      "net_approach_ratio_recorded": 0.1575,
+      "overhead_track_entries": 102,
+      "overhead_centroid_travel_xy_m": 30.48,
+      "overhead_frames": 10,
+      "overhead_frame_visual_check": "drone centered in top-down view; cube wall upper-left, orange ball upper-right, consistent with the flight corridor"
+    },
+    {
+      "path": "log/spf/pc-e2e/run-20261116z7/cancel1",
+      "success": true,
+      "gates": "stop_state/land/disarm/collision PASS; cycles NOT-EXECUTED by design for fault cases",
+      "fault_injection": "cancel Trigger after 3 navigation samples (fault-injection.json)",
+      "final_status_reason": "cancelled",
+      "cycles_done_before_cancel": 1,
+      "stop_handoff": "RUNNING -> STOPPING (speed gate <0.2 m/s) -> STOPPED within 10 s, then native Land + disarm",
+      "collision_events_during_navigation": 0,
+      "overhead_track_entries": 65
+    }
+  ],
+  "attempt_history_not_hidden": [
+    "run-20261116x/smoke1: navigation task_complete but scored FAIL by two defects (collision queried after Land = touchdown stickiness; final STOPPED status zeroed cycles_done). Both fixed; defect evidence retained.",
+    "run-20261116y/smoke2: first PASS after gate fixes; collision NOT-EXECUTED (sticky baseline). formal1/cancel1 in the same Blocks session failed to arm (PX4 GPS-drift preflight denial for minutes) -> one-mission-per-session rule established.",
+    "run-20261116z/z3: observer RPC surface mismatches (this Blocks build lacks simGetCameraPose and resetLastCollision; ImageResponse key is image_data_uint8). Fixed in place.",
+    "run-20261116z4/formal1: cycle 1 done, stopped by vlm_failures (substitute model empty/limited responses, D11). Retry backoff 5 s and 6 consecutive-failure budget added; parse ratio demoted to recorded metric per the pre-locked minimal scope.",
+    "run-20261116z5/formal1: cycles PASS 3/3 but REAL collision Ground_2 at z=0.36 during descent toward the ground-level ball -> D12 altitude floor (min_altitude_m 1.2) added; the collision detector (timestamp comparison) worked as designed."
+  ],
+  "m3_m4_status": "substantiated by the z6 run: real AirSim sensor bridge image/camera_info drove VLM decisions (parse 3/3 with real flight motion), FollowTimedPath accepted revisions 1-3, Motion Reference published only by the extended FollowPath Behavior. Matrix-format separate evidence not produced; recorded as substantiated-by-M5-run, not independently gated.",
+  "m8": {
+    "compute_role_image": "ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1 (ID in run-20261116z6/images.json)",
+    "import_closure_audit": "log/spf/pc-e2e/import-audit-20261116.txt",
+    "finding": "uav_spf_planner code is stdlib+rclpy only; numpy enters solely via the sensor_msgs.CameraInfo Python binding (environment-provided in the container). RoboPi board route (alternative) would need a numpy-free intrinsics channel - recorded gap, does not affect the either-environment ruling."
+  },
+  "not_executed_honest_gaps": [
+    "full matrix: 3 instructions x 3 instances with per-step error statistics (legacy M1 and minimal M5 cover algorithm/pipeline instead)",
+    "stale (sensor-pause) and vlm-down (proxy-stop) fault injections",
+    "RoboPi board deployment (alternative route per 2026-11-16 ruling)",
+    "real-hardware acceptance",
+    "test_ros_planner.py standalone DDS lifecycle test (superseded in practice by live smoke/formal missions; file not created)"
+  ],
+  "deviations_exercised": ["D4 1280x720 camera", "D5 step config (base_velocity 1.0 -> 2 m steps)", "D11 glm-4v-flash substitute model", "D12 min_altitude_m 1.2", "VLM retry backoff 5 s / 6 consecutive failures (D11 robustness config)"],
+  "claim_level": "partial-verification-passed (minimal end-to-end acceptance). Not reproduction-success; not comparable to paper numbers (D11)."
+}
