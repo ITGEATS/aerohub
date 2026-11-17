@@ -1,0 +1,3 @@
+dino_model: artifacts/grounding-dino-swin-ogc
+sam_checkpoint: weights/sam_vit_h_4b8939.pth
+device: '0'

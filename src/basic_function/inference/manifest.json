@@ -5,6 +5,10 @@
       "directory": "src/basic_function/inference/models/diffphys",
       "description": "Official DiffPhys swarm checkpoint recurrent inference with caller-owned hidden state"
     },
+    "grounded_sam": {
+      "directory": "src/basic_function/inference/models/grounded_sam",
+      "description": "GroundingDINO (HF port) plus SAM vit_h greedy open-vocabulary mask prediction with CityNav upstream semantics"
+    },
     "yopo": {
       "directory": "src/basic_function/inference/models/yopo",
       "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"

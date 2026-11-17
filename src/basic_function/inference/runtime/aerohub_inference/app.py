@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from starlette.concurrency import run_in_threadpool
 
 
-def create_app(factory, request_type, response_type):
+def create_app(factory, request_type, response_type, path="/infer"):
     @asynccontextmanager
     async def lifespan(app):
         app.state.predictor = await run_in_threadpool(factory)
@@ -63,5 +63,5 @@ def create_app(factory, request_type, response_type):
         return await asyncio.shield(task)
 
     infer.__annotations__["body"] = request_type
-    app.post("/infer", response_model=response_type)(infer)
+    app.post(path, response_model=response_type)(infer)
     return app
