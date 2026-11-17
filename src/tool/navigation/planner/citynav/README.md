@@ -99,16 +99,34 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
 | openai SDK | 不迁移，纯 stdlib HTTP 等价实现 | 与 SPF D2 同理；容器内也避免 Rust 轮子依赖 |
 | torch（agent 进程内） | 不迁移 | grounding 推理归 Inference 服务，planner 不加载模型 |
 
-## 5. 接口契约（阶段 2 实测后锁定，当前为设计值）
+## 5. 接口契约（阶段 2 锁定 2026-11-17，详见 `log/citynav/contract/result-20261117.md`）
 
-- 输入：`<vehicle_ns>/self_localization/pose|twist`；`sensor_measurements/FrontCamera/rgb/image`
-  + `camera_info` + 深度（量程/尺度阶段 2 锁定）；`citynav/goal`（String JSON
-  `{instruction, max_steps, use_memory}`）；`citynav/cancel`（Trigger）。
-- 输出：`follow_timed_path` Action；`citynav/llm/query|result`；`citynav/status|events`。
-- 时间：LLM 结果绑定请求时图像 stamp；`max_result_age_s` 配置；`use_sim_time` 经 `/clock`。
-- 坐标系：AirSim NED ↔ odom ENU 固化；`cam2ego/ego2world` 组合与 TF 链核对；
-  quaternion 分量序重排逐字保留（`SimRun.py` L397）。
-- 全景：原地偏航旋转取图（偏离 D8），采集耗时计入周期预算。
+- 输入：`<vehicle_ns>/self_localization/pose|twist`；五目相机阵
+  `sensor_measurements/<Cam>/rgb/image|camera_info` +
+  `sensor_measurements/<Cam>/depth_planar/image`（**32FC1 米 axial，ImageType 1**；
+  现有 px4-sensors.json 的 ImageType 2 为 Perspective，不可混用）；
+  `citynav/goal`（String JSON `{instruction, max_steps, use_memory}`）；
+  `citynav/cancel`（Trigger）。
+- 输出：`follow_timed_path` Action（共享 `uav_planner_interfaces`）；
+  `citynav/llm/query|result`；`citynav/status|events`。
+- 采集：**五目固定阵（Yaw -90/-45/0/+45/+90）替代原地旋转**（D8'）；批次内以最新
+  stamp 为参考，任一视角超 `view_freshness_s`（2.0 s）整批作废；图像新鲜度按
+  有界定位历史匹配（YOPO 教训），不与最新定位比较。
+- 内参：方形图像强制（桥 fx=fy=width/(2tan(fov/2)) 与上游分式等价的唯一条件）；
+  K 从 CameraInfo 实测读取（D7），FOV 配置 90° 对齐上游。
+- 深度无效值：桥不 clip；planner 过滤 `isfinite & 0<d<50 m`。
+- 尺度：AS2 用 metric 深度，上游 /300×100=1/3 尺度不复现（D7b，waypoint 接近量
+  3× 行为差记录）。
+- 时间：结果绑定请求时各视角图像 stamp；`max_result_age_s=90`（LLM ~10 s +
+  grounding 5×8 s 串行周期包络，D21）；`/clock` 经 flight_board clock 模式。
+- 坐标系：planner 全程 canonical odom ENU/FLU；反投影换轴按 optical→FLU→ENU
+  重写，等价性以非恒等样例在阶段 5 单测证明；上游 wxyz 重排点由 rclpy 原生四元数
+  取代。
+- 动作映射（预声明锁定）：TURN 15°→0.5 s@30°/s；FORWARD 5 m→5 s@1.0 m/s；
+  UP_DOWN 2 m→比例垂直段；分解顺序即时间顺序；`min_altitude_m` 参数化替代上游
+  `z>-5→z=5` 规则；alpha=0.6 保留。
+- QoS：sensor-data 默认（256 KB/帧×10 流@5 Hz）；连续漏帧则切
+  `camera_reliable:=true`（DiffPhys 先例）。
 
 ## 6. 多机外溢声明
 
