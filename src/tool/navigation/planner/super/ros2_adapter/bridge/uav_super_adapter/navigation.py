@@ -1,0 +1,180 @@
+"""Task-call wrapper around the existing SUPER adapter, not a planner.
+
+Arrival checks are the PC Demo's existing 1.5 m / 0.3 m/s / 2 s checks.
+The adapter's polynomial conversion and FollowTimedPath lifecycle stay intact.
+"""
+import copy
+import math
+import time
+
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.task import Future
+from rclpy.qos import qos_profile_sensor_data
+from std_srvs.srv import SetBool
+from uav_planner_interfaces.action import NavigateToPose
+
+
+class SuperNavigation:
+    def __init__(self, adapter):
+        self.node = adapter
+        self.reserved = False
+        self.handle = None
+        self.finished = None
+        self.odom = None
+        self.stable_since = None
+        self.stop_started = None
+        self.outcome = None
+        self.phase = 'idle'
+        self.started = 0.
+        self.timeout = 300.
+        self.publisher = adapter.create_publisher(PoseStamped, '/goal_pose', 1)
+        self.subscription = adapter.create_subscription(
+            Odometry, 'sensor_measurements/odom', self.on_odom,
+            qos_profile_sensor_data)
+        self.server = ActionServer(adapter, NavigateToPose, 'navigate_to_pose',
+                                   execute_callback=self.execute,
+                                   goal_callback=self.on_goal,
+                                   cancel_callback=lambda _: CancelResponse.ACCEPT,
+                                   callback_group=ReentrantCallbackGroup())
+
+    def on_odom(self, message):
+        if message.header.frame_id == self.node.frame:
+            self.odom = message
+
+    def on_goal(self, request):
+        if self.reserved or self.node.enabled:
+            return GoalResponse.REJECT
+        if self.node.client and not self.node.client.quiescent:
+            return GoalResponse.REJECT
+        self.reserved = True
+        return GoalResponse.ACCEPT
+
+    def validate(self, request):
+        p = request.target.pose.position
+        if request.target.header.frame_id != self.node.frame:
+            return 'INVALID_GOAL', 'Target frame must be ' + self.node.frame
+        if not all(math.isfinite(v) for v in (p.x, p.y, p.z)):
+            return 'INVALID_GOAL', 'Target position must be finite'
+        if request.orientation_mode not in (request.UNCONSTRAINED, request.KEEP_YAW):
+            return 'UNSUPPORTED', 'SUPER execution currently holds the takeover yaw'
+        for name in ('max_speed', 'position_tolerance', 'timeout'):
+            value = getattr(request, name)
+            if getattr(request, 'use_' + name) and (not math.isfinite(value) or value <= 0):
+                return 'INVALID_GOAL', name + ' must be finite and positive'
+        if request.use_max_speed and not math.isclose(
+                request.max_speed, self.node.get_parameter('max_speed').value):
+            return 'UNSUPPORTED', 'Per-task speed changes are not supported; use the deployed speed'
+        if self.odom is None or not -.05 <= self.node.now_seconds() - self.node.pose_stamp <= .5:
+            return 'NOT_READY', 'Fresh local odometry required'
+        if self.publisher.get_subscription_count() == 0:
+            return 'NOT_READY', 'SUPER goal subscriber unavailable'
+        return None
+
+    async def execute(self, handle):
+        self.handle = handle
+        self.finished = Future()
+        self.stable_since = self.stop_started = None
+        self.outcome = None
+        self.phase = 'preparing'
+        self.started = self.node.now_seconds()
+        request = handle.request
+        try:
+            error = self.validate(request)
+            if error:
+                return self.finish(False, *error, stopped=True)
+            if handle.is_cancel_requested:
+                return self.finish(False, 'CANCELED', 'Canceled before execution', stopped=True)
+            p = request.target.pose.position
+            self.node.goal = [p.x, p.y, p.z]
+            self.node.navigation_tolerance = (request.position_tolerance
+                                             if request.use_position_tolerance else self.node.get_parameter('goal_tolerance').value)
+            self.timeout = request.timeout if request.use_timeout else 300.
+            response = self.node.enable(SetBool.Request(data=True), SetBool.Response(), internal=True)
+            if not response.success:
+                return self.finish(False, 'NOT_READY', response.message, stopped=True)
+            target = copy.deepcopy(request.target)
+            # Position-only requests need a valid quaternion for SUPER's original
+            # input parser; no terminal orientation requirement is added.
+            target.pose.orientation = copy.deepcopy(self.odom.pose.pose.orientation)
+            target.header.stamp = self.node.get_clock().now().to_msg()
+            self.publisher.publish(target)
+            self.phase = 'planning'
+            return await self.finished
+        except Exception as exc:
+            self.outcome = (False, 'INTERNAL_ERROR', str(exc))
+            self.begin_stop()
+            return await self.finished
+        finally:
+            self.handle = None
+            self.reserved = False
+            self.phase = 'idle'
+
+    def begin_stop(self):
+        if self.stop_started is None:
+            self.stop_started = time.monotonic()
+            self.phase = 'stopping'
+            self.node.enable(SetBool.Request(data=False), SetBool.Response(), internal=True)
+
+    def current_pose(self):
+        pose = PoseStamped()
+        if self.odom is not None:
+            pose.header = copy.deepcopy(self.odom.header)
+            pose.pose = copy.deepcopy(self.odom.pose.pose)
+        return pose
+
+    def finish(self, success, code, reason, stopped):
+        result = NavigateToPose.Result(success=success, code=code, reason=reason,
+                                      final_pose=self.current_pose(), stop_confirmed=stopped)
+        if self.handle.is_cancel_requested and code == 'CANCELED':
+            self.handle.canceled()
+        elif success:
+            self.handle.succeed()
+        else:
+            self.handle.abort()
+        return result
+
+    def tick(self):
+        if self.handle is None or self.finished is None or self.finished.done():
+            return
+        now = self.node.now_seconds()
+        distance = math.inf
+        if self.odom is not None:
+            p = self.odom.pose.pose.position
+            distance = math.dist((p.x, p.y, p.z), self.node.goal)
+        feedback = NavigateToPose.Feedback(
+            phase=self.phase, current_pose=self.current_pose(), distance_remaining=distance,
+            revision=self.node.client.revision if self.node.client else 0)
+        self.handle.publish_feedback(feedback)
+        if self.stop_started is not None:
+            if self.node.client is None or self.node.client.quiescent:
+                self.finished.set_result(self.finish(*self.outcome, stopped=True))
+            elif time.monotonic() - self.stop_started > 8.:
+                self.finished.set_result(self.finish(False, 'STOP_UNCONFIRMED',
+                    self.outcome[1] + ': ' + self.outcome[2], stopped=False))
+            return
+        if self.odom is not None:
+            v = self.odom.twist.twist.linear
+            speed = math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+            fresh = -.05 <= now - self.node.pose_stamp <= .5
+            if fresh and distance <= self.node.navigation_tolerance and speed < .3:
+                if self.stable_since is None:
+                    self.stable_since = now
+            else:
+                self.stable_since = None
+        if self.handle.is_cancel_requested:
+            self.outcome = (False, 'CANCELED', 'Navigation canceled')
+        elif self.node.error:
+            self.outcome = (False, 'EXECUTION_FAILED', self.node.error)
+        elif now < self.started or now - self.started > self.timeout:
+            self.outcome = (False, 'TIMEOUT', 'Navigation clock reset or task timeout')
+        elif self.node.client and self.node.client.complete:
+            if self.stable_since is not None and now - self.stable_since >= 2.:
+                self.outcome = (True, 'SUCCEEDED', 'Execution complete and arrival held')
+            self.phase = 'settling'
+        elif self.node.client and self.node.client.revision:
+            self.phase = 'executing'
+        if self.outcome is not None:
+            self.begin_stop()

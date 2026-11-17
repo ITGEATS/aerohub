@@ -1,0 +1,48 @@
+schema_version: "1.0"
+id: tool.object-detection
+version: "0.3.0"
+type: tool
+name: Object Detection Tool
+description: Detects instances in a new RGB frame. Optional estimate_position requests RGB-D positioning and requires registered depth, calibration and historical TF; RGB-only detection does not require them.
+
+implementation:
+  component_id: aerohub.tool.object-detection
+  manifest: deployment/object_detection/component.yaml
+  shared_runtime: object-detection-adapter
+  coupled_capabilities: []
+
+inputs:
+  - id: rgb
+    capability_type: sensor/camera/rgb/image
+
+outputs: []
+
+interfaces:
+  - id: detect
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_object_detection_interfaces/srv/DetectSnapshot
+    parameter_schema: src/tool/object_detection/interfaces/srv/DetectSnapshot.srv
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+  - hardware_type: sensor/camera/rgb
+
+resource_access:
+  reads: [sensor/rgb-camera, sensor/depth-camera, vehicle/historical-tf]
+  shared_writes: [compute/gpu]
+  exclusive_writes: []
+
+demo:
+  representations:
+    - id: detection_overlay
+      stage: final
+      description: Optional legacy stream overlay; single-observation results are returned by the detect operation.
+      interface: {protocol: ros2_topic, schema: sensor_msgs/msg/Image}
+      renderer: image

@@ -1,0 +1,62 @@
+schema_version: "1.0"
+id: planner.gcopter
+version: "0.1.0"
+type: tool
+name: GCOPTER LiDAR local trajectory planning
+description: Private ROG-Map copy, independent local frontend, FIRI and GCOPTER/MINCO optimization; FollowTimedPath owns execution.
+
+implementation:
+  component_id: aerohub.planner.gcopter
+  manifest: deployment/gcopter/component.yaml
+  shared_runtime: gcopter-function-and-adapter
+  coupled_capabilities: []
+
+inputs:
+  - id: local_odometry
+    capability_type: state/local/odometry/3d
+  - id: obstacle_points
+    capability_type: perception/navigation/obstacle-points/3d
+
+outputs:
+  - id: task_status
+    capability_type: diagnostics/health/text
+
+interfaces:
+  - id: plan_once
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+  - id: set_execution_enabled
+    role: lifecycle_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/SetBool
+    parameter_schema: null
+  - id: health
+    role: lifecycle_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+
+lifecycle:
+  management: agent_managed
+  operations:
+    start: set_execution_enabled
+    status: health
+    stop: set_execution_enabled
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/lidar/3d
+  - hardware_type: flight-controller/px4
+
+resource_access:
+  reads:
+    - drone/self_state
+    - drone/lidar
+  shared_writes: []
+  exclusive_writes:
+    - drone/motion

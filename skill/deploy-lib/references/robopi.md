@@ -17,9 +17,9 @@
 
 ## CAT-ORA 的简单验证
 
-原生包是 `mrs_formation_reshaping`，源码在 `src/planner/cat_ora/ros2_adapter/native/`。最小验证启动 `cat_ora_node`，调用 `/mrs_formation_reshaping/get_reshaping_trajectories`；如果部署包含 `ros2_proxy.py`，再检查其本地 JSON 接口。AS2 仅做所需模块加载、最小启动检查，不启动四机任务。
+原生包是 `mrs_formation_reshaping`，源码在 `src/tool/navigation/planner/cat_ora/ros2_adapter/native/`。最小验证启动 `cat_ora_node`，调用 `/mrs_formation_reshaping/get_reshaping_trajectories`；如果部署包含 `ros2_proxy.py`，再检查其本地 JSON 接口。AS2 仅做所需模块加载、最小启动检查，不启动四机任务。
 
-`src/planner/cat_ora/ros2_adapter/native/tests/verify_board.py` 可参考其环境与启动方式，但它执行多组数值回归；简单部署验证不必全部运行。已有板端服务证据见 `log/pr-history/src/planner/cat_ora/validation/robopi-service.json`，只代表记录中的版本与范围。
+`src/tool/navigation/planner/cat_ora/ros2_adapter/native/tests/verify_board.py` 可参考其环境与启动方式，但它执行多组数值回归；简单部署验证不必全部运行。已有板端服务证据见 `log/pr-history/src/tool/navigation/planner/cat_ora/validation/robopi-service.json`，只代表记录中的版本与范围。
 
 `deployment/airsim/demos/catora_open_field/run.py` 和 `run_robopi.py` 会编排场景并发送飞行指令，不是本 skill 的简单验证入口。算法不同则选择自己的最小服务或消息样例，不照搬 CAT-ORA 的包集合和接口。
 
@@ -40,3 +40,9 @@ AS2 直接启动估计器时，需要同时加载安装包中的 `config/state_e
 Swarm 在 OHOS 构建时使用标准 Eigen 头路径；点云转换头文件包会导出未使用的 PCL IO 库，当前实现单独声明头文件/消息依赖，只链接实际使用的 PCL common。首次板端规划还发现原有 `desired_start_time` 未初始化：Clang 优化后读取空旧轨迹并崩溃。初始化首轮不使用的占位值后，单节点首条 PolyTraj 检查通过。
 
 2026-11-05 的持久布局简单验收：AS2 五秒启动与消息序列化、CAT-ORA 一次服务/JSON 请求、Swarm 单节点静态输入到两段五阶轨迹均通过。记录见 `log/pr-history/deployment/robopi/validation/startup.json`、两个库的 `validation/robopi-smoke.json`。这些不代表完整回归、真实点云或飞行验收。
+
+## 复用原生安装的 Python 更新
+
+仅修改 Python 代码且原生依赖、消息和扩展 ABI 均未变化时，可以复用已验证的原生安装。按完整模块依赖确定更新集合，不能只替换入口文件；在目标解释器中核对实际导入路径与文件内容，避免加载旧安装中的同名模块。
+
+若复用安装生成独立候选，不使用共享可写文件的硬链接。候选前缀变化时，环境脚本、包元数据、绝对符号链接与 ELF 搜索路径可能分别保留旧前缀；文本重定位不能代替 ELF 检查。原生二进制复用与重新交叉编译在产物来源中分别记录。

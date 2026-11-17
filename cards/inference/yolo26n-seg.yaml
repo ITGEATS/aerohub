@@ -1,0 +1,39 @@
+schema_version: "1.0"
+id: inference.yolo26n-seg
+version: "0.1.0"
+type: capability
+name: YOLO26n-seg instance segmentation inference
+description: Original-image boxes, categories, confidence and binary masks; no depth or flight control.
+
+implementation:
+  component_id: aerohub.inference.yolo26n-seg
+  manifest: deployment/inference/yolo26n_seg.component.yaml
+  shared_runtime: yolo26n-seg-worker-and-ros-facade
+  coupled_capabilities: []
+
+inputs: []
+outputs: []
+
+interfaces:
+  - id: infer
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_inference_interfaces/srv/InferDetections
+    parameter_schema: src/basic_function/inference/interfaces/srv/InferDetections.srv
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+
+resource_access:
+  reads:
+    - model/yolo26n-seg/weights
+  shared_writes:
+    - compute/gpu
+  exclusive_writes:
+    - inference/yolo26n-seg/worker

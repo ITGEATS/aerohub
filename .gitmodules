@@ -3,7 +3,7 @@
 	url = https://github.com/Popc0rn7/aerostack2-aerohub.git
 [submodule "pixhawk"]
 	path = as2/as2_platform_pixhawk
-	url = https://github.com/aerostack2/as2_platform_pixhawk.git
+	url = https://github.com/Popc0rn7/as2_platform-aerohub.git
 [submodule "px4"]
 	path = px4
 	url = https://github.com/PX4/PX4-Autopilot.git
@@ -11,33 +11,70 @@
 	path = simulator/gazebo
 	url = https://github.com/aerostack2/project_gazebo.git
 [submodule "cat_ora"]
-	path = src/planner/cat_ora/upstream
+	path = src/tool/navigation/planner/cat_ora/upstream
 	url = https://github.com/ctu-mrs/catora.git
 [submodule "swarm_formation"]
-	path = src/planner/swarm_formation/upstream
+	path = src/tool/navigation/planner/swarm_formation/upstream
 	url = https://github.com/ZJU-FAST-Lab/Swarm-Formation.git
 [submodule "px4_msgs"]
 	path = as2/px4_msgs
 	url = https://github.com/PX4/px4_msgs.git
 [submodule "src/state_estimator/fast_livo2/upstream"]
-	path = src/state_estimator/fast_livo2/upstream
+	path = src/basic_function/state_estimator/fast_livo2/upstream
 	url = https://github.com/hku-mars/FAST-LIVO2.git
 
 [submodule "super"]
-	path = src/planner/super/upstream
+	path = src/tool/navigation/planner/super/upstream
 	url = https://github.com/Popc0rn7/SUPER-sim.git
 [submodule "ipc"]
-	path = src/planner/ipc/upstream
+	path = src/tool/navigation/planner/ipc/upstream
 	url = https://github.com/hku-mars/IPC.git
 [submodule "src/state_estimator/pin_slam/upstream"]
-	path = src/state_estimator/pin_slam/upstream
+	path = src/basic_function/state_estimator/pin_slam/upstream
 	url = https://github.com/PRBonn/PIN_SLAM.git
 [submodule "src/planner/yopo/upstream"]
-	path = src/planner/yopo/upstream
+	path = src/tool/navigation/planner/yopo/upstream
 	url = https://github.com/TJU-Aerial-Robotics/YOPO.git
+[submodule "src/planner/diffphys/upstream"]
+	path = src/tool/navigation/planner/diffphys/upstream
+	url = https://github.com/HenryHuYu/DiffPhysDrone.git
+
 [submodule "src/state_estimator/dpv_slam/upstream"]
-	path = src/state_estimator/dpv_slam/upstream
+	path = src/basic_function/state_estimator/dpv_slam/upstream
 	url = https://github.com/princeton-vl/DPVO.git
-[submodule "src/planner/spf/upstream"]
-	path = src/planner/spf/upstream
+[submodule "src/tool/navigation/planner/spf/upstream"]
+	path = src/tool/navigation/planner/spf/upstream
 	url = https://github.com/Hu-chih-yao/see-point-fly
+[submodule "src/state_estimator/fast_livo2/ros2_upstream"]
+	path = src/basic_function/state_estimator/fast_livo2/ros2_upstream
+	url = https://github.com/SuperLDG/FASTLIVO2_ROS2.git
+[submodule "src/state_estimator/fast_livo2/dependencies/livox_ros_driver2"]
+	path = src/basic_function/state_estimator/fast_livo2/dependencies/livox_ros_driver2
+	url = https://github.com/Livox-SDK/livox_ros_driver2.git
+[submodule "src/state_estimator/fast_livo2/dependencies/rpg_vikit"]
+	path = src/basic_function/state_estimator/fast_livo2/dependencies/rpg_vikit
+	url = https://github.com/SuperLDG/rpg_vikit.git
+	branch = ros2
+[submodule "src/state_estimator/fast_livo2/dependencies/sophus"]
+	path = src/basic_function/state_estimator/fast_livo2/dependencies/sophus
+	url = https://github.com/strasdat/Sophus.git
+[submodule "src/tool/navigation/planner/falcon/upstream"]
+	path = src/tool/navigation/planner/falcon/upstream
+	url = https://github.com/Air-Suck/FALCON.git
+	branch = aerohub-ros2
+[submodule "src/basic_function/state_estimator/d2_slam/upstream"]
+	path = src/basic_function/state_estimator/d2_slam/upstream
+	url = https://github.com/Air-Suck/D2SLAM.git
+	branch = aerohub
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs
+	url = https://github.com/HKUST-Swarm/swarm_msgs.git
+	branch = D2SLAM
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver
+	url = https://github.com/HKUST-Swarm/ceres-solver.git
+	branch = D2SLAM
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/opengv"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/opengv
+	url = https://github.com/HKUST-Swarm/opengv.git
+	branch = master

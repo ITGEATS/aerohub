@@ -1,23 +1,23 @@
 schema_version: '0.1'
 id: aerohub.planner.yopo-single
-version: '0.1.0'
+version: '0.2.0'
 source:
-  upstream: src/planner/yopo/upstream
+  upstream: src/tool/navigation/planner/yopo/upstream
   revision: bd8a7f91953cfef9f1aa9a48d7ff0ab7bceee132
-  integration: src/planner/yopo/ros2_adapter
+  integration: src/tool/navigation/planner/yopo/ros2_adapter
   license: MIT
 provides: [planner.yopo-single]
 cards: [cards/planner/yopo-single.yaml]
 roles:
   compute: [yopo-planner, yopo-inference-adapter, isolated-yopo-worker, AS2, FollowTimedPath]
-  workstation: [ROS-task-client, simulation-collision-scoring]
+  workstation: [AS2-navigation-module, ROS-task-client, simulation-collision-scoring]
   simulator: [AirSim, sensor-bridge]
   flight_controller: [PX4-SITL]
 runtime:
   images: [onboard_computer:v0.1.0, flight_board:v0.1.0, 'osrf/ros:humble-desktop-full-jammy']
   platform: linux-x86_64-NVIDIA
   dependencies: [aerohub.inference.yopo, uav_follow_path_execution, ROS-2-Humble, AirSimNH, PX4-SITL]
-  source_preparation: src/inference/models/yopo/setup.sh
+  source_preparation: src/basic_function/inference/models/yopo/setup.sh
   build: deployment/airsim/demos/yopo_single/build.sh
   launch: deployment/airsim/demos/yopo_single/run.py
   configuration: deployment/airsim/demos/yopo_single/planner.yaml
@@ -30,7 +30,15 @@ runtime:
   clock: AirSim-clock-bridge
   domain: selected-unused-110-to-170-recorded-in-each-domain.json
   readiness: fresh-synchronized-depth-pose-twist-camera-info-and-TF-plus-ROS-services
-  stop: ROS-yopo/cancel-then-STOPPED-speed-gate-before-native-Land
+  navigation_action: true
+  public_interfaces:
+    navigate:
+      address: /drone0/navigate_to_pose
+      schema: uav_planner_interfaces/action/NavigateToPose
+      parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+  python_entry: drone.navigation.to_point
+  stop: standard-navigation-Action-cancel-then-STOPPED-speed-gate-before-native-Land
+  sharing: one-selected-navigation-provider-per-UAV-public-address-no-cross-process-arbitrator
   rollback: stop-confirmed-disarmed-task-restore-reviewed-source-and-model-lock-rebuild-matching-overlay
   persistence: log/yopo-single
 resources:
@@ -39,4 +47,7 @@ resources:
   tf_authority: AS2-self-localization-and-sensor-static-bridge
 validation:
   evidence: deployment/airsim/demos/yopo_single/validation.md
+  navigation_evidence: deployment/airsim/demos/yopo_single/VALIDATION-navigation-20261115.md
+  supported_constraints: [UNCONSTRAINED, deployed-speed-only, position-tolerance-at-least-5m]
+  arrival_semantics: original-distance-less-than-5m-trigger-then-confirm-stop-not-final-position-hold
   limitations: [reference-planning-branch-only, no-precise-arrival, no-real-hardware-validation]

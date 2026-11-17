@@ -22,6 +22,10 @@ def main():
         'AS2_STATE_ESTIMATOR_LAUNCH_PACKAGE', 'as2_state_estimator')
     estimator_launch_file = os.environ.get(
         'AS2_STATE_ESTIMATOR_LAUNCH_FILE', 'state_estimator_launch.py')
+    external_odom_value = os.environ.get('AS2_EXTERNAL_ODOM', '0')
+    if external_odom_value not in ('0', '1'):
+        raise ValueError('AS2_EXTERNAL_ODOM must be 0 or 1')
+    external_odom = external_odom_value == '1'
     fleet = yaml.safe_load(Path(os.environ.get('AS2_FLEET_FILE', '/opt/onboard_computer/fleet.yaml')).read_text())
     vehicles = fleet['vehicles']
     if not vehicles:
@@ -38,19 +42,14 @@ def main():
         platform_config = runtime / (namespace + '.yaml')
         platform_config.write_text(yaml.safe_dump({'/**': {'ros__parameters': {
             'use_sim_time': True, 'cmd_freq': 50.0, 'info_freq': 10.0,
-            'external_odom': False, 'fmu_prefix': vehicle['fmu_prefix'],
+            'external_odom': external_odom, 'fmu_prefix': vehicle['fmu_prefix'],
             'target_system_id': system_id}}}))
         estimator_command = [
             'ros2', 'launch', estimator_launch_package, estimator_launch_file,
             f'namespace:={namespace}']
-        if (estimator_launch_package, estimator_launch_file) == (
-                'as2_state_estimator', 'state_estimator_launch.py'):
-            estimator_command.extend([
-                f'config_file:={config}', f'plugin_name:={estimator_plugin}',
-                f'plugin_config_file:={estimator_config}', 'use_sim_time:=true'])
-        else:
-            estimator_command.extend([
-                f'config_file:={estimator_config}', 'use_sim_time:=true'])
+        estimator_command.extend([
+            f'config_file:={config}', f'plugin_name:={estimator_plugin}',
+            f'plugin_config_file:={estimator_config}', 'use_sim_time:=true'])
         commands.extend([
             ['ros2', 'launch', 'as2_platform_pixhawk', 'pixhawk_launch.py',
              f'namespace:={namespace}', f'platform_config_file:={platform_config}'],
@@ -85,6 +84,12 @@ def main():
                     if not 0.0 < value <= 20.0:
                         raise ValueError('AS2_TIMED_ACCELERATION_CONTINUITY_TOLERANCE must be in (0, 20]')
                     command.append(f'timed_acceleration_continuity_tolerance:={value}')
+                yaw = os.environ.get('AS2_TIMED_YAW_CONTINUITY_TOLERANCE')
+                if yaw:
+                    value = float(yaw)
+                    if not 0.0 < value <= 3.141592653589793:
+                        raise ValueError('AS2_TIMED_YAW_CONTINUITY_TOLERANCE must be in (0, pi]')
+                    command.append(f'timed_yaw_continuity_tolerance:={value}')
             elif len(command) > 2 and command[2].endswith('selected_behaviors.launch.py'):
                 raise ValueError('AS2_BEHAVIORS subset is incompatible with follow_path backend')
     if os.environ.get('AS2_TF_SCOPE')=='per-vehicle':

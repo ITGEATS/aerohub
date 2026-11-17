@@ -45,7 +45,11 @@ def legacy_vehicles(count):
              'px4_system_id':41+index,'xrce_agent_port':8901+index} for index in range(count)]
 
 
-def launch_vehicles(image,app,output,prefix,dds,delay=.1,sensors=False,settings_path=None,vehicles=None):
+def launch_vehicles(
+    image, app, output, prefix, dds, delay=.1, sensors=False,
+    settings_path=None, vehicles=None, ros_domain_id=91, rpc_port=42471,
+    relay_port_base=4780,
+):
     """Default settings_path=None and vehicles=None keep app/settings.json and Drone<i>/40+i/41+i/8901+i."""
     source=Path(settings_path) if settings_path else app/'settings.json'
     settings=json.loads(source.read_text())
@@ -60,14 +64,15 @@ def launch_vehicles(image,app,output,prefix,dds,delay=.1,sensors=False,settings_
     try:
         for index,vehicle in enumerate(vehicles):
             original=int(settings['Vehicles'][vehicle['airsim_name']]['TcpPort'])
-            relays.append(StartupRelay(('127.0.0.1',4780+index),('127.0.0.1',original),delay))
-            settings['Vehicles'][vehicle['airsim_name']]['TcpPort']=4780+index
+            relay_port = relay_port_base + index
+            relays.append(StartupRelay(('127.0.0.1',relay_port),('127.0.0.1',original),delay))
+            settings['Vehicles'][vehicle['airsim_name']]['TcpPort']=relay_port
         path=output/'px4-settings.json';path.write_text(json.dumps(settings,indent=2)+'\n')
         for index,vehicle in enumerate(vehicles):
             subprocess.run(['docker','run','--rm','--detach','--init','--network','host','--name',prefix+f'vehicle{index}',
-                '-e','ROS_DOMAIN_ID=91','-e',f"VEHICLE_NAME={vehicle['airsim_name']}",'-e',f"VEHICLE_NAMESPACE={vehicle['name']}",
+                '-e',f'ROS_DOMAIN_ID={ros_domain_id}','-e',f"VEHICLE_NAME={vehicle['airsim_name']}",'-e',f"VEHICLE_NAMESPACE={vehicle['name']}",
                 '-e',f"PX4_INSTANCE={vehicle['px4_instance']}",'-e',f"PX4_SYSTEM_ID={vehicle['px4_system_id']}",'-e',f"XRCE_AGENT_PORT={vehicle['xrce_agent_port']}",
-                '-e','AIRSIM_RPC_PORT=42471','-e','FLIGHT_BOARD_SENSORS='+('1' if sensors else '0'),'-e','FLIGHT_BOARD_CAMERAS=0',
+                '-e',f'AIRSIM_RPC_PORT={rpc_port}','-e','FLIGHT_BOARD_SENSORS='+('1' if sensors else '0'),'-e','FLIGHT_BOARD_CAMERAS=0',
                 '-v',str(path)+':/config/settings.json:ro','-v',str(dds)+':/opt/fastdds_udp.xml:ro',image,'vehicle'],check=True,stdout=subprocess.DEVNULL)
         startup_timeout=float(os.environ.get('PX4_STARTUP_TIMEOUT','25'))
         if not 1 <= startup_timeout <= 300:
@@ -80,7 +85,7 @@ def launch_vehicles(image,app,output,prefix,dds,delay=.1,sensors=False,settings_
             if len(ready)==count:
                 (output/'px4-startup.json').write_text(json.dumps({
                     'ready_vehicles':ready,'initial_tcp_buffer_seconds':delay,'tcp_nodelay':True,
-                    'relay_ports':list(range(4780,4780+count)),
+                    'relay_ports':list(range(relay_port_base,relay_port_base+count)),
                     'startup_timeout_seconds':startup_timeout,
                     'startup_wall_seconds':time.monotonic()-started},indent=2)+'\n')
                 return relays

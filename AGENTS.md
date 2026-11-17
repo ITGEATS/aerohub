@@ -9,6 +9,7 @@
 - 开发者自行选择 Linux 构建与测试环境；个人机器配置保存在不纳入 Git 的本地配置中。跨工作区同步前核对差异，保留已有依赖、独有文件及用户修改，不整树覆盖。
 - 临时测试目录不作为源码的长期保存位置。本地专用 AGENTS.md 不得覆盖本仓库的共享版本。
 - 未经用户明确授权，不创建 Git commit，不执行 push、merge 或历史改写。
+- 兼容问题优先在本项目通过 Adapter、Bridge、插件、配置或启动层解决。确实必须修改上游源码时才使用 Fork；所有 Fork 必须作为 Git 子模块接入，由 `.gitmodules` 记录仓库 URL、由父仓库 gitlink 锁定可获取提交，不复制 Fork 源码到主仓库，也不以构建补丁代替最终来源。
 - 共享 Docker 镜像作为稳定开发工具使用，普通 AS2/算法/适配修改优先在各自外部工作区补编译，并显式加载对应 install overlay；不因源码迭代默认重建或替换镜像。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用镜像旧插件。新增依赖先核查现有环境及工作区局部依赖；确需升级基础环境时作为单独的团队版本变更处理。
 
 ## 目标架构
@@ -24,16 +25,16 @@
 
 ### 2026-11-07 目标架构补充（优先于下方早期分层描述）
 
-- 目标运行链为 Application → Mission（人类目标、Online Agent）→ Tool → 基础 Behavior → 基础能力与平台。现有 Planner 和 adapter 是 Navigation Tool 的实现基础；本次不实现 Mission 或 Tool。
-- Tool 可直接读取传感器、状态与地图。基础能力层的 State Estimator 聚焦自身状态；新增 `src/perception/` 对应并列的环境感知、建图与环境表示，不将地图塞入自定位接口。
+- 目标运行链为 Application → Mission（人类目标、Online Agent）→ Tool → 基础 Behavior → 基础能力与平台。现有 Planner 和 adapter 按 Navigation Tool 职责组织；目录归类不代表通用 Mission、Tool 生命周期或资源仲裁已经实现。
+- Tool 可直接读取传感器、状态与地图。基础能力层的 State Estimator 聚焦自身状态；新增 `src/basic_function/perception/` 对应并列的环境感知、建图与环境表示，不将地图塞入自定位接口。
 - 高层复合 Behavior 不加载、不暴露，保留上游代码；基础执行按需兼容扩展。
 - Tool 必须声明功能卡片；资源互斥、取消交接和应急优先级由运行时软件强制执行，不仅依赖 Agent 自律。
 - Offline Agent 负责适配和部署，Online Agent 负责任务编排。详细接口、目录和验证约束见 `docs/开发者贡献指导.md`。
 ### 多无人机共享部署
 
 - 算法无关的多无人机拓扑、进程编排和观察视图统一维护在 deployment/swarm/，具体 Demo 复用该基础设施。
-- 机群规模由配置决定。恰好一个 UAV 计算节点运行在 RoboPi；其余 UAV 在 PC 上分别由一个独立线程监管一个独立进程或容器。
-- 集中式系统必须同时验证板端 UAV 作为中心和作为非中心 worker；外部计算及地面站固定运行在 PC。
+- 机群规模与部署阶段由配置决定。前期 `pc_simulation` 为每个 UAV 启动一个独立 onboard-computer Docker；上板期 `hybrid_board` 才替换其中一个节点为真实算力板，形成 N-1 个 Docker 加一个真实板端节点。
+- 集中式系统在上板期必须同时验证板端 UAV 作为中心和作为非中心 worker；外部计算及地面站固定运行在 PC。
 - 单机和多机 AirSim 均使用位于全部 UAV 实时质心正上方、垂直向下的观察视图。启动与健康检查不得把静态初始相机误报为动态跟踪成功。
 
 
@@ -104,8 +105,8 @@
 
 ## 目录约定
 
-新增 `src/inference/` 提供与 Perception、State Estimator 并列的 Inference Robotic Function：对外使用 ROS 2，内部 FastAPI runtime 与每模型独立 uv 环境隔离。`interfaces/`、`ros2_adapter/`、`runtime/` 保存公共服务设施，`models/<模型>/` 保存推理适配和环境。算法源码仍按功能归属原分类；Inference 模块只引用模型实现，不迁移或复制 Planner 算法，不承担轨迹重建或运动执行。
+新增 `src/basic_function/inference/` 提供与 Perception、State Estimator 并列的 Inference Robotic Function：对外使用 ROS 2，内部 FastAPI runtime 与每模型独立 uv 环境隔离。`interfaces/`、`ros2_adapter/`、`runtime/` 保存公共服务设施，`models/<模型>/` 保存推理适配和环境。算法源码仍按功能归属原分类；Inference 模块只引用模型实现，不迁移或复制 Planner 算法，不承担轨迹重建或运动执行。
 
 CUDA 模型迁移、独立环境与模型文件准备按正式子 Skill [model-migration-cuda](skill/model-migration-cuda/SKILL.md) 执行；每模型 README/setup 及验证要求集中在该 Skill 维护。
 
-自建代码位于 `src/`，先按 `planner/`、`behavior/`、`state_estimator/`、`perception/`、`inference/` 分类，再按对象分子目录。CAT-ORA 与 Swarm-Formation 使用 `upstream/`、`ros2_adapter/`、`ros1_proxy/`。上游算法分别在 `src/planner/cat_ora/upstream/` 和 `src/planner/swarm_formation/upstream/`。同类对象的目录规则见 `docs/开发者贡献指导.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。运行产物与测试日志统一进入被忽略的 `log/`。部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。
+自建代码位于 `src/`，顶层按 `tool/`、`basic_function/`、`behavior/` 三类组织。导航算法位于 `tool/navigation/planner/`，共用协调与接口分别位于 `tool/navigation/framework/` 和 `tool/navigation/interfaces/`；Inference、State Estimator、Perception 位于 `basic_function/` 下。面向任务的目标检测 Tool 应放入 `tool/object_detection/`，其模型推理适配仍归 `basic_function/inference/models/`。CAT-ORA 与 Swarm-Formation 使用 `upstream/`、`ros2_adapter/`、`ros1_proxy/`。同类对象的目录规则见 `docs/开发者贡献指导.md` 和 `src/README.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。运行产物与测试日志统一进入被忽略的 `log/`。部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。

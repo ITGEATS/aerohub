@@ -1,0 +1,39 @@
+schema_version: "1.0"
+id: inference.diffphys
+version: "0.1.0"
+type: capability
+name: DiffPhys recurrent policy inference
+description: Official swarm.pth or high-speed base.pth network outputs and explicit GRU state; no trajectory or flight execution.
+
+implementation:
+  component_id: aerohub.inference.diffphys
+  manifest: deployment/inference/diffphys.component.yaml
+  shared_runtime: diffphys-model-worker
+  coupled_capabilities: []
+
+inputs: []
+outputs: []
+
+interfaces:
+  - id: infer
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_inference_interfaces/srv/InferDiffphys
+    parameter_schema: src/basic_function/inference/interfaces/srv/InferDiffphys.srv
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+
+resource_access:
+  reads:
+    - model/diffphys/weights
+  shared_writes:
+    - compute/gpu
+  exclusive_writes:
+    - inference/diffphys/worker

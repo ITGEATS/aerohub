@@ -15,7 +15,7 @@ def main():
         ['python3', '-m', 'uav_inference.yopo_node', '--ros-args', '-r', '__ns:=/drone0',
          '-p', 'use_sim_time:=true', '-p', 'endpoint:='+os.environ.get('YOPO_ENDPOINT', 'http://127.0.0.1:18081')],
         ['ros2', 'run', 'uav_yopo_planner', 'yopo_planner', '--ros-args', '-r', '__ns:=/drone0',
-         '--params-file', str(APP/'planner.yaml'),
+         '--params-file', str(APP/'planner.yaml'), '-p', 'navigation_action:=true',
          '-r', 'yopo/depth:=sensor_measurements/yopo_front/depth_planar/image',
          '-r', 'yopo/camera_info:=sensor_measurements/yopo_front/depth_planar/camera_info'],
     ]

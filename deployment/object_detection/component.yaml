@@ -1,0 +1,52 @@
+schema_version: '0.1'
+id: aerohub.tool.object-detection
+version: 0.3.0
+source:
+  directory: src/tool/object_detection
+  license: GPL-3.0-or-later
+provides: [tool.object-detection]
+cards: [cards/tool/object-detection.yaml]
+roles:
+  compute: [object-detection-tool]
+  workstation: [AS2-object-detection-module, ROS-client]
+dependencies:
+  inference: deployment/inference/yolo26n_seg.component.yaml
+runtime:
+  build: bash deployment/object_detection/build_tool_overlay.sh
+  start: ros2 run uav_object_detection object_detection
+  namespace: configurable
+  public_interfaces:
+    detect:
+      address: /drone0/tools/object_detection/observe
+      schema: uav_object_detection_interfaces/srv/DetectSnapshot
+      parameter_schema: src/tool/object_detection/interfaces/srv/DetectSnapshot.srv
+  python_entry: drone.object_detection.detect
+  camera_binding: deployment/object_detection/params.example.yaml
+  categories: [person, car, truck, bus]
+  timeout_clock: monotonic-wall-clock
+  partial_result: completed-2D-with-unavailable-3D-is-success-PARTIAL-per-object-position_valid-required
+  sharing: public-observations-legacy-service-and-stream-share-one-adapter-and-inference-worker
+  readiness: RGB and inference for 2D; positioning additionally needs depth, calibration and historical TF
+  stream_default: false
+  estimate_position_default: false
+  optional_position_inputs:
+    when: estimate_position=true
+    capabilities: [sensor/camera/rgb/camera-info, sensor/camera/depth/axial-image, sensor/camera/depth/camera-info]
+    hardware: [sensor/camera/depth]
+    tf: camera-optical-to-output-frame at depth capture time
+    activation: lazy on first 3D or legacy request; consumers retained until process exit
+  stop: tools/object_detection/enable false discards pending generation; SIGINT exits owned Tool
+  rollback: stop, restore code, rebuild overlay, restart caller generation
+resources:
+  reads: [bound-camera-new-RGB-frame, inference/yolo/infer]
+  subscriptions: [RGB]
+  optional_subscriptions: registered-depth and RGB-depth-CameraInfo for positioning
+  optional_processing: mask-depth-measurement and capture-time-TF projection only when estimate_position=true
+  tf: camera-optical-to-output-frame at depth capture time; no state publishing authority
+  writes: [typed-3D-measurements, status, optional-overlay]
+  enforcement: local single-call lock and latest-only stream queue; no global task arbiter
+validation:
+  stage: partial
+  evidence: src/basic_function/inference/models/yolo26n_seg/validation.json
+  public_contract: deployment/object_detection/VALIDATION-tool.md
+  airsim_ground: deployment/object_detection/airsim/README.md
