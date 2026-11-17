@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-17",
+  "scope": "minimal acceptance per the 2026-11-16 user ruling (locked BEFORE the scored runs): one instruction x one full instance, 3 consecutive SPF cycles, no flight collision under EnableCollisions, native Land + disarm convergence; cancel fault injection; overhead tracking view evidence; compute role in the onboard-computer container. NOT the full M0-M8 reproduction matrix; the claim level is partial-verification-passed (minimal end-to-end acceptance), not reproduction-success.",
+  "thresholds_locked_pre_run": {
+    "m5_minimal": "1 instruction x 1 instance, cycles_done >= 3 consecutive, collision events empty during navigation, land+disarm PASS",
+    "m6_minimal": "cancel Trigger -> STOPPED with speed gate within 10 s; stale/vlm-down explicitly out of scope (NOT-EXECUTED)",
+    "m7": "centroid-tracking view enabled per AGENTS; proof = moving centroid series + captured overhead frames, never a static initial camera",
+    "m8": "formal task completes in onboard-computer container (either-environment ruling) + import closure audit",
+    "recorded_only": ["per-step displacement error vs nominal", "net approach ratio", "VLM parse ratio (legacy M1 metric, substitute model D11)"]
+  },
+  "baseline_pre_merge": {
+    "commit_range": "31eb79c (origin/dev) + feat commits aa9bbea",
+    "validated_runs": [
+      {
+        "path": "log/spf/pc-e2e/run-20261116z6/formal1",
+        "success": true,
+        "gates": "readiness/teleport/takeoff/cycles/stop_state/land/disarm/collision all PASS",
+        "cycles_done": 3,
+        "vlm_attempts": 3,
+        "parse_ratio": 1.0,
+        "final_status_reason": "task_complete",
+        "collision_events_during_navigation": 0,
+        "net_approach_ratio_recorded": 0.1575,
+        "overhead_track_entries": 102,
+        "overhead_centroid_travel_xy_m": 30.48,
+        "overhead_frames": 10,
+        "overhead_frame_visual_check": "drone centered in top-down view; cube wall upper-left, orange ball upper-right, consistent with the flight corridor"
+      },
+      {
+        "path": "log/spf/pc-e2e/run-20261116z7/cancel1",
+        "success": true,
+        "final_status_reason": "cancelled",
+        "cycles_done_before_cancel": 1,
+        "stop_handoff": "RUNNING -> STOPPING (speed gate <0.2 m/s) -> STOPPED within 10 s, then native Land + disarm",
+        "collision_events_during_navigation": 0,
+        "overhead_track_entries": 65
+      }
+    ]
+  },
+  "post_merge_revalidation": {
+    "baseline": "merged origin/dev 8d2226e (merge c6da1ad) + relocation/D13 commit 183ff7a; shared uav_planner_interfaces at src/tool/navigation/interfaces; upstream follow_path (yaw continuity 0.15, graceful shutdown); overlay rebuilt from clean cache; unit tests 23/23",
+    "validated_runs": [
+      {
+        "path": "log/spf/pc-e2e/run-20261117e/cancel1",
+        "success": true,
+        "gates": "stop_state/land/disarm/collision PASS; cycles NOT-EXECUTED by design",
+        "final_status": "reason=CANCELED detail=cancelled stop_confirmed=true (D13 shared code vocabulary active on the cancel path)",
+        "collision_events_during_navigation": 0
+      }
+    ],
+    "link_level_findings": [
+      "D13 codes verified on both the cancel path (e: CANCELED) and failure paths (a/c/d: EXECUTION_FAILED + detail=vlm_failures + stop_confirmed=true)",
+      "upstream follow_path executed 5 timed segments across a/c/d with zero continuity rejections and clean TRAJECTORY/POSITION/HOVER transitions",
+      "collision timestamp-comparison gating and the overhead observer (health + track + frames) all worked on the new baseline",
+      "shared interface package (renamed location, same package name) imports and runs unchanged"
+    ],
+    "m5_full_instance_attempts": [
+      {"path": "log/spf/pc-e2e/run-20261117a/formal1", "result": "cycles_done=2, cycle 3 exhausted 6 VLM retries (no_points/bad_json), parse 2/11"},
+      {"path": "log/spf/pc-e2e/run-20261117c/formal1", "result": "cycles_done=2, cycle 3 exhausted 6 VLM retries, parse 2/8"},
+      {"path": "log/spf/pc-e2e/run-20261117d/formal1", "result": "cycles_done=1, cycle 2 exhausted 6 VLM retries, parse 1/7"}
+    ],
+    "m5_full_instance_status": "NOT PASSED on the merged baseline after 3 attempts; aggregate parse ratio 5/26 ~ 0.19 matches the known substitute-model rate (D11, locked as recorded-only metric). Link-level evidence is complete; the gap is the stochastic VLM, not the chain. Further retries are possible follow-up work; the old-baseline z6 full pass remains the only complete M5 instance.",
+    "transient_infrastructure_attempts": [
+      {"path": "log/spf/pc-e2e/run-20261117b/cancel1", "result": "readiness timeout: PX4 simulator_mavlink poll timeout + clock bridge timeout despite healthy Blocks RPC; transient startup race, not a merge regression"}
+    ]
+  },
+  "attempt_history_not_hidden": [
+    "run-20261116x/smoke1: navigation task_complete but scored FAIL by two defects (collision queried after Land = touchdown stickiness; final STOPPED status zeroed cycles_done). Both fixed; defect evidence retained.",
+    "run-20261116y/smoke2: first PASS after gate fixes; collision NOT-EXECUTED (sticky baseline). formal1/cancel1 in the same Blocks session failed to arm (PX4 GPS-drift preflight denial for minutes) -> one-mission-per-session rule established.",
+    "run-20261116z/z3: observer RPC surface mismatches (this Blocks build lacks simGetCameraPose and resetLastCollision; ImageResponse key is image_data_uint8). Fixed in place.",
+    "run-20261116z4/formal1: cycle 1 done, stopped by vlm_failures (substitute model empty/limited responses, D11). Retry backoff 5 s and 6 consecutive-failure budget added; parse ratio demoted to recorded metric per the pre-locked minimal scope.",
+    "run-20261116z5/formal1: cycles PASS 3/3 but REAL collision Ground_2 at z=0.36 during descent toward the ground-level ball -> D12 altitude floor (min_altitude_m 1.2) added; the collision detector (timestamp comparison) worked as designed.",
+    "2026-11-17 sessions a/b/c/d/e: see post_merge_revalidation (3 M5 attempts failed on VLM instability, cancel passed, one transient mavlink race)."
+  ],
+  "m3_m4_status": "substantiated by z6 (pre-merge) and by 5 executed segments on the merged baseline: real AirSim sensor bridge image/camera_info drove VLM decisions, FollowTimedPath accepted revisions, Motion Reference published only by the extended FollowPath Behavior. Recorded as substantiated-by-runs, not independently gated.",
+  "m8": {
+    "compute_role_image": "ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1 (ID in run-20261116z6/images.json)",
+    "import_closure_audit": "log/spf/pc-e2e/import-audit-20261116.txt",
+    "finding": "uav_spf_planner code is stdlib+rclpy only; numpy enters solely via the sensor_msgs.CameraInfo Python binding (environment-provided in the container). RoboPi board route (alternative) would need a numpy-free intrinsics channel - recorded gap, does not affect the either-environment ruling."
+  },
+  "not_executed_honest_gaps": [
+    "full matrix: 3 instructions x 3 instances with per-step error statistics",
+    "stale (sensor-pause) and vlm-down (proxy-stop) fault injections",
+    "RoboPi board deployment (alternative route per 2026-11-16 ruling)",
+    "real-hardware acceptance",
+    "test_ros_planner.py standalone DDS lifecycle test (superseded in practice by live smoke/formal missions; file not created)",
+    "M5 3-cycle full instance on the merged baseline (3 attempts blocked by substitute-model instability; retries remain open)"
+  ],
+  "deviations_exercised": ["D4 1280x720 camera", "D5 step config (base_velocity 1.0 -> 2 m steps)", "D11 glm-4v-flash substitute model", "D12 min_altitude_m 1.2", "D13 shared navigation interface alignment (shared interfaces package + NavigateToPose result vocabulary in spf/status; no pose entry fabricated for language goals)", "VLM retry backoff 5 s / 6 consecutive failures (D11 robustness config)"],
+  "claim_level": "partial-verification-passed (minimal end-to-end acceptance, pre-merge baseline z6/z7) + merged-baseline link-level revalidation passed including cancel convergence; the 3-cycle full instance is not yet re-passed on the merged baseline (gap recorded, not hidden). Not reproduction-success; not comparable to paper numbers (D11)."
+}
