@@ -47,6 +47,14 @@ M8=算力角色 onboard-computer 容器完成 + import 闭包审计
 详见 [validation.json](validation.json)。**不声明"复现成功"**（全矩阵
 3 指令×3 实例、逐步误差统计、stale/vlm-down 注入、板端部署未执行）。
 
+**合并 dev 后复验（2026-11-17，基线 8d2226e+183ff7a，共享接口/D13/上游
+follow_path）**：链路级复验全部通过——5 个时间化段执行无连续性拒绝、
+D13 共享码表生效（cancel 路径 CANCELED、失败路径 EXECUTION_FAILED+detail+
+stop_confirmed）、碰撞门控与观察视图正常、cancel1 完整通过
+（`run-20261117e/cancel1`）；**M5 三循环完整实例在新基线未通过**
+（3 次尝试分别止于循环 2/3，均为替代模型连续失败，聚合 parse 5/26≈0.19
+与 D11 已知水平一致；缺口如实记录于 validation.json，重跑留作后续）。
+
 已知运行约束（证据与修复链见 validation.json attempt_history）：
 同一 Blocks 会话仅第一个 mission 可靠 arm（teleport 后 PX4 GPS drift
 preflight 拒锁数分钟）——每个用例独立 start→mission→stop；
