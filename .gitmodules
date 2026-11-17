@@ -38,3 +38,6 @@
 [submodule "src/state_estimator/dpv_slam/upstream"]
 	path = src/state_estimator/dpv_slam/upstream
 	url = https://github.com/princeton-vl/DPVO.git
+[submodule "src/planner/spf/upstream"]
+	path = src/planner/spf/upstream
+	url = https://github.com/Hu-chih-yao/see-point-fly
