@@ -128,6 +128,8 @@ def _start_projectairsim(profile: dict, run_dir: Path, timeout: float, attach: b
             ports.append(profile["display"]["port"])
         _ports_free(ports)
         command = [str(binary), *profile["args"],
+                   "-DefaultViewportMouseCaptureMode=NoCapture",
+                   "-ini:Input:[/Script/Engine.InputSettings]:DefaultViewportMouseLockMode=DoNotLock,bCaptureMouseOnLaunch=False",
                    f"-topicsport={profile['ports']['topics']}",
                    f"-servicesport={profile['ports']['services']}"]
         log_path = run_dir / "projectairsim.log"

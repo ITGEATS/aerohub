@@ -9,6 +9,16 @@ class IHttpRouter;
 class USceneCaptureComponent2D;
 class ACameraActor;
 
+// View-target bridge only: no copied transform, capture or sensor of its own.
+UCLASS()
+class AEROHUBDISPLAY_API AAerohubSensorView : public AActor
+{
+    GENERATED_BODY()
+public:
+    TWeakObjectPtr<USceneCaptureComponent2D> Source;
+    virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
+};
+
 UCLASS()
 class AEROHUBDISPLAY_API AAerohubHUD : public AHUD
 {
@@ -45,6 +55,7 @@ private:
     bool bGlobalFollowAvailable = false;
     FString ImageType;
     UPROPERTY() ACameraActor* ObservationCamera = nullptr;
+    UPROPERTY() AAerohubSensorView* SensorView = nullptr;
     UPROPERTY() UFont* TextFont = nullptr;
     UPROPERTY() UFont* TitleFont = nullptr;
     void NextView();

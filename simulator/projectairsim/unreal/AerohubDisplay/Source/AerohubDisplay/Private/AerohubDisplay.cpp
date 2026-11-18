@@ -3,6 +3,19 @@
 #include "Engine/Canvas.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Engine/GameViewportClient.h"
+
+void AAerohubSensorView::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
+{
+    if (auto* Capture = Source.Get(); IsValid(Capture) && Capture->IsRegistered()) {
+        Capture->GetCameraView(DeltaTime, OutResult);
+        OutResult.PostProcessSettings = Capture->PostProcessSettings;
+        OutResult.PostProcessBlendWeight = Capture->PostProcessBlendWeight;
+        OutResult.bConstrainAspectRatio = false;
+        return;
+    }
+    Super::CalcCamera(DeltaTime, OutResult);
+}
 #include "Camera/PlayerCameraManager.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/PlayerInput.h"
@@ -85,7 +98,17 @@ void AAerohubHUD::BeginPlay()
     TitleFont = MakeFont(TEXT("NotoSansCJK-Bold.ttc"));
     ReadConfig();
     ObservationCamera = GetWorld()->SpawnActor<ACameraActor>();
+    SensorView = GetWorld()->SpawnActor<AAerohubSensorView>();
     if (APlayerController* PC = GetWorld()->GetFirstPlayerController()) {
+        FInputModeGameAndUI InputMode;
+        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        InputMode.SetHideCursorDuringCapture(false);
+        PC->SetInputMode(InputMode);
+        PC->bShowMouseCursor = true;
+        if (auto* Viewport = GetWorld()->GetGameViewport()) {
+            Viewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
+            Viewport->SetMouseLockMode(EMouseLockMode::DoNotLock);
+        }
         EnableInput(PC);
         InputComponent->Priority = 100;
         auto& Tab = InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AAerohubHUD::NextView);
@@ -264,6 +287,7 @@ void AAerohubHUD::EndPlay(const EEndPlayReason::Type Reason)
     if (Router.IsValid()) for (const auto& Route : Routes) if (Route.IsValid()) Router->UnbindRoute(Route);
     Routes.Empty(); Router.Reset();
     if (ObservationCamera) ObservationCamera->Destroy();
+    if (SensorView) SensorView->Destroy();
     Super::EndPlay(Reason);
 }
 
@@ -584,12 +608,10 @@ void AAerohubHUD::UpdateView()
             Selected = Camera.Get();
         }
         if (!IsValid(Selected) || !Selected->IsRegistered()) return;
-        FMinimalViewInfo Info;
-        Selected->GetCameraView(0,Info);
-        ObservationCamera->SetActorLocationAndRotation(Info.Location,Info.Rotation);
-        Lens->FieldOfView = Info.FOV;
-        Lens->PostProcessSettings = Selected->PostProcessSettings;
-        Lens->PostProcessBlendWeight = Selected->PostProcessBlendWeight;
+        if (!SensorView) return;
+        SensorView->Source = Selected;
+        if (PC->GetViewTarget() != SensorView) PC->SetViewTarget(SensorView);
+        return;
     }
     Lens->bConstrainAspectRatio = false;
     if (PC->GetViewTarget() != ObservationCamera) PC->SetViewTarget(ObservationCamera);

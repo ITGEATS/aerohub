@@ -77,3 +77,51 @@ SetPlayRate，让原路径与动画同步，避免远程逐帧RPC或重烘焙地
 `SetView` 的返回值为布尔确认；随后用 `GetDisplayState` 检查 camera、global、
 view_available。RPC 状态不等于实际键盘与画面验证：在目标游戏窗口验证
 Tab/G/Tab，并保存画面。WestStreet 2026-11-17 已验证此观察路径，无新增传感器采集。
+
+第一视角应通过 ViewTarget 的 CalcCamera 读取所选原生采集组件的视角，
+避免在HUD Tick中复制其姿态到另一相机：HUD与原生SpringArm稳定可能处于
+不同Tick阶段。2026-11-18该直读路径已通过定向BuildPlugin；抖动改善仍需
+实际窗口动态对照，不以构建或RPC确认代替。Global继续使用独立观察相机。
+
+## 独立路线资产与Save As（UE5.2）
+
+窗口观察默认允许鼠标出窗。InputSettings属于Input配置而非Engine配置；
+仅显示光标不解除锁定。HUD可使用GameAndUI/DoNotLock并显式设置Viewport
+NoCapture，释放已有捕获且保留键盘输入。2026-11-18实际窗口点击后出窗及
+Tab/G/Tab验证通过；验收须测指针位置越过客户区，不能只检查光标可见。
+
+修改已有场景路线时，先保存原地图与sequence哈希，生成独立资产并拒绝
+覆盖。新旧路线交接应沿原路线切线，使用全部地面和胶囊检查验证几何，
+碰撞失败时修正路径，不直接略过检查。
+
+首次save_map用于Save As；重载新地图后重新获取新world/actors再绑定，
+最终使用save_packages([world.get_outermost()],False)明确保存该新package。
+重复save_map或依赖当前子关卡的save_current_level可能失败；checkout
+提示既不证明成功也不证明文件未写入，须实际磁盘重载并核查引用与override。
+完成后重算原资产哈希，确认未变。
+
+动画累计相位使用FirstLoopStartFrameOffset；StartFrameOffset是裁剪偏移，
+UE5.2需按sequence tick resolution换算。逐帧section方案可保持距离相位，
+但创建成功不代表动画接缝、脚滑及运行性能通过，须独立检查。
+
+最后实测人物转弯半径和速度，并分别报告人物通行与无人机净空。
+人物胶囊无碰撞不能替代无人机飞行碰撞验收；延后失跟若已发生碰撞，
+先保留接触对象/时间与失效顺序，不能只放宽跟踪窗口归因。
+
+替换新地图LevelSequenceActor的sequence时，SetSequence不清除旧override；
+仅SetBinding也可能留下其他ID条目。新资产生成器先显式ResetBindings，
+再设置新binding；重载验证逐项核对当前GUID、sequence ID、对象和
+bOverridesDefault。列表里“包含runner”不能证明当前轨道唯一绑定；
+已有验证若未记录这些字段，应保留缺口而非事后解释为无害的旧绑定。
+
+路线平移实验应保留初始位置：任务若按首次观测计算固定世界跟随偏移，
+整条路线连同起点平移可能被初始偏移抵消。采用独立资产、渐入/渐出
+横移并保持转弯半径和速度，分别核对人物路线、执行参考和实际轨迹。
+WestStreet右移2m实飞仍撞同一路灯；人物路线变化不证明UAV净空改善，
+各轮首次接触位置之差也不等于同一时刻的轨迹横向位移。
+
+局部温和弯道实验可为profile传逐点速度上限，仅限制指定圆弧，再统一
+前后向传播加减速约束；不要用全局turn速度误改所有弯道。独立UE地面/
+胶囊检查与实际actor弧段速度都通过后仍需飞行：WestStreet第二弯10m/
+2m/s真实生效，但出弯后固定偏移导致迎面接近，约57.7秒仍失跟。
+弯道平滑不等于跟随几何正确，不能只因失效延后宣称解决。

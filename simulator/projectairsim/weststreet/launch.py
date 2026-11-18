@@ -37,6 +37,7 @@ def main():
  scene_config.write_text(json.dumps({'port':a.scene_port}))
  env['AEROHUB_SCENE_CONTROL_CONFIG']=str(scene_config)
  cmd=[str(engine/'Binaries/Linux/UnrealEditor'),str(a.project.resolve()),'/Game/Aerohub/WestStreetCircuit','-game','-windowed','-ResX=1280','-ResY=720','-nosound','-noraytracing',f'-topicsport={a.topic_port}',f'-servicesport={a.service_port}',f'-abslog={a.output.resolve()/"game.log"}']
+ cmd += ['-DefaultViewportMouseCaptureMode=NoCapture', '-ini:Input:[/Script/Engine.InputSettings]:DefaultViewportMouseLockMode=DoNotLock,bCaptureMouseOnLaunch=False']
  (a.output/'launch-command.json').write_text(json.dumps(cmd,indent=2))
  game=observer=None
  try:
