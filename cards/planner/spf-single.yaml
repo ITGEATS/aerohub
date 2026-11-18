@@ -3,7 +3,7 @@ id: planner.spf-single
 version: "0.2.0"
 type: tool
 name: SPF language-navigation single-vehicle tool
-description: Accepts a natural-language goal and executes closed-loop See-Point-Fly navigation (FPV image -> cloud VLM point + semantic depth -> pinhole back-projection -> rotate/forward timed segments) through the existing FollowTimedPath execution chain.
+description: Accepts a natural-language goal and executes single-vehicle closed-loop See-Point-Fly navigation through FPV image interpretation, semantic-depth back-projection and FollowTimedPath rotate/forward segments; the workstation VLM proxy consumes images while the compute role exchanges request/result JSON.
 
 implementation:
   component_id: aerohub.planner.spf-single
@@ -18,15 +18,12 @@ inputs:
     capability_type: sensor/camera/rgb/camera-info
   - id: fpv_image
     capability_type: sensor/camera/rgb/image
-    note: consumed by the workstation-side VLM proxy; the compute role exchanges request/result JSON only
-  - id: sim_clock
-    capability_type: state/sim/clock
 
 outputs:
   - id: task_status
-    capability_type: task/spf/status
+    capability_type: diagnostics/health/text
   - id: planning_events
-    capability_type: task/spf/events
+    capability_type: diagnostics/health/text
 
 interfaces:
   - id: navigate_by_language
@@ -35,7 +32,6 @@ interfaces:
     protocol: ros2_topic
     schema: std_msgs/msg/String
     parameter_schema: null
-    note: goal JSON {instruction, max_cycles, max_duration_s}; status stream carries the shared NavigateToPose result vocabulary (SUCCEEDED/CANCELED/TIMEOUT/NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED), detail sub-reason and stop_confirmed (deviation D13). No NavigateToPose ActionServer: a language goal cannot be expressed as a pose.
   - id: cancel_task
     role: lifecycle_operation
     interaction: request_response
@@ -52,15 +48,14 @@ interfaces:
 lifecycle:
   management: agent_managed
   operations:
-    start: publish goal JSON to spf/goal
-    status: spf/status snapshot (state, task_id, revision, cycles_done, vlm_attempts, ready)
-    stop: Trigger spf/cancel -> stop request -> speed<0.2 m/s held 1 s -> STOPPED; 10 s gate timeout -> FAULT/STOP_UNCONFIRMED recovered only by native Land
+    start: navigate_by_language
+    status: null
+    stop: cancel_task
 
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
   - hardware_type: sensor/camera/rgb
   - hardware_type: flight-controller/px4
-  - hardware_type: network/cloud-api
 
 resource_access:
   reads:
@@ -70,22 +65,3 @@ resource_access:
   shared_writes: []
   exclusive_writes:
     - vehicle/motion
-
-type_specific:
-  depth: VLM semantic level 1-10 mapped to metres (depth/10*2, default 4) exactly as upstream (D9); no LiDAR ranging
-  step: upstream min_command_duration 2.0 s retained (D5); demo runs base_velocity 1.0 -> 2 m steps for the Blocks corridor
-  altitude_floor: min_altitude_m 1.2 clamps commanded t>0 points (D12); upstream-faithful branches keep the unbounded mapping
-  synchronization: single vehicle; multi-vehicle spillover declared in src/tool/navigation/planner/spf/README.md but not implemented
-
-validation:
-  stage: pc-sim-e2e-minimal
-  evidence:
-    - deployment/airsim/demos/spf_language_nav/validation.json
-    - log/spf/pc-e2e/run-20261116z6/formal1
-    - log/spf/pc-e2e/run-20261116z7/cancel1
-  limitations:
-    - minimal-acceptance-scope-per-2026-11-16-ruling
-    - substitute-VLM-D11-not-comparable-to-paper-numbers
-    - single-vehicle-only
-    - not-RoboPi-or-real-flight-acceptance
-    - evidence-paths-are-developer-local

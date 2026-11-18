@@ -1,6 +1,6 @@
 schema_version: "0.1"
 id: aerohub.tool.falcon
-version: "0.1.0"
+version: "0.2.0"
 source:
   upstream: src/tool/navigation/planner/falcon/upstream
   upstream_baseline: 312eb4d32c6c7af1a482f94a0a204aa2bb150cca
@@ -27,8 +27,10 @@ roles:
     - ROS-task-and-acceptance-client
 runtime:
   platform: linux-x86_64
-  build_image: onboard_computer:v0.1.0
-  execution_image: onboard_computer:v0.1.0
+  compute_build_base: onboard_computer:v0.1.1
+  workstation_build_base: osrf/ros:humble-desktop-full-jammy
+  compute_image: aerohub/falcon:ros2-humble
+  workstation_image: aerohub/falcon-workstation:ros2-humble
   flight_image: flight_board:v0.1.0
   dependencies:
     - ROS-2-Humble
@@ -43,8 +45,8 @@ runtime:
   build: bash deployment/falcon/build.sh
   check: bash deployment/falcon/check.sh
   launch: python3 deployment/falcon/run.py
-  overlay: log/falcon/install
-  workstation_overlay: log/falcon/workstation/install
+  install_prefix: /opt/falcon_ws/install
+  runtime_policy: self-contained-images-with-only-generated-config-and-evidence-mounts
   clock: ROS-clock-from-AirSim
   namespace: drone0
   readiness: fresh-timestamp-paired-depth-and-odometry-map-frontier-and-FollowTimedPath-ready
@@ -71,11 +73,21 @@ resources:
     - duplicate-FALCON-runtime
 validation:
   stage: reproduced
-  scope: visible-AirSim-image-embedded-PX4-SITL-real-depth-and-odometry-FALCON-exploration-FollowTimedPath-motion-normal-and-required-fault-cases
+  scope: Native ROS 2 Humble self-contained compute and workstation images passed the visible AirSim + image-embedded PX4 SITL normal, depth-loss and planner-exit matrix without host source or build/install mounts.
+  image: sha256:57d923b4315f0d41165181b28a9977ebe61b2662d280abcd518e07a96d690e3e
+  workstation_image: sha256:3eb4ad8667859b06b78eedf9e0c50710ae316b886b89a4e5cdd73770a3604f00
+  flight_image: sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843
+  source_digest: 3e9e67ed9b8676aff3a76d7c34745beed26be75acb024f38218048a6280edd6f
   evidence:
-    - log/falcon/e2e-normal-20261116-display1-r34/result.json
-    - log/falcon/e2e-depth-loss-20261116-display1-r1/result.json
-    - log/falcon/e2e-planner-exit-20261116-display1-r4/result.json
+    - log/falcon/self-contained-final-normal-r1/result.json
+    - log/falcon/self-contained-final-normal-r1/runtime-mounts.json
+    - log/falcon/self-contained-final-normal-r1/cleanup.json
+    - log/falcon/self-contained-final-depth-loss-r1/result.json
+    - log/falcon/self-contained-final-depth-loss-r1/runtime-mounts.json
+    - log/falcon/self-contained-final-depth-loss-r1/cleanup.json
+    - log/falcon/self-contained-final-planner-exit-r1/result.json
+    - log/falcon/self-contained-final-planner-exit-r1/runtime-mounts.json
+    - log/falcon/self-contained-final-planner-exit-r1/cleanup.json
   required_cases:
     - normal-complete-exploration
     - depth-stream-loss

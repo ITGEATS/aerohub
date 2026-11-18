@@ -70,7 +70,7 @@ def prepare(source: Path, output: Path) -> dict:
         hashes[relative] = hashlib.sha256(data).hexdigest()
     (package / "CMakeLists.txt").write_text(CMAKE)
     (package / "package.xml").write_text(PACKAGE)
-    manifest = {"source": str(source.resolve()), "interfaces": hashes}
+    manifest = {"source": "locked-onboard-as2-msg-definitions", "interfaces": hashes}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 

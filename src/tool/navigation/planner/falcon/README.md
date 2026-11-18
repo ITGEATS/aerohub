@@ -65,9 +65,14 @@ Build, launch and validation commands are maintained in
 
 ## Validation status
 
-The locked Fork passed the declared PC-simulation matrix with visible AirSim,
-the PX4 SITL embedded in `flight_board:v0.1.0`, the compute chain in
-`onboard_computer:v0.1.0`, real AirSim depth/odometry, FALCON map growth and
-FollowTimedPath motion. Normal exploration, depth-stream loss and planner exit
-all reached confirmed stop, native landing and disarm. RoboPi, real flight and
-resolution of the upstream license are outside the accepted scope.
+FALCON is reproduced on PC with native ROS 2 Humble and self-contained compute
+and workstation images. The visible AirSim + image-embedded PX4 SITL matrix
+passed normal exploration, depth-stream loss and planner-exit cases on one
+locked image pair and source digest. The runtime mount evidence shows no host
+repository, source workspace or build/install overlay; every case confirmed
+execution stop, landing, disarm and owned-resource cleanup.
+
+The accepted evidence is indexed by `deployment/falcon/component.yaml` and
+summarized in `deployment/falcon/README.md`. The older host-overlay runs are
+historical evidence only. Physical-board deployment, real flight and
+resolution of the upstream license remain outside the PC acceptance scope.
