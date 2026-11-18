@@ -457,8 +457,14 @@ class CityNavPlannerNode(Node):
             return
         self._step_size += timed["steps"]
         self._hist_step_size.append(timed["steps"])
+        # walk/waypoints are published for acceptance evidence (decision-6
+        # reuse round): the node sequence the LM-Nav route walked and the
+        # positions it will execute.
         self._publish_event("exploit_executed", nodes=len(waypoints),
-                            steps=timed["steps"])
+                            steps=timed["steps"],
+                            walk=[int(a[0]) for a in route["walk"]],
+                            waypoints=[[round(float(v), 3) for v in w]
+                                       for w in waypoints])
         if self._send_path(timed) is None:
             return
         self._save_memory()

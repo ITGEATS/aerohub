@@ -91,14 +91,37 @@ stop_state、final_reason=task_complete、land、disarm、collision（0 事件�
 28 俯视帧。记录项：NE 33.6→11.8 m（ratio 0.65，无门槛）、144.6 s。
 详见 [validation.json](validation.json)（含 11 次尝试全链与 5 个真 bug
 修复记录）。**口径为部分验证通过（最小端到端验收），不声明"复现成功"**：
-跨任务记忆 exploit 复用、cancel 注入、全矩阵、板端部署未执行；
-AirVLN 基准范围外（路线 B 裁决）。
+跨任务记忆 exploit 复用（见下 BLOCKED 归因）、全矩阵、板端部署未通过/
+未执行；AirVLN 基准范围外（路线 B 裁决）。
 
 起点偏离（Demo 层适配，门槛未动）：默认 spawn 由任务书建议 (-10,-10)
 改为 **(10,10,yaw45)**——(-10,-10) 距橙球 62 m 超契约 `0<d<50 m` 深度门，
 球像素全被滤除，grounding 误分割 50 m 内墙体 → waypoint 系统性穿墙 →
 真实撞墙（`run-20261118f` collision FAIL 实证）；(10,10) 球 33.5 m 深度
 有效。指令与目标真值不变。
+
+**cancel1 通过（M6 取消收口，2026-11-18，`run-20261118n/cancel1`）**：
+事件驱动注入（首个 FollowTimedPath goal 发出后 20 s，`fault-injection.json`
+带 `seconds_after_first_goal_sent`/`revision_at_injection` 证据）→ planner
+STOPPING → stop 服务 → 速度 <0.2 m/s 持续 1 s → STOPPED
+reason=CANCELED detail=cancelled stop_confirmed=true，**未触发 10 s
+FAULT 分支**；behavior 侧 goal 终态 ABORTED(6) 于 `_action/status`；
+land/disarm/无碰撞全 PASS。前置适配：mission 起飞后悬停稳定门（8 s 滑窗
+0.15 m，起飞 z 极限环 ±0.4 m 教训 h/j/l/m）；behavior 拒绝日志补数值诊断
+（`src/behavior/follow_path`，重建 overlay，属诊断改进非门槛放宽）。
+
+**exploit1 阻塞（决策 6 跨任务记忆复用，2026-11-18，见 validation.json
+exploit1 节）**：链条已实证部分——memory_loaded(nodes=2, run g 图注入) →
+find_closest_node 命中既往 node0（until=floor 修复生效）→ CLIP CPU 服务
+真实评分 2.9 s → LM-Nav find_optimal_route 执行 → 退化 walk 收口干净
+（`run-20261118o`）。阻塞层：①感知模型——CLIP 对既有两节点分数差 0.003
+且方向反（node0 0.1965 > node1 0.1935，`log/citynav/pc-e2e/clip_diag.py`）
+→ argmax=start → walk 无执行段；②飞控——起飞后 z 极限环使所有"先飞出去
+建新节点"的扩展任务首个 goal 被连续性门拒绝（q/s/u 三轮，诊断数值
+actual z=1.064 vs front z=1.463）或触地（q/s）；③仿真器——Blocks 启动期
+死亡频率上升（i/r/t）+ 63 m teleport EKF 不收敛（p×2）。按批准预案投入
+6 个 Blocks 会话走"先扩节点再复用"路径未突破；**门槛未放宽，本轮记
+BLOCKED 而非通过**。
 
 ## 已知限制
 

@@ -217,7 +217,9 @@ def pick_domain(output):
             for entry in container['Config']['Env']:
                 if entry.startswith('ROS_DOMAIN_ID='):
                     used.add(int(entry.split('=', 1)[1]))
-    available = [v for v in range(180, 200) if v not in used]
+    available = [v for v in range(180, 233) if v not in used]
+    # 180-199 (the SPF-era window) exhausted after ~20 citynav runs; Fast DDS
+    # accepts domain ids up to 232 (RTPS port arithmetic stays in range).
     if not available:
         raise RuntimeError('no unused DDS domain')
     (output / 'domain.json').write_text(json.dumps({'domain': available[0]}) + '\n')

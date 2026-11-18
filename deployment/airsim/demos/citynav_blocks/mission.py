@@ -21,6 +21,7 @@ Reserved switches for later rounds (not part of formal1):
 --use-memory toggles the goal payload memory flag (exploit reuse round).
 """
 import argparse
+import collections
 import json
 import math
 from pathlib import Path
@@ -58,6 +59,8 @@ class Mission(Node):
         # keys), so the finish reason must be latched from the status that
         # first carried it.
         self.terminal_detail = None
+        self.terminal_stop_confirmed = None
+        self._settle_win = collections.deque()  # (monotonic, x, y, z)
         # The clock bridge publishes best-effort; a reliable subscription is
         # rejected by DDS (SPF phase-2 note), so match best-effort here.
         self.create_subscription(Clock, '/clock', lambda m: setattr(
@@ -97,6 +100,7 @@ class Mission(Node):
                 ('detail' in self.status or 'reason' in self.status):
             self.terminal_detail = self.status.get('detail',
                                                    self.status.get('reason'))
+            self.terminal_stop_confirmed = self.status.get('stop_confirmed')
 
     def _on_event(self, msg):
         try:
@@ -147,6 +151,28 @@ class Mission(Node):
         if stamp is None:
             return False
         return abs(now - stamp) <= limit
+
+    def _settled(self):
+        """Pose must hold inside a 0.15 m range over a sliding 8 s window.
+        Run-20261118h/j showed a post-takeoff z limit cycle of +-0.3 m for
+        ~15-50 s (warm services make the planner decide inside it, and the
+        Behavior rejects a first point >0.15 m from the vehicle position);
+        a 3 s endpoint check could pass by luck mid-oscillation, so the gate
+        compares window max-min per axis instead."""
+        if not self.pose:
+            return False
+        p = self.pose.pose.position
+        now = time.monotonic()
+        self._settle_win.append((now, p.x, p.y, p.z))
+        while self._settle_win and now - self._settle_win[0][0] > 8.0:
+            self._settle_win.popleft()
+        if len(self._settle_win) < 40 or now - self._settle_win[0][0] < 7.5:
+            return False
+        for axis in (1, 2, 3):
+            vals = [w[axis] for w in self._settle_win]
+            if max(vals) - min(vals) >= 0.15:
+                return False
+        return True
 
 
 def main():
@@ -240,6 +266,17 @@ def main():
             raise RuntimeError('native Takeoff failed (status=%d)' % handle.status)
         result['gates']['takeoff'] = 'PASS'
 
+        # Hover-stability gate before publishing the goal (run-20261118h:
+        # with a warm grounding service the planner's first FollowTimedPath
+        # goal landed ~17 s after takeoff, inside the post-takeoff settle;
+        # the Behavior rejected it because the path's first point (decision
+        # pose) was >0.25 m from the actual position at valid_from). The
+        # mission waits until the pose holds still, so segment-1 continuity
+        # holds regardless of how fast the compute role decides.
+        mission.spin_until(lambda: mission._settled(), 90,
+                           'drone did not settle after takeoff')
+        result['gates']['hover_settle'] = 'PASS'
+
         # Collision baseline AFTER takeoff: the flag is sticky for the whole
         # Blocks session and spawn/teleport residue sets it early; new flight
         # contacts are detected by the time_stamp changing (this build lacks
@@ -259,22 +296,46 @@ def main():
             'instruction': args.instruction, 'max_steps': args.max_steps,
             'use_memory': bool(args.use_memory)}))
         mission.goal_pub.publish(goal_msg)
+        # Wait for the planner to enter RUNNING before monitoring: when a
+        # second mission reuses the same session, the planner heartbeat still
+        # publishes the PREVIOUS task's STOPPED for up to 0.5 s, which would
+        # break the loop instantly and mis-score the new task
+        # (run-20261118q/expand-building2).
+        mission.spin_until(lambda: (mission.status or {}).get('state') == 'RUNNING',
+                           20, 'planner never entered RUNNING (busy/rejected?)')
         goal_wall = time.time()
 
         cancelled = False
+        first_goal_wall = None
         deadline = goal_wall + args.timeout
         last_sample = 0.0
         while time.time() < deadline:
             rclpy.spin_once(mission, timeout_sec=0.1)
-            if args.cancel_after > 0 and not cancelled \
-                    and time.time() - goal_wall >= args.cancel_after:
-                cancelled = True
-                if not mission.cancel_cli.wait_for_service(10):
-                    raise TimeoutError('citynav/cancel unavailable')
-                mission.cancel_cli.call_async(Trigger.Request())
-                (args.output / 'fault-injection.json').write_text(json.dumps(
-                    {'fault': 'cancel', 'wall': time.time(),
-                     'seconds_after_goal': args.cancel_after}, indent=2) + '\n')
+            if args.cancel_after > 0 and not cancelled:
+                # Event-driven injection (run-20261118k: with a single
+                # landmark the LLM can answer is_found=true and the task
+                # finishes ~8 s after the goal before any timed path is
+                # sent, so a wall-clock-after-goal cancel would fire on an
+                # idle planner). revision>=1 means the planner just sent
+                # its first FollowTimedPath goal; cancel_after counts from
+                # that instant, so the handoff always interrupts an
+                # executing trajectory (>=2 segments by then: yaw 0.5 s +
+                # 5 m steps at 1 m/s).
+                if int((mission.status or {}).get('revision', 0) or 0) >= 1:
+                    if first_goal_wall is None:
+                        first_goal_wall = time.time()
+                    elif time.time() - first_goal_wall >= args.cancel_after:
+                        cancelled = True
+                        if not mission.cancel_cli.wait_for_service(10):
+                            raise TimeoutError('citynav/cancel unavailable')
+                        mission.cancel_cli.call_async(Trigger.Request())
+                        (args.output / 'fault-injection.json').write_text(json.dumps(
+                            {'fault': 'cancel', 'wall': time.time(),
+                             'seconds_after_first_goal_sent': round(
+                                 time.time() - first_goal_wall, 1),
+                             'revision_at_injection': int(
+                                 (mission.status or {}).get('revision', 0))},
+                            indent=2) + '\n')
             if mission.pose and time.time() - last_sample > 1.0:
                 last_sample = time.time()
                 p = mission.pose.pose.position
@@ -311,9 +372,12 @@ def main():
 
         # Waypoint-segment accounting (pre-locked interpretation, README):
         # revision == number of FollowTimedPath goals the planner sent; the
-        # first `revision` cycle events are the executed ones (the planner
-        # blocks until each goal result before the next cycle).
-        cycles = [e for e in mission.events if e.get('event') == 'cycle']
+        # first `revision` segment events are the executed ones (the planner
+        # blocks until each goal result before the next cycle). Exploit
+        # goals publish `exploit_executed` instead of `cycle` (decision-6
+        # reuse round), so both event kinds count as executed segments.
+        cycles = [e for e in mission.events
+                  if e.get('event') in ('cycle', 'exploit_executed')]
         revision = int(status.get('revision', 0) or 0)
         executed = cycles[:revision] if revision else []
         steps_executed = sum(int(c.get('steps', 0)) for c in executed)
@@ -348,12 +412,25 @@ def main():
             result['gates']['revision_match'] = (
                 'PASS' if revision >= 1 and succeeded_goals >= revision
                 else 'FAIL')
-        result['gates']['stop_state'] = ('PASS' if status.get('state') in
-                                         ('STOPPED', 'FAULT') else 'FAIL')
+        if args.cancel_after > 0:
+            # M6 gate (locked): the cancel handoff must converge through the
+            # speed-gated STOPPED path with detail=cancelled; reaching FAULT
+            # (the 10 s stop-gate timeout) is a FAIL, not a pass.
+            result['gates']['stop_state'] = (
+                'PASS' if status.get('state') == 'STOPPED'
+                and mission.terminal_detail == 'cancelled'
+                and mission.terminal_stop_confirmed is True else 'FAIL')
+        else:
+            result['gates']['stop_state'] = ('PASS' if status.get('state') in
+                                             ('STOPPED', 'FAULT') else 'FAIL')
         result['gates']['final_reason'] = (
             'NOT-EXECUTED' if args.cancel_after > 0 else
             ('PASS' if mission.terminal_detail == 'task_complete' else 'FAIL'))
         result['terminal_detail'] = mission.terminal_detail
+        # Decision-6 exploit evidence summary (events stream is the primary
+        # record; these are the load/hit/walk markers the reuse round needs).
+        result['exploit'] = [e for e in mission.events if e.get('event') in
+                             ('memory_loaded', 'exploit_hit', 'exploit_executed')]
 
         stage = 'land'
         land_goal = Land.Goal()

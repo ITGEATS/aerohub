@@ -1,12 +1,50 @@
 {
   "date": "2026-11-18",
-  "scope": "formal1 minimal acceptance (locked BEFORE the runs, per migration plan phase 6 + user task ruling): 1 instruction x 1 full instance on standard AirSim Blocks + PX4 SITL; planner produces and FollowTimedPath accepts >=3 waypoint segments; no collision during navigation under EnableCollisions (timestamp-comparison detector); land->disarm clean; centroid-tracking overhead view evidence. Per-step displacement and NE are recorded only, no threshold. NOT the full matrix: cross-task memory exploit reuse and cancel injection are explicitly out of this round (switches reserved). Route-B ruling: no AirVLN benchmark; paper SR/OSR/NE/SPL not claimable.",
+  "scope": "formal1 minimal acceptance (locked BEFORE the runs, per migration plan phase 6 + user task ruling): 1 instruction x 1 full instance on standard AirSim Blocks + PX4 SITL; planner produces and FollowTimedPath accepts >=3 waypoint segments; no collision during navigation under EnableCollisions (timestamp-comparison detector); land->disarm clean; centroid-tracking overhead view evidence. Per-step displacement and NE are recorded only, no threshold. Round 2 (user ruling 2026-11-18): cancel1 (M6 cancel handoff, gate locked: cancel during >=2 executed segments -> speed<0.2 m/s 1 s -> STOPPED cancelled without hitting the 10 s FAULT; land/disarm; no collision) and exploit1 (decision-6 cross-task memory reuse, gate locked: find_closest_node hits PRIOR-task node -> CLIP scoring -> LM-Nav walk -> exploit segments executed -> clean convergence; expansion runs allowed as auxiliary, chain must be real). Route-B ruling: no AirVLN benchmark; paper SR/OSR/NE/SPL not claimable.",
   "thresholds_locked_pre_run": {
     "waypoint_segments": "sum of calculate_movement_steps `steps` over the first `status.revision` cycle events >= 3, revision >= 1, no segment_failed; each exploration cycle sends one FollowTimedPath goal whose timed points are the waypoint segments (upstream 15deg/5m/2m decomposition). Goal acceptance additionally cross-checked on /drone0/follow_timed_path/_action/status (goals_succeeded >= revision).",
     "collision": "collision events empty during navigation (baseline captured after takeoff, time_stamp comparison; sticky session flag and touchdown residue excluded)",
     "convergence": "final citynav/status state STOPPED with detail=task_complete, native Land success, platform disarmed",
     "observe": "centroid-tracking view enabled per AGENTS; proof = moving centroid series in <case>/overhead/track.jsonl + captured overhead frames, never the static initial camera",
     "recorded_only": ["per-cycle waypoint and steps", "NE (start/end distance to OrangeBall ground truth in odom ENU)", "net approach ratio", "LLM latencies/error codes in events stream", "five-eye 10-stream actual rate/latency (health.json counts)"]
+  },
+  "cancel1": {
+    "status": "PASSED (run-20261118n, 2026-11-18)",
+    "evidence_path": "log/citynav/pc-e2e/run-20261118n/cancel1/",
+    "result": {
+      "success": true,
+      "injection": "event-driven: citynav/cancel sent 20.0 s after the first FollowTimedPath goal was sent (fault-injection.json: seconds_after_first_goal_sent=20.0, revision_at_injection=1); the 9-step goal (waypoint (22.2,22.2,3.1)) was mid-execution, >=2 timed segments already flown",
+      "handoff": "planner STOPPING -> follow_timed_path/_behavior/stop -> speed<0.2 m/s for 1 s -> STOPPED with reason=CANCELED detail=cancelled stop_confirmed=true; the 10 s stop-gate FAULT branch NOT triggered",
+      "behavior_terminal": "goal terminal status 6 (ABORTED) on /drone0/follow_timed_path/_action/status - the stop-service interruption path, as expected for cancel",
+      "land_disarm": "native Land success + platform disarmed confirmed; collision 0 events during navigation; duration 136.6 s",
+      "observe": "overhead track.jsonl + frames recorded during the flight (case dir)"
+    },
+    "attempt_history_not_hidden": [
+      {"run": "h", "result": "attempt 1 FAIL: warm grounding made the planner decide ~14 s after takeoff, inside the post-takeoff settle; Behavior rejected the first goal (initial point not continuous) -> goal_rejected before cancel. Added hover-stability gate to mission (3 s version)."},
+      {"run": "i", "result": "no mission: Blocks died 65 s after heartbeat during warmup (LogD3D11RHI GPU contention family)."},
+      {"run": "j", "result": "attempt 2 FAIL: 3 s settle gate passed by luck mid-oscillation; second goal rejected. Samples show odom z limit cycle 1.08-1.64 m for ~15 s post-takeoff. Gate strengthened to 8 s sliding-window range <0.15 m."},
+      {"run": "k", "result": "attempt 3 FAIL: task self-completed ~8 s after the goal (single landmark, LLM is_found=true, no goal ever sent) so wall-clock cancel never fired. Cancel injection changed to event-driven (revision>=1 + N s) and the case instruction given two landmarks."},
+      {"run": "l", "result": "attempt 4 FAIL: aircraft dropped from 0.88 m truth altitude to ground 2 s before the first goal (Blocks.log: D3D eviction family); goal rejected because vehicle already landed."},
+      {"run": "m", "result": "attempt 5 FAIL: first goal rejected again; added numeric diagnostics to the Behavior rejection (actual/front/distance) and rebuilt uav_follow_path_execution overlay."},
+      {"run": "n", "result": "attempt 6 PASSED (see result above)."}
+    ]
+  },
+  "exploit1": {
+    "status": "BLOCKED (2026-11-18): reuse chain partially substantiated; execution segment blocked by two environment/model-layer defects",
+    "evidence_path": "log/citynav/pc-e2e/run-20261118o/exploit1/ (+ p/q/r/s/t/u expand attempts)",
+    "substantiated": [
+      "memory load: planner event memory_loaded path=/evidence/citynav_memory.json nodes=2 (run g graph injected as prior task memory, sha256 recorded in run o dir)",
+      "find_closest_node hits a PRIOR-task node: exploit_hit node=0 at spawn (9.96,10.01) vs node0 (9.94,9.95) - the until=floor fix correctly restricts hits to prior nodes",
+      "CLIP scoring real: live CPU service, 2.9 s for 2 node images x 1 text (log/citynav/pc-e2e/clip_diag.py)",
+      "LM-Nav search executed: find_optimal_route ran over the loaded graph; degenerate-walk handling converged cleanly (STOPPED task_complete, land/disarm/collision all PASS in run o)"
+    ],
+    "blockers": [
+      {"layer": "perception model", "detail": "CLIP ViT-L/14 margin on the two prior nodes is 0.003 AND INVERTED (node0 start-frame 0.1965 > node1 near-ball frame 0.1935 for 'A photo of orange ball'), so argmax=start -> walk=[start] -> exploit_waypoints empty -> no executable segment (run o). This is the model-capacity boundary already flagged as small-margin in phase 3; Blocks 256x256 scenes do not separate.", "evidence": "log/citynav/pc-e2e/clip_diag.py output; run o result.json exploit events"},
+      {"layer": "flight controller / state estimation", "detail": "post-takeoff hover z limit cycle of +-0.4 m (period ~2-5 s) between odom and truth (Behavior diagnostic: actual z=1.064 vs front z=1.463 one second apart, run s; truth track 0.53-1.0 m, run q). Every expansion mission that must FLY to create a new >20 m memory node had its first FollowTimedPath goal rejected by the continuity gate (q/s/u) or touched Ground_6 (q/s); the planner then converges goal_rejected. Without a new node, the reuse round cannot produce a non-degenerate walk.", "evidence": "run s compute.txt rejection numbers; run q/s/u result.json; overhead track.jsonl"},
+      {"layer": "simulator host", "detail": "Blocks startup-phase deaths became frequent this session (i/r/t: died 1-2 min after first heartbeat, D3D/GPU-contention family); long teleports (63 m to (46,44)) never converged the EKF within 60 s (p x2, GPS Horizontal Pos Drift too high).", "evidence": "run p expand1/2 result.json readiness errors; tasklist checks; Blocks.log"}
+    ],
+    "expansion_attempts": "6 Blocks sessions spent on the sanctioned expand-then-reuse path (p: EKF teleport; q: goal_rejected, same-session re-run artifacts, takeoff timeout after session degradation; r/t: startup deaths; s/u: goal_rejected). The chain was never faked: no exploit_executed event exists without a real prior hit + real CLIP + real walk.",
+    "not_relaxed": "the pre-locked gate (hit + execute + converge) stands; partial chain evidence is recorded, the round is NOT marked passed"
   },
   "formal1": {
     "status": "PASSED (run-20261118g, 2026-11-18)",
@@ -69,13 +107,12 @@
     ]
   },
   "not_executed_honest_gaps": [
-    "cross-task memory exploit reuse (decision-6 mandatory item, next round; run-20261118g citynav_memory.json with 2 nodes is the ready input)",
-    "cancel injection convergence (--cancel-after reserved)",
+    "cross-task memory exploit reuse with an EXECUTED walk segment (decision-6 mandatory item) - BLOCKED: CLIP small/inverted margin on existing nodes + z limit cycle preventing expansion missions from flying (see exploit1.blockers)",
     "full matrix (multiple instructions x instances, per-step error statistics)",
     "RoboPi board deployment",
     "real-hardware acceptance",
     "AirVLN benchmark metrics (route B: out of scope by ruling)"
   ],
-  "deviations_exercised": ["Blocks window -ResX=1024 -ResY=1024 -ExecCmds=r.Streaming.PoolSize 128 (task spec said 1280x720; 720-height window triggers UE4 BitArray RT ping-pong with the 1024x1024 overhead observer capture)", "spawn realized as ground teleport + native takeoff instead of airborne NED z=-8 drop; default spawn (10,10,yaw45) instead of task-spec (-10,-10) because the ball at 62 m exceeds the contract 50 m depth gate (run-20261118f collision FAIL evidence; instruction/target/thresholds unchanged)", "OrangeBall target scored in odom ENU (+3.68)", "camera_rate_hz 5.0 per contract 10-stream budget", "planner service_timeout_s 120 / retry_backoff_s 20 for GS_EMPTY_CACHE cold-start (run-20261118b)"],
-  "claim_level": "partial-verification-passed: formal1 minimal end-to-end acceptance PASSED on run-20261118g (all 10 gates, pre-locked thresholds, evidence complete); chain levels M0/M3/M4/M7/M8 substantiated. NOT reproduction-success: exploit reuse, cancel injection, full matrix and board deployment remain open; AirVLN benchmark out of scope by route-B ruling."
+  "deviations_exercised": ["Blocks window -ResX=1024 -ResY=1024 -ExecCmds=r.Streaming.PoolSize 128 (task spec said 1280x720; 720-height window triggers UE4 BitArray RT ping-pong with the 1024x1024 overhead observer capture)", "spawn realized as ground teleport + native takeoff instead of airborne NED z=-8 drop; default spawn (10,10,yaw45) instead of task-spec (-10,-10) because the ball at 62 m exceeds the contract 50 m depth gate (run-20261118f collision FAIL evidence; instruction/target/thresholds unchanged)", "OrangeBall target scored in odom ENU (+3.68)", "camera_rate_hz 5.0 per contract 10-stream budget", "planner service_timeout_s 120 / retry_backoff_s 20 for GS_EMPTY_CACHE cold-start (run-20261118b)", "cancel injection event-driven (revision>=1 + 20 s) with two-landmark instruction instead of wall-clock-after-goal, so the handoff provably interrupts an executing trajectory (run k lesson)", "mission hover-stability gate (8 s sliding window, 0.15 m range) after takeoff (post-takeoff z limit cycle, runs h/j)", "Behavior rejection log extended with actual/front/distance numbers (diagnostic improvement, rebuilt overlay; run m)", "exploit_executed event publishes walk/waypoints for acceptance evidence (observability addition, no semantic change)", "memory_loaded/exploit_hit/exploit_executed counted as executed segments in the waypoint gate (decision-6 reuse round semantics)"],
+  "claim_level": "partial-verification-passed: formal1 (run g) and cancel1 (run n) minimal end-to-end acceptance PASSED with pre-locked gates and complete evidence; exploit1 BLOCKED with per-layer attribution (perception model margin, flight-controller z limit cycle, simulator host startup deaths) - chain levels M0/M3/M4/M6/M7/M8 substantiated. NOT reproduction-success: exploit executed-walk reuse, full matrix and board deployment remain open; AirVLN benchmark out of scope by route-B ruling."
 }

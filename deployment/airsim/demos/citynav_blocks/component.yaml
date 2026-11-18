@@ -42,7 +42,7 @@ resources:
   tf_authority: AS2-self-localization-and-sensor-static-bridge
 validation:
   evidence: deployment/airsim/demos/citynav_blocks/validation.json
-  status: formal1 minimal end-to-end acceptance PASSED (run-20261118g, 2026-11-18); claim level partial-verification-passed, not reproduced
-  limitations: [exploit-reuse-and-cancel-rounds-open, full-matrix-open, single-vehicle-only, no-AirVLN-benchmark-route-B,
+  status: formal1 (run-20261118g) and cancel1 (run-20261118n) minimal end-to-end acceptance PASSED 2026-11-18; exploit1 BLOCKED (CLIP margin + hover z limit cycle + host startup deaths, see validation.json); claim level partial-verification-passed, not reproduced
+  limitations: [exploit-reuse-blocked-executed-walk, full-matrix-open, single-vehicle-only, no-AirVLN-benchmark-route-B,
                 substitute-VLM-model, board-deployment-open, blocks-scene-not-urban-city,
-                host-precondition-grounded-sam-GS_EMPTY_CACHE]
+                host-precondition-grounded-sam-GS_EMPTY_CACHE, hover-z-limit-cycle-post-takeoff]

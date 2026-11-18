@@ -60,7 +60,15 @@ public:
         try {
           timeline_.start(convert(goal->path), now().seconds());
           if (uf::distance(actual_, timeline_.active.points.front().p) > continuity_) {
-            throw std::invalid_argument("initial point is not continuous with vehicle position");
+            // Numerical detail per the SUPER lesson: a merged rejection
+            // predicate cannot be diagnosed from text alone (run-20261118
+            // h/j/m needed both sides of the comparison to attribute the
+            // discontinuity between planner decision pose and behavior pose).
+            const auto & f = timeline_.active.points.front().p;
+            throw std::invalid_argument("initial point is not continuous with vehicle position: actual=[" +
+              std::to_string(actual_[0]) + "," + std::to_string(actual_[1]) + "," + std::to_string(actual_[2]) +
+              "] front=[" + std::to_string(f[0]) + "," + std::to_string(f[1]) + "," + std::to_string(f[2]) +
+              "] distance=" + std::to_string(uf::distance(actual_, f)));
           }
         } catch (const std::exception & e) {
           RCLCPP_WARN(get_logger(), "%s", e.what());
