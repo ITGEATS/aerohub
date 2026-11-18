@@ -60,6 +60,8 @@ description: 为无人机算法及 AS2 扩展建立固定工具镜像内的可�
 
 ROS shell 环境脚本不一定支持 Bash nounset。入口可在 source ROS/AS2/colcon setup 时暂不启用 `set -u`，加载后再启用；用真实目标镜像构造节点，而不只做 Python 语法检查。Python ROS 节点避免以 `handle`、`clients` 等 Node 只读属性命名自己的状态；目标 rclpy 的真实构造检查能检出这类问题。
 
+固定镜像缺少组件运行所需的第三方依赖、且按约定不重建镜像不新增基础环境依赖时，优先在组件包内做最小等价实现（保持被消费的原接口面不变），并在测试期与真实原库对照断言语义等价（原库仅测试期安装，运行时零依赖），作为编号偏离记录；CityNav 的 networkx 替换（包内最小无向图 + `test_graph_equivalence.py` 对照）为该模式的已验证实例。
+
 ## 绝对路径 catkin 工作区的容器复用
 
 catkin devel-space、生成脚本和插件元数据可能嵌入构建时工作区的绝对宿主路径。使用固定共享镜像作为工具容器时，不能假定仅把同一目录挂到 `/workspace` 就可运行；检查 `setup.bash`、`.private`、生成 Python 和 ELF/RPATH 中的原路径。若无法无损 relocate，同时把工作区只读挂到 `/workspace` 与原绝对路径，并在 source manifest 中记录两者；构建阶段同样使用一致挂载。

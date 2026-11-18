@@ -26,6 +26,8 @@ description: 将已适配的无人机算法打包为可安装、选择、启动�
 
 Inference 组件部署需分别记录 ROS Adapter 与模型 worker 的环境、启动入口和可达地址；本机回环仅在同一网络命名空间内可用。算法上游路径与推理模块路径分别声明，每模型的 uv 环境不与 ROS overlay 混合。健康状态区分 HTTP 进程可用、模型加载预热完成与 ROS 消费者实际可调用，不能仅凭 ROS Service 存在宣称就绪。
 
+Windows 宿主原生编排（非 WSL interop）与 WSL 版存在实测差异，须在组件清单 runtime 中分别记录：Blocks.exe 经 schtasks 计划任务启动——编排进程直接派生的 GUI 子进程会随 job object 被回收；容器→宿主地址在 start 时实测选定（host.docker.internal 可能解析到 IPv6，PX4 C++ TCP 连接无 v4 回退，IPv4 候选优先），选定地址须同时打通 Blocks RPC TCP 与宿主服务 HTTP 并写入拓扑产物；settings.json 写入 Documents\AirSim 前自动备份原文件；start 后 UE4 首帧 shader 编译期 RPC 超时，须预热 ≥3 分钟再做健康检查；以 PATH 裸 `bash` 调用 setup.sh 前先确认其不是 WSL 桩。
+
 组件包含 CUDA 模型且需迁移或准备环境/权重时，先读取并执行子 Skill [model-migration-cuda](../model-migration-cuda/SKILL.md)，消费其准备入口和验证结果，再继续组件部署；模型准备细节仅在该子 Skill 维护。
 
 1. 检查目标环境、依赖、输入表示与消费者匹配。缺少传感器或有效标定不能仅启动空进程后标健康。

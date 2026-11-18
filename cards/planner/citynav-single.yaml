@@ -1,0 +1,110 @@
+schema_version: "1.0"
+id: planner.citynav-single
+version: "0.1.0"
+type: tool
+name: CityNavAgent language-navigation single-vehicle tool
+description: |
+  Accepts a natural-language goal and executes the migrated CityNavAgent HSPM
+  loop (landmark sequence extracted from the instruction by the cloud LLM (D3,
+  Blocks has no AirVLN annotation input), five-view viewpoint route query,
+  open-vocabulary grounding, metric-depth back-projection to filtered semantic
+  point clouds, alpha=0.6 shrunk waypoint) plus an online topology memory graph
+  with cross-task exploit (D4/D22), running observe-decide-move cycles and
+  executing the upstream 15deg/5m/2m action decomposition as timed segments
+  through the shared FollowTimedPath execution chain; no new navigation
+  Behavior and no direct Motion Reference publication.
+  Loop cadence: one independent is_final FollowTimedPath goal per cycle; the
+  fixed five-eye camera array (Yaw -90..+90, D8') streams at 5 Hz with batch
+  view_freshness_s=2.0; results are bound to request-time image stamps with
+  max_result_age_s=90 (LLM ~10 s + 5x8 s serial grounding cycle envelope, D21).
+  Start/stop constraint: the planner process is orchestrated by the demo; it
+  requires the workstation LLM proxy (cloud glm-4v-flash via citynav/llm
+  topics), the host grounded_sam (:8100) and clip (:8101) HTTP inference
+  services, and the flight_board sensor/clock bridge; cancel enters STOPPING,
+  stops the Behavior and confirms speed<0.2 m/s for 1 s before STOPPED.
+  Shared runtime: the planner node is co-located with the AS2 state
+  estimator/controller and the FollowTimedPath Behavior in one compute-role
+  container; the LLM proxy runs in a separate workstation container.
+  Validation status (claim level partial-verification-passed, NOT
+  reproduction-success): formal1 and cancel1 minimal end-to-end acceptance
+  PASSED 2026-11-18 on AirSim Blocks + PX4 SITL; exploit1 cross-task memory
+  reuse is incomplete (未完成) because the CLIP discriminative signal is
+  inherently insufficient in the Blocks scene (user ruling B2).
+  Boundaries: single vehicle only; per-vehicle spillover needs proxy cache
+  keys, memory-graph paths and request_id namespacing isolated per vehicle
+  (declared, not implemented). Out of scope by the route-B ruling: the AirVLN
+  benchmark, so paper SR/OSR/NE/SPL/SDTD are not claimable.
+
+implementation:
+  component_id: aerohub.planner.citynav-single
+  manifest: deployment/airsim/demos/citynav_blocks/component.yaml
+  shared_runtime: citynav-compute-container
+  coupled_capabilities: []
+
+inputs:
+  - id: self_pose
+    capability_type: state/self/pose/3d
+  - id: self_twist
+    capability_type: state/self/twist/3d
+  - id: five_view_rgb
+    capability_type: sensor/camera/rgb/image
+  - id: five_view_axial_depth
+    capability_type: sensor/camera/depth/axial-image
+  - id: five_view_camera_info
+    capability_type: sensor/camera/rgb/camera-info
+  - id: llm_result
+    capability_type: task/citynav/llm-result
+
+outputs:
+  - id: llm_query
+    capability_type: task/citynav/llm-query
+  - id: task_status
+    capability_type: task/citynav/status
+  - id: planning_events
+    capability_type: task/citynav/events
+
+interfaces:
+  - id: navigate_by_language
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_topic
+    schema: std_msgs/msg/String
+    parameter_schema: null
+  - id: cancel_task
+    role: lifecycle_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+  - id: timed_path_execution
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/FollowTimedPath
+    parameter_schema: src/tool/navigation/interfaces/action/FollowTimedPath.action
+
+lifecycle:
+  management: agent_managed
+  operations:
+    start: navigate_by_language
+    status: null
+    stop: cancel_task
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/camera/rgb
+  - hardware_type: sensor/camera/depth
+  - hardware_type: flight-controller/px4
+  - hardware_type: network/cloud-api
+
+resource_access:
+  reads:
+    - sensor/rgb-camera
+    - sensor/depth-camera
+    - vehicle/self-state
+    - external/cloud-llm-api
+    - service/grounded-sam-inference
+    - service/clip-inference
+  shared_writes: []
+  exclusive_writes:
+    - vehicle/motion

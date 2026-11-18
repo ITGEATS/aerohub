@@ -8,7 +8,8 @@ source:
                 src/tool/navigation/planner/citynav/llm_proxy]
   license: 'Upstream badge declares MIT (CODE_LICENSE file missing - broken link, recorded gap in src/tool/navigation/planner/citynav/README.md); git submodule reference only, internal non-commercial research use'
 provides: [planner.citynav-single]
-cards: []  # cards/planner/citynav-single.yaml is phase 8 deliverable (not yet authored)
+cards:
+- cards/planner/citynav-single.yaml
 roles:
   compute: [citynav-planner, AS2, FollowTimedPath]
   workstation: [ROS-task-client, citynav-llm-proxy, simulation-collision-scoring]

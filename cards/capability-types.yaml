@@ -540,3 +540,75 @@ capability_types:
       coordinate_frame: none
       axes: none
       timestamp: publication_time
+
+  - id: task/citynav/status
+    name: CityNav planner status
+    description: JSON status containing planner state, task_id, revision, generation, ready, step_size, next_landmark_idx, landmark count, memory_nodes and failure count.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
+  - id: task/citynav/events
+    name: CityNav planning events
+    description: JSON event stream containing landmark/LLM/grounding/cycle/exploit events with task_id and sim_time; the payload contract is defined by the CityNav adapter.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: event_sim_time
+
+  - id: task/citynav/llm-query
+    name: CityNav LLM proxy query
+    description: JSON request with request_id, op (viewpoint|landmark|caption), instruction, landmark/traversed/next fields, per-view request image stamps and max_age_s; prompts and images are built by the workstation proxy, never sent by the planner.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
+  - id: task/citynav/llm-result
+    name: CityNav LLM proxy result
+    description: JSON response with request_id, op, ok, raw model text, error_code (ok|stale|timeout|http|parse|busy) and latency_s.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time

@@ -35,7 +35,7 @@ interfaces:
     protocol: ros2_topic
     schema: std_msgs/msg/String
     parameter_schema: null
-    note: goal JSON {instruction, max_cycles, max_duration_s}; status stream carries the shared NavigateToPose result vocabulary (SUCCEEDED/CANCELED/TIMEOUT/NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED), detail sub-reason and stop_confirmed (deviation D13). No NavigateToPose ActionServer: a language goal cannot be expressed as a pose.
+    note: 'goal JSON {instruction, max_cycles, max_duration_s}; status stream carries the shared NavigateToPose result vocabulary (SUCCEEDED/CANCELED/TIMEOUT/NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED), detail sub-reason and stop_confirmed (deviation D13). No NavigateToPose ActionServer: a language goal cannot be expressed as a pose.'
   - id: cancel_task
     role: lifecycle_operation
     interaction: request_response

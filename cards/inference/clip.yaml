@@ -1,0 +1,52 @@
+schema_version: "1.0"
+id: inference.clip
+version: "0.1.0"
+type: capability
+name: CLIP ViT-L/14 image-text similarity inference
+description: |
+  Serves raw CLIP image-text cosine similarity for the CityNav memory-exploit
+  node scoring path. The real contract is plain HTTP, not a ROS interface:
+  POST /models/clip/score with {images_b64 (PNG/JPEG base64, <=16), texts
+  (<=16)} returns {similarity[i][j] = cos(image i, text j), model_version};
+  busy=429, empty/oversize/undecodable=422; GET /health/live and
+  /health/ready. The upstream "A photo of " prefix and per-node
+  max-over-images reduction stay with the caller; rectify_and_crop_v2 is not
+  ported (D23, bound to AirVLN panorama geometry; the service takes original
+  images). Backend: HF transformers port of openai/clip-vit-large-patch14
+  (weights same source as the upstream ViT-L/14; no numerical parity check
+  against the openai-clip package, D17 chain). Runs on CPU in the CityNav
+  deployment: the host 8 GB GPU is reserved for grounded_sam + co-resident
+  UE4 Blocks, so the worker was moved to CPU (2 node images x 1 text scored
+  in ~2.9 s). Validation boundary (claim level for this component: GPU/CPU
+  algorithm test passed, not flight acceptance): real GPU load/warmup passed
+  and real-frame HTTP scoring is idempotent with recorded margins (orange-ball
+  frame margin +0.0033, direction correct, no threshold set); on CityNav
+  memory nodes the margin measured 0.003 AND inverted, the attributed cause
+  of the exploit1 acceptance gap (user ruling B2: CLIP discriminative signal
+  inherently insufficient in the Blocks scene); NOT covered: ROS/AS2 facade
+  (none exists), AirVLN-scale discrimination.
+
+implementation:
+  component_id: aerohub.inference.clip
+  manifest: null
+  shared_runtime: clip-fastapi-worker
+  coupled_capabilities: []
+
+inputs: []
+outputs: []
+
+interfaces: []
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+
+resource_access:
+  reads:
+    - model/clip-weights
+  shared_writes: []
+  exclusive_writes:
+    - inference/clip-worker
