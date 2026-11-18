@@ -23,7 +23,7 @@ from simulator.projectairsim.display_session import views_from_scene
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--ue-map',choices=['/Game/Aerohub/WestStreetCircuit','/Game/Aerohub/WestStreetSmoothTurn','/Game/Aerohub/WestStreetShiftRight2m', '/Game/Aerohub/WestStreetShiftRight2mLate4m'],default='/Game/Aerohub/WestStreetShiftRight2mLate4m',help='Current tracking baseline: 4m turns, 2.75m/s; other maps require explicit selection')
+    parser.add_argument('--ue-map',choices=['/Game/Aerohub/WestStreetCircuit','/Game/Aerohub/WestStreetSmoothTurn','/Game/Aerohub/WestStreetShiftRight2m', '/Game/Aerohub/WestStreetShiftRight2mLate4m','/Game/Aerohub/WestStreetClosedLoop'],default='/Game/Aerohub/WestStreetShiftRight2mLate4m',help='Current tracking baseline: 4m turns, 2.75m/s; other maps require explicit selection')
     parser.add_argument('--mission-file',choices=['demo.py','demo_before_plaza.py'],default='demo_before_plaza.py')
     parser.add_argument('--component-overlay',type=Path,help='Optional isolated component overlay; leaves shared installs untouched')
     parser.add_argument('--duration', type=float, default=5.)
@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--yolo-window',action='store_true',help='Owned official YOLO window, closed on task exit even with keep-scene')
     parser.add_argument('--recovery-window',type=float,default=.5,help='Explicit bounded target prediction window, seconds (.5 to 2)')
     parser.add_argument('--keep-scene',action='store_true',help='Keep owned simulator/PX4 disarmed for viewing after the run')
+    parser.add_argument('--fps', type=int, choices=(30, 60), default=30, help='UE window frame rate cap')
     parser.add_argument('--viewer-wait',type=float,default=0.,help='Pause before mission startup so the live window can be inspected')
     parser.add_argument('--reuse-runtime', type=Path, help='Resume an owned disarmed scene after startup failure')
     args = parser.parse_args()
@@ -77,6 +78,7 @@ def main():
     profile_path = out/'profile.json'
     profile = json.loads(profile_path.read_text())
     profile['args'][1]=args.ue_map
+    profile['args'].append(f'-ExecCmds=t.MaxFPS {args.fps}')
     camera = profile['sensor_options']['Drone1']['FrontCamera']
     camera.update(width=640, height=480, captures=['rgb'], rotation=[0.,0.,0.], position=[.6,0.,.8])
     base = json.loads(args.base_profile.read_text())

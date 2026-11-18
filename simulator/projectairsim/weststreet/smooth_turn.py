@@ -2,7 +2,7 @@
 import math
 
 
-def rounded_path(points, radius=4.0, spacing=0.2, corners=None):
+def rounded_path(points, radius=4.0, spacing=0.2, corners=None, *, max_trim_fraction=.45):
     """Round selected interior corners; reject insufficient room, never shrink radius."""
     if radius <= 0 or spacing <= 0:
         raise ValueError('radius and spacing must be positive')
@@ -23,7 +23,7 @@ def rounded_path(points, radius=4.0, spacing=0.2, corners=None):
             line(b)
             continue
         trim = radius * math.tan(angle/2)
-        if trim > min(math.dist(a,b), math.dist(b,c))*.45:
+        if trim > min(math.dist(a,b), math.dist(b,c))*max_trim_fraction:
             raise ValueError('Not enough room for requested radius at corner %d' % i)
         entry = tuple(b[k]-trim*incoming[k] for k in range(2))
         exit = tuple(b[k]+trim*outgoing[k] for k in range(2))
@@ -148,3 +148,23 @@ def delayed_first_junction(points, delay_m=4.):
         else:weight=0.
         result.append((p[0],p[1]+delay_m*weight))
     return result
+
+
+def close_return_lane(points, lane_x=13.5, turn_y=-49.):
+    """Replace the reversing tail with a rounded return to the start tangent."""
+    start = points[0]
+    join = next(i for i in range(len(points)-2, 0, -1)
+                if math.dist(points[i], (18., -12.)) < 1e-6)
+    # Start the fillet on the existing -X straight, and approach the
+    # original start along +Y so the loop seam lies on a straight.
+    anchor = points[join]
+    lane_x = float(lane_x)
+    turn_y = float(turn_y)
+    if lane_x >= anchor[0] or lane_x - start[0] < 9 or turn_y > start[1] - 9:
+        raise ValueError('Return lane does not leave room for 4 m bends')
+    # The first segment starts on an already validated straight. Its 4 m
+    # trim fits in 4.5 m, and the 9.5 m cross street fits both 4 m trims.
+    return_lane = rounded_path(
+        [anchor, (lane_x, anchor[1]), (lane_x, turn_y),
+         (start[0], turn_y), start], radius=4., spacing=.2, max_trim_fraction=.99)
+    return points[:join] + return_lane

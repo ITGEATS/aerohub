@@ -13,15 +13,19 @@ from pathlib import Path
 import unreal as u
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from smooth_turn import candidate_from_baseline, profile, sample, shifted_first_junction, delayed_first_junction
+from smooth_turn import candidate_from_baseline, profile, sample, shifted_first_junction, delayed_first_junction, close_return_lane
 
-DELAYED=os.environ.get('WEST_ROUTE_VARIANT')=='shift-right-2m-late-4m'
+LOOP=os.environ.get('WEST_ROUTE_VARIANT')=='closed-loop'
+DELAYED=LOOP or os.environ.get('WEST_ROUTE_VARIANT')=='shift-right-2m-late-4m'
 SHIFTED=os.environ.get('WEST_ROUTE_VARIANT')=='shift-right-2m'
 MAP='/Game/Aerohub/WestStreetShiftRight2m' if SHIFTED else '/Game/Aerohub/WestStreetSmoothTurn'
 if DELAYED:MAP='/Game/Aerohub/WestStreetShiftRight2mLate4m'
 SEQUENCE='/Game/Aerohub/WestShiftRight2mMotion' if SHIFTED else '/Game/Aerohub/WestSmoothTurnMotion'
 if DELAYED:SEQUENCE='/Game/Aerohub/WestShiftRight2mLate4mMotion'
 
+if LOOP:
+    MAP='/Game/Aerohub/WestStreetClosedLoop'
+    SEQUENCE='/Game/Aerohub/WestClosedLoopMotion'
 
 def prepare():
     output=Path(os.environ['WEST_SMOOTH_OUTPUT'])
@@ -42,6 +46,7 @@ def prepare():
     points=candidate_from_baseline(original)
     if SHIFTED or DELAYED:points=shifted_first_junction(points,2.)
     if DELAYED:points=delayed_first_junction(points,4.)
+    if LOOP:points=close_return_lane(points)
     plan=profile(points)
     actors=u.get_editor_subsystem(u.EditorActorSubsystem).get_all_level_actors()
     runner=next(a for a in actors if a.get_actor_label()=='West_Runner_5mps')

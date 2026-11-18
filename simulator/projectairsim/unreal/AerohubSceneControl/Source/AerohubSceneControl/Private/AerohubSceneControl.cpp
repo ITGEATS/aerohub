@@ -5,6 +5,14 @@
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
 #include "MovieSceneSequencePlayer.h"
+#include "MovieSceneTimeController.h"
+#include "LandscapeSubsystem.h"
+#include "LandscapeProxy.h"
+#include "LandscapeComponent.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstanceConstant.h"
+#include "Misc/Crc.h"
+#include "core_sim/clock.hpp"
 #include "HttpServerModule.h"
 #include "HttpServerRequest.h"
 #include "HttpServerResponse.h"
@@ -16,6 +24,93 @@
 #include "Serialization/JsonSerializer.h"
 
 IMPLEMENT_MODULE(FDefaultModuleImpl, AerohubSceneControl)
+
+namespace {
+int64 SimNanos() { return microsoft::projectairsim::SimClock::Get()->NowSimNanos(); }
+// Integral of smoothstep speed: exact even when render frames are irregular.
+double RampDistance(double Seconds, double RampSeconds)
+{
+    if (RampSeconds <= 0. || Seconds >= RampSeconds) return Seconds - RampSeconds * .5;
+    const double X = Seconds / RampSeconds;
+    return RampSeconds * (X * X * X - .5 * X * X * X * X);
+}
+}
+
+struct FRunnerSimTimeController : FMovieSceneTimeController
+{
+    double RampSeconds = 0., ElapsedSeconds = 0., OffsetSeconds = 0.;
+    int64 LastNanos = 0;
+    void BeginRun(double Ramp) { RampSeconds = Ramp; ElapsedSeconds = 0.; }
+    virtual void OnStartPlaying(const FQualifiedFrameTime&) override
+    {
+        LastNanos = SimNanos(); OffsetSeconds = 0.;
+    }
+    virtual FFrameTime OnRequestCurrentTime(const FQualifiedFrameTime& Current, float) override
+    {
+        if (!GetPlaybackStartTime().IsSet()) return Current.Time;
+        const int64 Now = SimNanos();
+        if (Now < 0) { LastNanos = -1; return Current.Time; }
+        // A scene reload can replace/reset SimClock. Rebase without moving backwards.
+        const double Delta = LastNanos >= 0 && Now >= LastNanos ? double(Now - LastNanos) * 1.e-9 : 0.;
+        LastNanos = Now;
+        OffsetSeconds += RampDistance(ElapsedSeconds + Delta, RampSeconds)
+            - RampDistance(ElapsedSeconds, RampSeconds);
+        ElapsedSeconds += Delta;
+        return GetPlaybackStartTime()->ConvertTo(Current.Rate) + OffsetSeconds * Current.Rate;
+    }
+};
+
+int32 UAerohubSceneControlWorld::OutdatedLandscapeMaterials(UObject* WorldContext)
+{
+#if WITH_EDITOR
+    auto* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+    auto* Landscape = World ? World->GetSubsystem<ULandscapeSubsystem>() : nullptr;
+    return Landscape ? Landscape->GetOudatedPhysicalMaterialComponentsCount() : -1;
+#else
+    return -1;
+#endif
+}
+int32 UAerohubSceneControlWorld::RebuildLandscape(UObject* WorldContext)
+{
+#if WITH_EDITOR
+    auto* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+    if (auto* Landscape = World ? World->GetSubsystem<ULandscapeSubsystem>() : nullptr) Landscape->BuildPhysicalMaterial();
+#endif
+    return OutdatedLandscapeMaterials(WorldContext);
+}
+
+void UAerohubSceneControlWorld::InitializeLandscapeSavedHashes()
+{
+#if WITH_EDITOR && ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION == 2
+    // UE5.2 initializes this transient saved-hash field only when GIsEditor is
+    // true (Landscape.cpp, ULandscapeComponent::PostLoad). UnrealEditor -game
+    // skips it and reports every clean, already-built component as unsaved.
+    // Restore only validated cached hashes, never acknowledge stale build data.
+    if (!GIsEditor && GetWorld()->IsGameWorld()) {
+        for (TActorIterator<ALandscapeProxy> It(GetWorld()); It; ++It) {
+            for (ULandscapeComponent* Component : It->LandscapeComponents) {
+                if (!Component || Component->LastSavedPhysicalMaterialHash != 0
+                    || Component->GetPackage()->IsDirty() || !Component->GetCollisionComponent()) continue;
+                uint32 Hash = 0;
+                UMaterialInterface* Material = Component->GetLandscapeMaterial();
+                for (auto* Instance = Cast<UMaterialInstanceConstant>(Material); Instance;
+                     Instance = Cast<UMaterialInstanceConstant>(Material)) {
+                    Hash = FCrc::TypeCrc32(Instance->ParameterStateId, Hash);
+                    Material = Instance->Parent;
+                }
+                auto* Base = Cast<UMaterial>(Material);
+                if (!Base) continue;
+                Hash = FCrc::TypeCrc32(Base->StateId, Hash);
+                if (Hash != 0 && Component->PhysicalMaterialHash == Hash) {
+                    Component->LastSavedPhysicalMaterialHash = Hash;
+                    ++RestoredLandscapeHashes;
+                }
+            }
+        }
+        UE_LOG(LogTemp, Display, TEXT("Scene control restored %d validated UE5.2 landscape saved-hash caches"), RestoredLandscapeHashes);
+    }
+#endif
+}
 
 bool UAerohubSceneControlWorld::DoesSupportWorldType(EWorldType::Type Type) const
 {
@@ -47,10 +142,12 @@ bool UAerohubSceneControlWorld::FindTarget()
     if (!bTargetInitialized) {
         auto* Player = FoundSequence->GetSequencePlayer();
         Player->Pause();
+        SimTimeController = MakeShared<FRunnerSimTimeController>();
+        Player->SetTimeController(SimTimeController);
         Player->SetPlayRate(1.f); bStarting = false; StartupElapsedSeconds = 0.f;
         Player->SetPlaybackPosition(FMovieSceneSequencePlaybackParams(0.f, EUpdatePositionMethod::Jump));
         Freeze(true);
-        bTargetInitialized = true; bHavePreviousPosition = false;
+        bTargetInitialized = true; bHavePreviousPosition = false; LastSimNanos = -1;
     }
     return true;
 }
@@ -65,6 +162,14 @@ TSharedPtr<FJsonObject> UAerohubSceneControlWorld::State() const
 {
     auto Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("actor_id"), TEXT("runner"));
+    Data->SetStringField(TEXT("clock_source"), TEXT("projectairsim_sim_clock"));
+    const int64 Now = SimNanos();
+    Data->SetBoolField(TEXT("clock_available"), Now >= 0);
+    Data->SetNumberField(TEXT("sim_time_seconds"), Now >= 0 ? double(Now) * 1.e-9 : -1.);
+    Data->SetNumberField(TEXT("landscape_saved_hashes_restored"), RestoredLandscapeHashes);
+#if WITH_EDITOR
+    Data->SetNumberField(TEXT("landscape_materials_outdated"), GetWorld()->GetSubsystem<ULandscapeSubsystem>()->GetOudatedPhysicalMaterialComponentsCount());
+#endif
     const bool bAvailable = Runner.IsValid() && Sequence.IsValid() && Sequence->GetSequencePlayer();
     Data->SetBoolField(TEXT("available"), bAvailable);
     Data->SetStringField(TEXT("state"), !bAvailable ? TEXT("unavailable")
@@ -127,6 +232,8 @@ void UAerohubSceneControlWorld::InitializeRouter()
                             if (!Player->IsPlaying()) {
                                 StartupElapsedSeconds = 0.f;
                                 bStarting = StartupRampSeconds > 0.f;
+                                SimTimeController->BeginRun(StartupRampSeconds);
+                                LastSimNanos = SimNanos(); bHavePreviousPosition = false;
                                 Player->SetPlayRate(bStarting ? 0.f : 1.f);
                                 Freeze(false); Player->Play();
                             }
@@ -152,19 +259,26 @@ void UAerohubSceneControlWorld::InitializeRouter()
 void UAerohubSceneControlWorld::Tick(float DeltaSeconds)
 {
     if (!GetWorld()->HasBegunPlay()) return;
+    if (!bLandscapeInitialized) { InitializeLandscapeSavedHashes(); bLandscapeInitialized = true; }
     if (!bRouterInitialized) InitializeRouter();
     if (FindTarget()) {
+        const int64 Now = SimNanos();
+        const double SimDelta = LastSimNanos >= 0 && Now >= LastSimNanos
+            ? double(Now - LastSimNanos) * 1.e-9 : 0.;
+        const bool bClockReset = LastSimNanos >= 0 && Now < LastSimNanos;
+        LastSimNanos = Now;
+        if (bClockReset) bHavePreviousPosition = false;
         auto* Player = Sequence->GetSequencePlayer();
         if (bStarting && Player->IsPlaying()) {
-            StartupElapsedSeconds += FMath::Max(DeltaSeconds, 0.f);
+            StartupElapsedSeconds += SimDelta;
             const float Alpha = FMath::Clamp(StartupElapsedSeconds / StartupRampSeconds, 0.f, 1.f);
             // Smoothstep: zero acceleration at both ends, unchanged route and loop.
             Player->SetPlayRate(Alpha * Alpha * (3.f - 2.f * Alpha));
             if (Alpha >= 1.f) bStarting = false;
         }
         const auto Position = Runner->GetActorLocation();
-        Velocity = bHavePreviousPosition && DeltaSeconds > SMALL_NUMBER && Sequence->GetSequencePlayer()->IsPlaying()
-            ? (Position-PreviousPosition)/DeltaSeconds : FVector::ZeroVector;
+        Velocity = bHavePreviousPosition && SimDelta > SMALL_NUMBER && Player->IsPlaying()
+            ? (Position-PreviousPosition)/SimDelta : FVector::ZeroVector;
         PreviousPosition = Position; bHavePreviousPosition = true;
     }
 }

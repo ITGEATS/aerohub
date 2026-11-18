@@ -70,6 +70,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stop',action='store_true',help='Request safe stop of this launcher\'s active run')
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--legacy-route', action='store_true', help='Use the previously validated out-and-back route')
+    parser.add_argument('--fps', type=int, choices=(30, 60), default=30, help='UE window frame rate cap')
     parser.add_argument('--viewer-wait',type=float,default=15.,help='Seconds to prepare screen recording after UE view is ready')
     args=parser.parse_args()
     if args.stop:
@@ -106,12 +108,13 @@ def main():
     output.parent.mkdir(parents=True,exist_ok=True)
     ACTIVE.parent.mkdir(parents=True,exist_ok=True)
     metadata=output.with_name(output.name+'-launcher.json')
+    route = 'WestStreetShiftRight2mLate4m' if args.legacy_route else 'WestStreetClosedLoop'
     command=[sys.executable,str(HERE/'run_tool_demo.py'),'--mission-file','demo_before_plaza.py',
         '--component-overlay',str(ROOT/'log/weststreet-before-plaza/runtime'),
         '--output',str(output),'--duration','0','--tangent-follow','--tangent-lead','1',
         '--continuous-yaw','--recovery-window','1','--native-audit','--image-storage','png',
-        '--ue-map','/Game/Aerohub/WestStreetShiftRight2mLate4m','--yolo-window','--observe-runner',
-        '--viewer-wait',str(args.viewer_wait)]
+        '--ue-map','/Game/Aerohub/'+route,'--yolo-window','--observe-runner',
+        '--viewer-wait',str(args.viewer_wait),'--fps',str(args.fps)]
     env=dict(os.environ)
     env.setdefault('DISPLAY',':1')
     env.setdefault('XAUTHORITY',f'/run/user/{os.getuid()}/gdm/Xauthority')
