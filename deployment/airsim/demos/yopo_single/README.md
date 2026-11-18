@@ -55,7 +55,7 @@ python3 deployment/airsim/demos/yopo_single/run.py stop --output log/yopo-single
 
 ## 验收记录
 
-当前结果与边界见 [validation.md](validation.md)。任务证据在 `log/yopo-single/`，过程在 `skill/temp/yopo-single/`；数值/接口/服务链与实际动力学分开记录。
+当前结果与边界见 [validation.md](validation.md)。已归档证据在 `dev/yopo-single/evidence/`，过程在 `dev/yopo-single/`，尚未归档的运行输出仍在 `log/yopo-single/`；数值/接口/服务链与实际动力学分开记录。归档仅调整材料位置，不改变原执行版本与验证结论；本地材料不随 Git 分发。
 
 故障用例同样从新实例开始，`--fault cancel` 由工作站经ROS取消；`--fault stale` 由编排器仅暂停本次独立sensor容器，任务结束后恢复，PX4和时钟持续运行；`--fault worker-exit --worker-pid <本次worker进程ID>` 在3个revision后验证进程身份并中断该worker。后者必须先记录本次worker PID，结束后显式重新准备/启动；不会终止其他模型或GPU进程。每轮都检查 `fault-injection.json`、停止原因、Land和disarmed，不能仅看脚本退出码。
 

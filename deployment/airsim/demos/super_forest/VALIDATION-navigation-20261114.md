@@ -49,5 +49,5 @@ forest8 实测峰速 8.371m/s，沿用原任务 observe 策略，不表示严格
 - short-input-loss-01：在故障注入前触发现有 FLEET_ACK_TIMEOUT，已停止并降落解除武装；
   保留失败证据，重试未修改时间门槛，不宣称该时序波动已修复。
 
-原始失败日志和结果均保留在对应目录。汇总为 `log/super-navigation/validation-summary.json`。
+原始失败日志和结果均保留在对应目录。汇总为 `dev/super-navigation/evidence/summary/validation-summary.json`。
 本轮提供接口封装及上述用例的验证结果，不构成长期可靠性、跨 Planner 或板端验收。
