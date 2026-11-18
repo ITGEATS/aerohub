@@ -5,6 +5,13 @@ platform:
   flight_controller: PX4 SITL
   motion_authority: previously validated AS2 provider during shadow; PIN-SLAM dual-rate provider only after all shadow gates pass
   candidate_role: shadow candidate followed by gated authority validation
+  initialization: >-
+    The AS2 PIN-SLAM plugin remains the sole canonical state/TF provider in
+    authority mode and publishes high-rate PX4 local odometry during takeoff.
+    The global PIN-SLAM correction starts explicitly after the vehicle is
+    airborne, avoiding a vertically degenerate LiDAR map initialization. The
+    accuracy window begins only after two valid PIN-SLAM outputs; initialization
+    service success and pre-window outputs are retained as readiness evidence.
   lidar:
     rotations_per_second: 10
     points_per_second: 80000
@@ -27,7 +34,7 @@ motion:
     Keep takeoff and translation within the stable LiDAR tracking envelope
     while retaining the full distance and airborne-duration gates.
 alignment:
-  method: first valid candidate pose to simultaneous AirSim truth pose
+  method: first valid post-initialization candidate pose to simultaneous AirSim truth pose
   scale: fixed at 1.0
   max_time_pairing_error_s: 0.05
 coverage:

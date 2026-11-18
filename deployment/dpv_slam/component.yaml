@@ -14,12 +14,11 @@ cards:
   - cards/perception/dpv-slam-sparse-points.yaml
 shared_process_group: dpv-slam-gpu
 environment:
-  shared_image: onboard_computer:v0.1.0
+  shared_image: onboard_computer:v0.1.1
+  runtime_image: aerohub/dpv-slam:ros2-humble
   architecture: linux/amd64
-  workspace_prepare: deployment/dpv_slam/prepare_workspace.sh
-  workspace_default: log/workspaces/dpv_slam
-  runtime_compose: deployment/dpv_slam/shared.compose.yaml
-  authority_compose: deployment/dpv_slam/authority.shared.compose.yaml
+  image_build: deployment/dpv_slam/prepare_workspace.sh
+  prohibited_runtime: host source/build overlays and ROS 1 runtime
   dependency_lock: deployment/dpv_slam/python-wheels.sha256
 runtime:
   roles:
@@ -48,13 +47,14 @@ lifecycle:
 validation:
   stage: reproduced
   gate: deployment/dpv_slam/validation.yaml
-  scope: Locked build and GPU runtime, real AirSim RGB input, sparse-point consumption, truth-scored shadow, AS2 authority, RGB interruption and algorithm exit pass in the shared environment. Real flight remains out of scope.
+  scope: Native ROS 2 Humble self-contained GPU image, visible AirSim + PX4 SITL shadow, AS2 authority, sensor loss and algorithm-exit matrix passed.
+  image: sha256:5341db3f2f08f7d5376bddcf7288d7b843900dcdbf0cfbc9e1d4cae1b618c783
   evidence:
-    - log/dpv_slam/shared-workspace-20261111/build.log
-    - log/dpv_slam/shared-workspace-20261112/unit-and-gpu-smoke.log
-    - log/dpv_slam/shared-workspace-20261113-plugin-rebuild.log
-    - log/dpv_slam/shared-workspace-20261113-plugin-smoke.log
-    - log/dpv_slam/shadow-schema-0.2-current-frame-20261114-01
-    - log/dpv_slam/authority-schema-0.2-current-frame-20261114-01
-    - log/dpv_slam/sensor-fault-schema-0.2-final-20261114-01
-    - log/dpv_slam/algorithm-fault-schema-0.2-final-20261114-01
+    - log/dpv_slam/airsim-shadow-24patch-20261118/gate-report.json
+    - log/dpv_slam/airsim-authority-24patch-20261118/gate-report.json
+    - log/dpv_slam/airsim-sensor-fault-24patch-20261118/result.json
+    - log/dpv_slam/airsim-algorithm-fault-24patch-20261118/result.json
+  limitations:
+    - Physical-board and real-flight deployment are not validated.
+    - Sparse visual points are not occupancy or collision geometry.
+    - PX4 local-estimator failure is outside the validated degradation path.

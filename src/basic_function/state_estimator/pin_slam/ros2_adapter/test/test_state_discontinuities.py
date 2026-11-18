@@ -48,6 +48,7 @@ class Harness:
     _stamp_ns = staticmethod(PinSlamNode._stamp_ns)
 
     def __init__(self, results):
+        self._active = True
         self._engine = Engine(results)
         self._map_max_points = 100
         self._map_publish_every_n_frames = 2

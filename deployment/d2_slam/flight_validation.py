@@ -132,7 +132,9 @@ class Validation:
             raise ValueError(f"invalid scenario {SCENARIO}")
         if len(VEHICLES) != 3:
             raise ValueError("D2SLAM acceptance requires exactly three vehicles")
-        self.config = yaml.safe_load(Path("/config/validation.yaml").read_text())
+        config_path = Path(os.environ.get(
+            "D2_VALIDATION_CONFIG", "/opt/d2_slam/runtime/validation.yaml"))
+        self.config = yaml.safe_load(config_path.read_text())
         self.gates = self.config["gates"]
         self.node = rclpy.create_node(
             "d2_slam_fleet_validation",
@@ -239,8 +241,9 @@ class Validation:
         if stamp_ns(message) <= 0:
             return
         self.candidates[vehicle] = message
-        self.candidate_stamps[vehicle].append(stamp_ns(message))
         self.candidate_arrivals[vehicle] = time.monotonic()
+        if self.recording:
+            self.candidate_stamps[vehicle].append(stamp_ns(message))
 
     def cloud(self, vehicle: str, message: PointCloud2) -> None:
         state = self.landmarks[vehicle]
@@ -457,11 +460,11 @@ class Validation:
                     vehicle, "set_arming_state", True, 400,
                     lambda name=vehicle: self.modes.get(name) is not None
                     and self.modes[name].flag_armed)
-        self.recording = True
         goals = {vehicle: Takeoff.Goal(takeoff_height=1.5, takeoff_speed=0.4)
                  for vehicle in VEHICLES}
         self.actions(Takeoff, "TakeoffBehavior", goals, "takeoff_success", 90)
         self.airborne_started = time.monotonic()
+        self.recording = True
         self.screenshot("airborne")
 
     def goto_relative(self, dx: float, dy: float) -> None:
@@ -479,11 +482,11 @@ class Validation:
         self.spin(2)
 
     def land(self) -> None:
+        self.recording = False
         goals = {vehicle: Land.Goal(land_speed=0.4) for vehicle in VEHICLES}
         self.actions(Land, "LandBehavior", goals, "land_success", 120)
         self.wait(lambda: all(not self.modes[vehicle].flag_armed for vehicle in VEHICLES),
                   60, "fleet disarm")
-        self.recording = False
         self.screenshot("landed")
 
     def execute_fault(self) -> None:

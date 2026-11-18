@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import threading
@@ -18,10 +19,9 @@ from sim_startup import StartupRelay
 
 PREFIX = 'aerohub-fast-livo2-'
 NAMES = [PREFIX + name for name in (
-    'vehicle', 'clock', 'sensors', 'algorithm', 'as2', 'mission', 'preflight',
-    'python-source')]
+    'vehicle', 'clock', 'sensors', 'algorithm', 'as2', 'mission', 'preflight')]
 BOARD = 'flight_board:v0.1.0'
-ONBOARD = 'onboard_computer:v0.1.0'
+FAST_IMAGE = os.environ.get('FAST_LIVO2_IMAGE', 'aerohub/fast-livo2:ros2-humble')
 WARMUP_SECONDS = float(os.environ.get('FAST_LIVO_WARMUP_SECONDS', '0'))
 if not 0 <= WARMUP_SECONDS <= 30:
     raise ValueError('FAST_LIVO_WARMUP_SECONDS must be between 0 and 30')
@@ -30,42 +30,11 @@ if not 0.1 <= STARTUP_RELAY_DELAY <= 2.0:
     raise ValueError('PX4_STARTUP_RELAY_DELAY must be between 0.1 and 2.0 seconds')
 
 
-def host_path(variable, default):
-    path = Path(os.environ.get(variable, default))
-    return (path if path.is_absolute() else ROOT / path).resolve()
-
-
-CONFIG_HOST = host_path('FAST_LIVO_CONFIG_HOST', 'deployment/fast_livo2/airsim.yaml')
-CAMERA_HOST = host_path('FAST_LIVO_CAMERA_HOST', 'deployment/fast_livo2/camera_airsim.yaml')
-MISSION_HOST = host_path('FAST_LIVO_MISSION_HOST', 'deployment/fast_livo2/airsim_mission.py')
-AS2_RUN_HOST = host_path('FAST_LIVO_AS2_RUN_HOST', 'deployment/airsim/as2/run.py')
-SCOPED_TF_HOST = host_path(
-    'FAST_LIVO_SCOPED_TF_HOST', 'deployment/airsim/as2/scoped_tf.launch.py')
-ESTIMATOR_HOST = host_path(
-    'FAST_LIVO_ESTIMATOR_HOST', 'deployment/fast_livo2/plugin.params.yaml')
-RPC_HOST = host_path(
-    'FAST_LIVO_RPC_HOST', 'simulator/airsim/sensors/uav_as2_sensor_adapter/rpc.py')
-RUN_ALGORITHM_HOST = host_path(
-    'FAST_LIVO_RUN_ALGORITHM_HOST', 'deployment/fast_livo2/run_algorithm.sh')
-FAST_WORKSPACE = host_path(
-    'FAST_LIVO2_WORKSPACE', 'log/workspaces/fast_livo2-script-validation-01')
-SENSOR_WORKSPACE = host_path(
-    'AIRSIM_SENSOR_WORKSPACE', 'log/workspaces/airsim-sensors-fast-livo2-validation-01')
-PX4_WORKSPACE = host_path(
-    'PX4_MSGS_OVERLAY_WORKSPACE', 'log/workspaces/px4_msgs-61907962-script-validation-02')
-AS2_WORKSPACE = host_path(
-    'AS2_EXECUTION_WORKSPACE', 'log/workspaces/as2-execution-fast-livo2-03')
-WORKSPACES = {
-    'fast_livo2': FAST_WORKSPACE,
-    'airsim_sensors': SENSOR_WORKSPACE,
-    'px4_msgs': PX4_WORKSPACE,
-    'as2_execution': AS2_WORKSPACE,
-}
-
-
-def workspace_state_file(name):
-    filename = 'source-state.env' if name == 'px4_msgs' else 'source-state.txt'
-    return WORKSPACES[name] / filename
+CONFIG_HOST = ROOT / 'deployment/fast_livo2/airsim.yaml'
+CAMERA_HOST = ROOT / 'deployment/fast_livo2/camera_airsim.yaml'
+MISSION_HOST = ROOT / 'deployment/fast_livo2/airsim_mission.py'
+AS2_RUN_HOST = ROOT / 'deployment/airsim/as2/run.py'
+VALIDATION_HOST = ROOT / 'deployment/fast_livo2/validation.yaml'
 
 
 def execute(command, **kwargs):
@@ -101,6 +70,92 @@ def cleanup(output):
     subprocess.run(manager('stop', output), check=False)
 
 
+def port_available(port):
+    try:
+        with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('127.0.0.1', port))
+        return True
+    except OSError:
+        return False
+
+
+def write_cleanup_evidence(output):
+    evidence = {
+        'containers_remaining': [name for name in NAMES if container_exists(name)],
+        'ports_available': {
+            str(port): port_available(port)
+            for port in (44471, 4980, 5080, 8961)
+        },
+        'wall_time': time.time(),
+    }
+    evidence['success'] = (
+        not evidence['containers_remaining'] and all(evidence['ports_available'].values()))
+    (output / 'cleanup.json').write_text(json.dumps(evidence, indent=2) + '\n')
+
+
+def write_gate_report(output, scenario, result):
+    gates = yaml.safe_load(VALIDATION_HOST.read_text())['gates']
+    if scenario == 'shadow':
+        checks = {
+            'shadow_airborne_error_max_m': (
+                result.get('fast_livo2_airborne_error_m'),
+                gates['shadow_airborne_error_max_m'], '<='),
+            'shadow_horizontal_error_max_m': (
+                result.get('fast_livo2_horizontal_error_m'),
+                gates['shadow_horizontal_error_max_m'], '<='),
+            'shadow_truth_movement_min_m': (
+                result.get('truth_airborne_movement_m'),
+                gates['shadow_truth_movement_min_m'], '>='),
+            'shadow_estimate_movement_min_m': (
+                result.get('fast_livo2_airborne_movement_m'),
+                gates['shadow_estimate_movement_min_m'], '>='),
+            'registered_point_nonempty_samples_min': (
+                result.get('cloud_consumer', {}).get('nonempty'),
+                gates['registered_point_nonempty_samples_min'], '>='),
+            'landed_and_disarmed': (result.get('landed_and_disarmed'), True, '=='),
+        }
+    elif scenario == 'authority':
+        checks = {
+            'authority_waypoint_error_max_m': (
+                result.get('waypoint_error_m'),
+                gates['authority_waypoint_error_max_m'], '<='),
+            'authority_hold_drift_max_m': (
+                result.get('hold_drift_m'),
+                gates['authority_hold_drift_max_m'], '<='),
+            'authority_final_truth_error_max_m': (
+                result.get('truth_error_final_m'),
+                gates['authority_final_truth_error_max_m'], '<='),
+            'registered_point_nonempty_samples_min': (
+                result.get('cloud_consumer', {}).get('nonempty'),
+                gates['registered_point_nonempty_samples_min'], '>='),
+            'landed_and_disarmed': (result.get('landed_and_disarmed'), True, '=='),
+        }
+    else:
+        checks = {
+            'scenario_matches': (result.get('scenario'), scenario, '=='),
+            'fault_matches': (result.get('fault'), scenario, '=='),
+            'fault_detected': (result.get('detection_seconds'), 30.0, '<='),
+            'landed_and_disarmed': (result.get('landed_and_disarmed'), True, '=='),
+        }
+    report = {'scenario': scenario, 'checks': {}, 'passed': True}
+    for name, (measured, threshold, operator) in checks.items():
+        if operator == '<=':
+            passed = measured is not None and measured <= threshold
+        elif operator == '>=':
+            passed = measured is not None and measured >= threshold
+        else:
+            passed = measured == threshold
+        report['checks'][name] = {
+            'measured': measured, 'operator': operator,
+            'threshold': threshold, 'passed': passed,
+        }
+        report['passed'] = report['passed'] and passed
+    (output / 'gate-report.json').write_text(json.dumps(report, indent=2) + '\n')
+    if not report['passed']:
+        raise RuntimeError('FAST-LIVO2 acceptance gate failed: ' + json.dumps(report))
+
+
 def wait_px4(output, attempt):
     started = time.monotonic()
     deadline = started + float(os.environ.get('PX4_STARTUP_TIMEOUT', '60'))
@@ -132,14 +187,12 @@ def probe_px4_preflight(output, attempt):
     command = [
         'docker', 'run', '--rm', '--init', '--network', 'host', '--name', name,
         '--env', 'ROS_DOMAIN_ID=96',
-        '--volume', f'{PX4_WORKSPACE}:/px4-overlay:ro',
-        '--volume',
-        f'{ROOT / "deployment/fast_livo2/preflight_probe.py"}:/probe.py:ro',
-        '--entrypoint', 'bash', ONBOARD, '-lc',
+        '--entrypoint', 'bash', FAST_IMAGE, '-lc',
         'source /opt/ros/humble/setup.bash && '
         'source /opt/px4_ws/install/setup.bash && '
-        'source /px4-overlay/install/setup.bash && '
-        'exec python3 /probe.py --timeout 15 --stable-seconds 2',
+        'source /opt/fast_livo2_ws/install/setup.bash && '
+        'exec python3 /opt/fast_livo2/runtime/preflight_probe.py '
+        '--timeout 15 --stable-seconds 2',
     ]
     completed = subprocess.run(command, text=True, capture_output=True)
     evidence = {
@@ -153,20 +206,10 @@ def probe_px4_preflight(output, attempt):
     return completed.returncode == 0
 
 
-def validate_workspaces():
-    required = {
-        'fast_livo2': FAST_WORKSPACE / 'install/fast_livo/lib/fast_livo/fastlivo_mapping',
-        'airsim_sensors': SENSOR_WORKSPACE / (
-            'install/lib/uav_as2_sensor_adapter/airsim_sensor_node'),
-        'px4_msgs': PX4_WORKSPACE / 'install/setup.bash',
-        'as2_execution': AS2_WORKSPACE / (
-            'install/lib/as2_platform_pixhawk/as2_platform_pixhawk_node'),
-    }
-    for name, artifact in required.items():
-        if not artifact.exists():
-            raise RuntimeError(f'{name} overlay artifact is missing: {artifact}')
-        if not workspace_state_file(name).is_file():
-            raise RuntimeError(f'{name} overlay source manifest is missing')
+def validate_inputs():
+    for path in (CONFIG_HOST, CAMERA_HOST, MISSION_HOST, AS2_RUN_HOST, VALIDATION_HOST):
+        if not path.is_file():
+            raise RuntimeError(f'required acceptance input is missing: {path}')
 
 
 def source_manifest(output):
@@ -190,14 +233,6 @@ def source_manifest(output):
         for path in files
         if path.is_file() and '__pycache__' not in path.parts
     }
-    workspace_state = {}
-    for name, path in WORKSPACES.items():
-        state = workspace_state_file(name)
-        workspace_state[name] = {
-            'path': str(path),
-            'source_state_sha256': hashlib.sha256(state.read_bytes()).hexdigest(),
-            'source_state': state.read_text().splitlines(),
-        }
     manifest = {
         'commit': subprocess.check_output(
             ['git', '-C', ROOT, 'rev-parse', 'HEAD'], text=True).strip(),
@@ -227,25 +262,10 @@ def source_manifest(output):
         },
         'ports': {'airsim_rpc': 44471, 'airsim_tcp': 4980,
                   'px4_relay': 5080, 'agent': 8961},
-        'workspaces': workspace_state,
+        'runtime_policy': 'self-contained image; no source or workspace mounts',
         'source_hashes': hashes,
     }
     (output / 'source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-
-
-def extract_msgpack(output):
-    target = output / 'python-overlay'
-    target.mkdir()
-    name = PREFIX + 'python-source'
-    execute(['docker', 'create', '--name', name, BOARD], stdout=subprocess.DEVNULL)
-    try:
-        execute(['docker', 'cp', name + ':/usr/lib/python3/dist-packages/msgpack', target])
-    finally:
-        subprocess.run(['docker', 'rm', '--force', name], stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
-    if not (target / 'msgpack/__init__.py').is_file():
-        raise RuntimeError('fixed flight-board image did not provide the msgpack runtime')
-    return target
 
 
 def run_detached(name, image, environment, volumes, command):
@@ -276,20 +296,17 @@ def main():
         subprocess.run(manager('status', output), check=False)
         execute(['docker', 'ps', '--filter', 'name=' + PREFIX])
         return
-    if os.environ.get('DISPLAY') != ':3' or os.environ.get('AIRSIM_RENDER_MODE') != 'windowed':
-        raise RuntimeError('acceptance requires DISPLAY=:3 and AIRSIM_RENDER_MODE=windowed')
+    if os.environ.get('DISPLAY') != ':1' or os.environ.get('AIRSIM_RENDER_MODE') != 'windowed':
+        raise RuntimeError('acceptance requires DISPLAY=:1 and AIRSIM_RENDER_MODE=windowed')
     if any((output / name).exists() for name in ('result.json', 'failure.json', 'images.json')):
         raise RuntimeError('choose a fresh output directory')
     for name in NAMES:
         if container_exists(name):
             raise RuntimeError('reserved container exists: ' + name)
-    for image in (BOARD, ONBOARD):
+    for image in (BOARD, FAST_IMAGE):
         execute(['docker', 'image', 'inspect', image], stdout=subprocess.DEVNULL)
-    validate_workspaces()
+    validate_inputs()
     source_manifest(output)
-    msgpack_overlay = extract_msgpack(output)
-    algorithm_debug = output / 'algorithm-debug'
-    (algorithm_debug / 'result').mkdir(parents=True)
     settings = json.loads(
         (ROOT / 'simulator/airsim/scenarios/fast_livo2/settings.json').read_text())
     px4_settings = json.loads(json.dumps(settings))
@@ -301,7 +318,7 @@ def main():
     identities = {
         name: subprocess.check_output(
             ['docker', 'image', 'inspect', '--format', '{{.Id}}', image], text=True).strip()
-        for name, image in (('flight_board', BOARD), ('onboard_computer', ONBOARD))
+        for name, image in (('flight_board', BOARD), ('fast_livo2', FAST_IMAGE))
     }
     (output / 'images.json').write_text(json.dumps(identities, indent=2) + '\n')
     relay = None
@@ -362,36 +379,31 @@ def main():
 
         sensor_command = (
             'source /opt/ros/humble/setup.bash && '
-            'source /opt/platform_sensors/install/setup.bash && '
-            'source /sensor-overlay/install/setup.bash && '
+            'source /opt/fast_livo2_ws/install/setup.bash && '
             'exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args '
             '-p use_sim_time:=true -p settings_file:=/config/settings.json '
             '-p vehicle_name:=PX4 -p vehicle_namespace:=drone0 '
             '-p rpc_host:=127.0.0.1 -p rpc_port:=44471 '
             '-p camera_rate_hz:=5.0 -p imu_rate_hz:=100.0 -p lidar_rate_hz:=10.0')
         run_detached(
-            PREFIX + 'sensors', BOARD, {'ROS_DOMAIN_ID': '96'},
-            [(SENSOR_WORKSPACE, '/sensor-overlay', 'ro'),
-             (output / 'px4-settings.json', '/config/settings.json', 'ro')],
+            PREFIX + 'sensors', FAST_IMAGE, {'ROS_DOMAIN_ID': '96'},
+            [(output / 'px4-settings.json', '/config/settings.json', 'ro')],
             sensor_command)
 
         run_detached(
-            PREFIX + 'algorithm', ONBOARD, {'ROS_DOMAIN_ID': '96'},
-            [(FAST_WORKSPACE, '/workspace', 'ro'),
-             (algorithm_debug, '/workspace/src/fast_livo/Log', 'rw'),
-             (CONFIG_HOST, '/config/airsim.yaml', 'ro'),
-             (CAMERA_HOST, '/config/camera.yaml', 'ro'),
-             (RUN_ALGORITHM_HOST, '/opt/aerohub/run_fast_livo2.sh', 'ro')],
-            'exec /opt/aerohub/run_fast_livo2.sh')
+            PREFIX + 'algorithm', FAST_IMAGE, {'ROS_DOMAIN_ID': '96'}, [],
+            'exec /usr/local/bin/aerohub-fast-livo2')
 
         as2_environment = {
             'ROS_DOMAIN_ID': '96', 'AS2_FLEET_FILE': '/results/fleet.yaml',
             'AS2_TF_SCOPE': 'per-vehicle', 'AS2_EXTERNAL_ODOM': '0',
+            'AS2_CONFIG_FILE': '/opt/fast_livo2/runtime/as2_config.yaml',
+            'AS2_CONTROLLER_CONFIG_FILE': '/opt/fast_livo2/runtime/pid.yaml',
         }
         if args.scenario != 'shadow':
             as2_environment.update({
                 'AS2_STATE_ESTIMATOR_PLUGIN': 'fast_livo2',
-                'AS2_STATE_ESTIMATOR_CONFIG_FILE': '/config/plugin.yaml',
+                'AS2_STATE_ESTIMATOR_CONFIG_FILE': '/opt/fast_livo2/config/plugin.yaml',
                 'AS2_STATE_ESTIMATOR_LAUNCH_PACKAGE': 'uav_fast_livo2',
                 'AS2_STATE_ESTIMATOR_LAUNCH_FILE': 'external_state_estimator.launch.py',
             })
@@ -399,18 +411,11 @@ def main():
             'source /opt/ros/humble/setup.bash && '
             'source /opt/px4_ws/install/setup.bash && '
             'source /root/aerostack2_ws/install/setup.bash && '
-            'source /fast-livo-overlay/install/setup.bash && '
-            'source /px4-overlay/install/setup.bash && '
-            'source /as2-overlay/install/setup.bash && '
-            'exec python3 /opt/aerohub/run_as2.py')
+            'source /opt/fast_livo2_ws/install/setup.bash && '
+            'exec python3 /opt/fast_livo2/runtime/run_as2.py')
         run_detached(
-            PREFIX + 'as2', ONBOARD, as2_environment,
-            [(output, '/results', 'rw'), (PX4_WORKSPACE, '/px4-overlay', 'ro'),
-             (AS2_WORKSPACE, '/as2-overlay', 'ro'),
-             (FAST_WORKSPACE, '/fast-livo-overlay', 'ro'),
-             (AS2_RUN_HOST, '/opt/aerohub/run_as2.py', 'ro'),
-             (SCOPED_TF_HOST, '/opt/aerohub/scoped_tf.launch.py', 'ro'),
-             (ESTIMATOR_HOST, '/config/plugin.yaml', 'ro')],
+            PREFIX + 'as2', FAST_IMAGE, as2_environment,
+            [(output, '/results', 'rw')],
             as2_command)
 
         mission_environment = {
@@ -422,23 +427,17 @@ def main():
             'source /opt/ros/humble/setup.bash && '
             'source /opt/px4_ws/install/setup.bash && '
             'source /root/aerostack2_ws/install/setup.bash && '
-            'source /px4-overlay/install/setup.bash && '
-            'source /as2-overlay/install/setup.bash && '
-            'PYTHONPATH=/tmp/aerohub:/opt/flight-board-python:${PYTHONPATH:-} '
-            'exec python3 /tmp/aerohub/airsim_mission.py')
+            'source /opt/fast_livo2_ws/install/setup.bash && '
+            'PYTHONPATH=/opt/fast_livo2/runtime:${PYTHONPATH:-} '
+            'exec python3 /opt/fast_livo2/runtime/airsim_mission.py')
         mission_args = [
             'docker', 'run', '--init', '--network', 'host', '--name', PREFIX + 'mission',
         ]
         for key, value in mission_environment.items():
             mission_args += ['--env', f'{key}={value}']
-        for source, target, mode in (
-                (output, '/results', 'rw'), (PX4_WORKSPACE, '/px4-overlay', 'ro'),
-                (AS2_WORKSPACE, '/as2-overlay', 'ro'),
-                (msgpack_overlay, '/opt/flight-board-python', 'ro'),
-                (MISSION_HOST, '/tmp/aerohub/airsim_mission.py', 'ro'),
-                (RPC_HOST, '/tmp/aerohub/airsim_rpc.py', 'ro')):
+        for source, target, mode in ((output, '/results', 'rw'),):
             mission_args += ['--volume', f'{source}:{target}:{mode}']
-        mission_args += ['--entrypoint', 'bash', ONBOARD, '-lc', mission_command]
+        mission_args += ['--entrypoint', 'bash', FAST_IMAGE, '-lc', mission_command]
         injector = None
         injector_errors = []
         if args.scenario in ('sensor_fault', 'algorithm_fault'):
@@ -484,10 +483,12 @@ def main():
         result = json.loads((output / 'result.json').read_text())
         if not result.get('success'):
             raise RuntimeError('FAST-LIVO2 mission did not pass')
+        write_gate_report(output, args.scenario, result)
     finally:
         cleanup(output)
         if relay:
             relay.close()
+        write_cleanup_evidence(output)
 
 
 if __name__ == '__main__':
