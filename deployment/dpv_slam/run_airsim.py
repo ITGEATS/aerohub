@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import threading
@@ -19,31 +20,12 @@ CONTAINERS = [PREFIX + name for name in (
     "clock", "vehicle", "sensors", "truth", "algorithm", "as2",
     "freshness", "mission")]
 BOARD = "flight_board:v0.1.0"
-ONBOARD = "onboard_computer:v0.1.0"
+DPV_IMAGE = os.environ.get("DPV_SLAM_IMAGE", "aerohub/dpv-slam:ros2-humble")
 DOMAIN = 82
 
-
-def host_path(variable, default):
-    value = Path(os.environ.get(variable, default))
-    return (value if value.is_absolute() else ROOT / value).resolve()
-
-
-DPV_WORKSPACE = host_path("DPV_SLAM_WORKSPACE", "log/workspaces/dpv_slam")
-SENSOR_WORKSPACE = host_path(
-    "AIRSIM_SENSOR_WORKSPACE", "log/workspaces/airsim-sensors-dpv-parallel-rpc-02")
-PX4_WORKSPACE = host_path(
-    "PX4_MSGS_OVERLAY_WORKSPACE", "log/workspaces/px4_msgs-61907962-script-validation-02")
-AS2_WORKSPACE = host_path(
-    "AS2_EXECUTION_WORKSPACE", "log/workspaces/as2-execution-fast-livo2-ca38fa8-01")
 SETTINGS = ROOT / "deployment/dpv_slam/airsim-settings.json"
 PROFILE = ROOT / "deployment/dpv_slam/airsim-profile.json"
-AS2_RUN = ROOT / "deployment/airsim/as2/run.py"
-VALIDATOR = ROOT / "deployment/dpv_slam/shadow_validation.py"
-TRUTH = ROOT / "deployment/dpv_slam/airsim_truth_bridge.py"
-FRESHNESS = ROOT / "deployment/state_estimator/canonical_freshness.py"
-GATE = ROOT / "deployment/dpv_slam/gate_result.py"
-GATE_CONFIG = ROOT / "deployment/dpv_slam/validation.yaml"
-ESTIMATOR_CONFIG = ROOT / "src/basic_function/state_estimator/dpv_slam/plugin/config/estimator.yaml"
+UPSTREAM_ROOT = ROOT / "src/basic_function/state_estimator/dpv_slam/upstream"
 
 
 def execute(command, **kwargs):
@@ -93,28 +75,41 @@ def cleanup(output):
                    stderr=subprocess.DEVNULL)
 
 
-def workspace_state(workspace):
-    for name in ("source-state.txt", "source-state.env"):
-        candidate = workspace / name
-        if candidate.is_file():
-            return candidate
-    raise RuntimeError(f"workspace source manifest is missing: {workspace}")
+def port_available(port):
+    try:
+        with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+
+
+def write_cleanup_evidence(output):
+    evidence = {
+        "containers_remaining": [
+            name for name in CONTAINERS if container_exists(name)],
+        "ports_available": {
+            str(port): port_available(port)
+            for port in (45471, 5080, 8891)
+        },
+        "wall_time": time.time(),
+    }
+    evidence["success"] = (
+        not evidence["containers_remaining"]
+        and all(evidence["ports_available"].values()))
+    (output / "cleanup.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
 
 def validate_inputs():
     required = {
-        "dpv_ros": DPV_WORKSPACE / "ros/install/setup.bash",
-        "dpv_plugin": DPV_WORKSPACE / "plugin/install/setup.bash",
-        "dpv_cuda": DPV_WORKSPACE / "python/cuda_corr.cpython-310-x86_64-linux-gnu.so",
-        "sensor": SENSOR_WORKSPACE / "install/lib/uav_as2_sensor_adapter/airsim_sensor_node",
-        "px4_msgs": PX4_WORKSPACE / "install/setup.bash",
-        "as2": AS2_WORKSPACE / "install/lib/as2_platform_pixhawk/as2_platform_pixhawk_node",
+        "settings": SETTINGS,
+        "profile": PROFILE,
+        "dpvo_source": UPSTREAM_ROOT / "dpvo/dpvo.py",
     }
     for label, path in required.items():
         if not path.exists():
             raise RuntimeError(f"{label} artifact is missing: {path}")
-    for workspace in (DPV_WORKSPACE, SENSOR_WORKSPACE, PX4_WORKSPACE, AS2_WORKSPACE):
-        workspace_state(workspace)
 
 
 def source_manifest(output, scenario):
@@ -128,22 +123,12 @@ def source_manifest(output, scenario):
         str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in files if "__pycache__" not in path.parts
     }
-    workspaces = {}
-    for label, workspace in {
-            "dpv_slam": DPV_WORKSPACE, "airsim_sensors": SENSOR_WORKSPACE,
-            "px4_msgs": PX4_WORKSPACE, "as2_execution": AS2_WORKSPACE}.items():
-        state = workspace_state(workspace)
-        workspaces[label] = {
-            "path": str(workspace),
-            "source_state_sha256": hashlib.sha256(state.read_bytes()).hexdigest(),
-            "source_state": state.read_text().splitlines(),
-        }
     manifest = {
         "scenario": scenario,
         "commit": subprocess.check_output(
             ["git", "-C", ROOT, "rev-parse", "HEAD"], text=True).strip(),
         "dpvo_commit": subprocess.check_output(
-            ["git", "-C", ROOT / "src/basic_function/state_estimator/dpv_slam/upstream",
+            ["git", "-C", UPSTREAM_ROOT,
              "rev-parse", "HEAD"], text=True).strip(),
         "dirty": bool(subprocess.check_output(
             ["git", "-C", ROOT, "status", "--porcelain"])),
@@ -152,7 +137,7 @@ def source_manifest(output, scenario):
         "ros_domain": DOMAIN,
         "ports": {"airsim_rpc": 45471, "px4_tcp": 5080,
                   "agent": 8891, "system_id": 21},
-        "workspaces": workspaces,
+        "runtime_policy": "self-contained image; no source or workspace mounts",
         "source_hashes": hashes,
     }
     (output / "source-manifest.json").write_text(
@@ -182,9 +167,9 @@ def wait_px4(output):
 def graph_evidence(output):
     command = (
         "source /opt/ros/humble/setup.bash && "
-        "source /opt/px4_ws/install/setup.bash && source /px4-overlay/install/setup.bash && "
+        "source /opt/px4_ws/install/setup.bash && "
         "source /root/aerostack2_ws/install/setup.bash && "
-        "source /as2-overlay/install/setup.bash && source /dpv/plugin/install/setup.bash && "
+        "source /opt/dpv_ws/install/setup.bash && "
         "ros2 node list; ros2 topic info -v "
         "/drone0/sensor_measurements/FrontCamera/rgb/image; "
         "ros2 topic info -v /drone0/dpv_slam/odometry; "
@@ -192,10 +177,7 @@ def graph_evidence(output):
     base = [
         "docker", "run", "--rm", "--network", "host",
         "--env", f"ROS_DOMAIN_ID={DOMAIN}",
-        "--volume", f"{PX4_WORKSPACE}:/px4-overlay:ro",
-        "--volume", f"{AS2_WORKSPACE}:/as2-overlay:ro",
-        "--volume", f"{DPV_WORKSPACE}:/dpv:ro",
-        "--entrypoint", "bash", ONBOARD, "-lc", command,
+        "--entrypoint", "bash", DPV_IMAGE, "-lc", command,
     ]
     deadline = time.monotonic() + 60
     attempts = []
@@ -240,15 +222,15 @@ def main():
         subprocess.run(manager("status", output), check=False)
         execute(["docker", "ps", "--filter", "name=" + PREFIX])
         return
-    if os.environ.get("DISPLAY") != ":3" or os.environ.get(
+    if os.environ.get("DISPLAY") != ":1" or os.environ.get(
             "AIRSIM_RENDER_MODE") != "windowed":
-        raise RuntimeError("acceptance requires DISPLAY=:3 and windowed rendering")
+        raise RuntimeError("acceptance requires DISPLAY=:1 and windowed rendering")
     if any((output / name).exists() for name in (
             "result.json", "failure.json", "gate-report.json")):
         raise RuntimeError("choose a fresh output directory")
     if any(container_exists(name) for name in CONTAINERS):
         raise RuntimeError("a reserved DPV-SLAM container already exists")
-    for image in (BOARD, ONBOARD):
+    for image in (BOARD, DPV_IMAGE):
         execute(["docker", "image", "inspect", image], stdout=subprocess.DEVNULL)
     validate_inputs()
     source_manifest(output, args.scenario)
@@ -258,7 +240,7 @@ def main():
         label: subprocess.check_output(
             ["docker", "image", "inspect", "--format", "{{.Id}}", image],
             text=True).strip()
-        for label, image in (("flight_board", BOARD), ("onboard_computer", ONBOARD))
+        for label, image in (("flight_board", BOARD), ("dpv_slam", DPV_IMAGE))
     }
     (output / "images.json").write_text(json.dumps(images, indent=2) + "\n")
     try:
@@ -267,10 +249,11 @@ def main():
         environment = Path(f"/proc/{scene['pid']}/environ").read_bytes().replace(
             b"\0", b"\n").decode(errors="replace")
         window = subprocess.check_output(
-            ["bash", "-lc", "DISPLAY=:3 xwininfo -root -tree | grep -i AirSimNH"],
+            ["bash", "-lc", "DISPLAY=:1 xwininfo -root -tree | grep -i AirSimNH"],
             text=True)
         (output / "window-evidence.txt").write_text(
             "command=" + json.dumps(scene["command"]) + "\n" + environment + window)
+        runtime_settings = output / "scene/settings.json"
 
         common = {"ROS_DOMAIN_ID": str(DOMAIN)}
         clock_env = dict(common, AIRSIM_RPC_PORT="45471", VEHICLE_NAME="PX4")
@@ -284,74 +267,65 @@ def main():
                            AIRSIM_SETTINGS="/config/settings.json",
                            FLIGHT_BOARD_SENSORS="0")
         run_detached(PREFIX + "vehicle", BOARD, vehicle_env,
-                     [(SETTINGS, "/config/settings.json", "ro")],
+                     [(runtime_settings, "/config/settings.json", "ro")],
                      "source /opt/ros/humble/setup.bash && "
                      "source /opt/platform_sensors/install/setup.bash && "
                      "exec python3 /opt/flight_board/supervisor.py vehicle")
         wait_px4(output)
 
         sensor_command = (
-            "source /opt/ros/humble/setup.bash && source /opt/platform_sensors/install/setup.bash && "
-            "source /sensor-overlay/install/setup.bash && "
+            "source /opt/ros/humble/setup.bash && source /opt/dpv_ws/install/setup.bash && "
             "exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args "
             "-p use_sim_time:=true -p settings_file:=/config/settings.json "
             "-p vehicle_name:=PX4 -p vehicle_namespace:=drone0 "
             "-p rpc_port:=45471 -p camera_rate_hz:=15.0 "
             "-p camera_parallelism:=4 -p imu_rate_hz:=100.0 -p lidar_rate_hz:=10.0")
-        run_detached(PREFIX + "sensors", BOARD, common,
-                     [(SENSOR_WORKSPACE, "/sensor-overlay", "ro"),
-                      (SETTINGS, "/config/settings.json", "ro")], sensor_command)
+        run_detached(PREFIX + "sensors", DPV_IMAGE, common,
+                     [(runtime_settings, "/config/settings.json", "ro")], sensor_command)
         truth_command = (
-            "source /opt/ros/humble/setup.bash && source /sensor-overlay/install/setup.bash && "
-            "exec python3 /opt/aerohub/airsim_truth_bridge.py --ros-args "
+            "source /opt/ros/humble/setup.bash && source /opt/dpv_ws/install/setup.bash && "
+            "exec python3 /opt/dpv/runtime/airsim_truth_bridge.py --ros-args "
             "-p use_sim_time:=true -p rpc_port:=45471")
-        run_detached(PREFIX + "truth", BOARD, common,
-                     [(SENSOR_WORKSPACE, "/sensor-overlay", "ro"),
-                      (TRUTH, "/opt/aerohub/airsim_truth_bridge.py", "ro")],
-                     truth_command)
+        run_detached(PREFIX + "truth", DPV_IMAGE, common, [], truth_command)
 
         algorithm_command = (
-            "export PYTHONPATH=/dpv/python:/workspace/aerohub/src/basic_function/state_estimator/dpv_slam/upstream:${PYTHONPATH:-} && "
-            "export LD_LIBRARY_PATH=$(find /dpv/python/nvidia -type d -name lib -print | paste -sd:):/dpv/cuda/lib:/dpv/cuda/lib64:${LD_LIBRARY_PATH:-} && "
-            "source /opt/ros/humble/setup.bash && source /dpv/ros/install/setup.bash && "
+            "export LD_LIBRARY_PATH=$(find /opt/dpv/python/nvidia -type d -name lib -print | paste -sd:):"
+            "/opt/dpv/cuda/lib:/opt/dpv/cuda/lib64:${LD_LIBRARY_PATH:-} && "
+            "source /opt/ros/humble/setup.bash && source /opt/dpv_ws/install/setup.bash && "
             "exec ros2 run uav_dpv_slam_ros2 dpv_slam_node --ros-args "
-            "-r __ns:=/drone0 --params-file /config/algorithm.yaml")
-        run_detached(PREFIX + "algorithm", ONBOARD, common,
-                     [(ROOT, "/workspace/aerohub", "ro"), (DPV_WORKSPACE, "/dpv", "ro"),
-                      (ROOT / "deployment/dpv_slam/algorithm.params.yaml",
-                       "/config/algorithm.yaml", "ro"), (output, "/results", "rw")],
+            "-r __ns:=/drone0 --params-file /opt/dpv/config/algorithm.yaml")
+        run_detached(PREFIX + "algorithm", DPV_IMAGE, common,
+                     [(output, "/results", "rw")],
                      algorithm_command, gpu=True)
 
         as2_env = dict(common, AS2_FLEET_FILE="/results/fleet.yaml",
-                       AS2_EXTERNAL_ODOM="0")
+                       AS2_EXTERNAL_ODOM="0",
+                       AS2_CONFIG_FILE="/opt/dpv/runtime/as2_config.yaml",
+                       AS2_CONTROLLER_CONFIG_FILE="/opt/dpv/runtime/pid.yaml")
         if args.scenario != "shadow":
             as2_env.update({
                 "AS2_STATE_ESTIMATOR_PLUGIN": "dpv_slam",
-                "AS2_STATE_ESTIMATOR_CONFIG_FILE": "/config/estimator.yaml",
+                "AS2_STATE_ESTIMATOR_CONFIG_FILE": "/opt/dpv/config/estimator.yaml",
                 "AS2_STATE_ESTIMATOR_LAUNCH_PACKAGE": "uav_dpv_slam",
                 "AS2_STATE_ESTIMATOR_LAUNCH_FILE": "dpv_slam.launch.py",
             })
         as2_command = (
             "source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && "
-            "source /px4-overlay/install/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "source /as2-overlay/install/setup.bash && source /dpv/plugin/install/setup.bash && "
-            "exec python3 /opt/aerohub/run_as2.py")
-        run_detached(PREFIX + "as2", ONBOARD, as2_env,
-                     [(output, "/results", "rw"), (PX4_WORKSPACE, "/px4-overlay", "ro"),
-                      (AS2_WORKSPACE, "/as2-overlay", "ro"),
-                      (DPV_WORKSPACE, "/dpv", "ro"),
-                      (AS2_RUN, "/opt/aerohub/run_as2.py", "ro"),
-                      (ESTIMATOR_CONFIG, "/config/estimator.yaml", "ro")], as2_command)
+            "source /opt/dpv_ws/install/setup.bash && "
+            "exec python3 /opt/dpv/runtime/run_as2.py")
+        run_detached(PREFIX + "as2", DPV_IMAGE, as2_env,
+                     [(output, "/results", "rw")], as2_command)
 
         if args.scenario != "shadow":
             freshness_command = (
                 "source /opt/ros/humble/setup.bash && "
                 "source /root/aerostack2_ws/install/setup.bash && "
-                "exec python3 /probe.py --namespace drone0 "
+                "source /opt/dpv_ws/install/setup.bash && "
+                "exec python3 /opt/dpv/runtime/canonical_freshness.py --namespace drone0 "
                 "--output /results/canonical-freshness.json")
-            run_detached(PREFIX + "freshness", ONBOARD, common,
-                         [(output, "/results", "rw"), (FRESHNESS, "/probe.py", "ro")],
+            run_detached(PREFIX + "freshness", DPV_IMAGE, common,
+                         [(output, "/results", "rw")],
                          freshness_command)
 
         time.sleep(8)
@@ -360,19 +334,16 @@ def main():
                                    DPV_SLAM_SCENARIO=args.scenario)
         mission_command = (
             "source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && "
-            "source /px4-overlay/install/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "source /as2-overlay/install/setup.bash && exec python3 /validator.py")
+            "source /opt/dpv_ws/install/setup.bash && "
+            "exec python3 /opt/dpv/runtime/shadow_validation.py")
         mission_args = ["docker", "run", "--init", "--network", "host",
                         "--name", PREFIX + "mission"]
         for key, value in mission_environment.items():
             mission_args += ["--env", f"{key}={value}"]
-        for source, target, mode in (
-                (output, "/results", "rw"), (PX4_WORKSPACE, "/px4-overlay", "ro"),
-                (AS2_WORKSPACE, "/as2-overlay", "ro"),
-                (VALIDATOR, "/validator.py", "ro")):
+        for source, target, mode in ((output, "/results", "rw"),):
             mission_args += ["--volume", f"{source}:{target}:{mode}"]
-        mission_args += ["--entrypoint", "bash", ONBOARD, "-lc", mission_command]
+        mission_args += ["--entrypoint", "bash", DPV_IMAGE, "-lc", mission_command]
 
         injector_errors = []
         injector = None
@@ -427,15 +398,19 @@ def main():
         if container_exists(PREFIX + "freshness"):
             execute(["docker", "stop", "--timeout", "10", PREFIX + "freshness"],
                     stdout=subprocess.DEVNULL)
-        gate_command = [sys.executable, GATE, GATE_CONFIG, output / "result.json",
-                        "--output", output / "gate-report.json"]
+        gate_command = [
+            "docker", "run", "--rm", "--volume", f"{output}:/results:rw",
+            "--entrypoint", "python3", DPV_IMAGE,
+            "/opt/dpv/runtime/gate_result.py", "/opt/dpv/runtime/validation.yaml",
+            "/results/result.json", "--output", "/results/gate-report.json"]
         if args.scenario == "authority":
             gate_command += ["--authority", "--authority-freshness",
-                             output / "canonical-freshness.json"]
+                             "/results/canonical-freshness.json"]
         if args.scenario in ("shadow", "authority"):
             execute(gate_command)
     finally:
         cleanup(output)
+        write_cleanup_evidence(output)
 
 
 if __name__ == "__main__":

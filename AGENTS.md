@@ -9,8 +9,8 @@
 - 开发者自行选择 Linux 构建与测试环境；个人机器配置保存在不纳入 Git 的本地配置中。跨工作区同步前核对差异，保留已有依赖、独有文件及用户修改，不整树覆盖。
 - 临时测试目录不作为源码的长期保存位置。本地专用 AGENTS.md 不得覆盖本仓库的共享版本。
 - 未经用户明确授权，不创建 Git commit，不执行 push、merge 或历史改写。
-- 兼容问题优先在本项目通过 Adapter、Bridge、插件、配置或启动层解决。确实必须修改上游源码时才使用 Fork；所有 Fork 必须作为 Git 子模块接入，由 `.gitmodules` 记录仓库 URL、由父仓库 gitlink 锁定可获取提交，不复制 Fork 源码到主仓库，也不以构建补丁代替最终来源。
-- 共享 Docker 镜像作为稳定开发工具使用，普通 AS2/算法/适配修改优先在各自外部工作区补编译，并显式加载对应 install overlay；不因源码迭代默认重建或替换镜像。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用镜像旧插件。新增依赖先核查现有环境及工作区局部依赖；确需升级基础环境时作为单独的团队版本变更处理。
+- 兼容问题优先在本项目通过 Adapter、插件、配置或启动层解决。ROS 1 算法必须源码迁移到 ROS 2 Humble；ROS 1 容器、`ros1_bridge`、专用 Proxy 或 IPC 桥只能用于离线基线对照，不能进入 PC 复现、板端部署或交付运行拓扑。确实必须修改上游源码时才使用 Fork；所有 Fork 必须作为 Git 子模块接入，由 `.gitmodules` 记录仓库 URL、由父仓库 gitlink 锁定可获取提交，不复制 Fork 源码到主仓库，也不以构建补丁代替最终来源。
+- `onboard_computer` 共享镜像作为复现镜像的固定基础环境。算法交付镜像必须在构建阶段复制锁定源码并编译依赖、算法和适配层，运行时不得挂载仓库、源码 workspace、build/install overlay 或宿主依赖目录。易于为目标架构构建的依赖直接编入镜像；难以迁移的 ROS 1 依赖不能通过额外挂载规避，应按板端已有 ROS 2 Humble、Python 和系统工具完成源码迁移。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用旧插件。
 
 ## 目标架构
 
@@ -113,4 +113,4 @@
 
 CUDA 模型迁移、独立环境与模型文件准备按正式子 Skill [model-migration-cuda](skill/model-migration-cuda/SKILL.md) 执行；每模型 README/setup 及验证要求集中在该 Skill 维护。
 
-自建代码位于 `src/`，顶层按 `tool/`、`basic_function/`、`behavior/` 三类组织。导航算法位于 `tool/navigation/planner/`，共用协调与接口分别位于 `tool/navigation/framework/` 和 `tool/navigation/interfaces/`；Inference、State Estimator、Perception 位于 `basic_function/` 下。面向任务的目标检测 Tool 应放入 `tool/object_detection/`，其模型推理适配仍归 `basic_function/inference/models/`。CAT-ORA 与 Swarm-Formation 使用 `upstream/`、`ros2_adapter/`、`ros1_proxy/`。同类对象的目录规则见 `docs/开发者贡献指导.md` 和 `src/README.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。开发材料和产物按上文归属；部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。
+自建代码位于 `src/`，顶层按 `tool/`、`basic_function/`、`behavior/` 三类组织。导航算法位于 `tool/navigation/planner/`，共用协调与接口分别位于 `tool/navigation/framework/` 和 `tool/navigation/interfaces/`；Inference、State Estimator、Perception 位于 `basic_function/` 下。面向任务的目标检测 Tool 应放入 `tool/object_detection/`，其模型推理适配仍归 `basic_function/inference/models/`。ROS 2 迁移代码使用 `ros2_adapter/native/`，统一 AeroHub 接口使用同级 `ros2_adapter/bridge/`；`ros1_proxy/` 仅可保存带明确历史标识的对照实现，不得被活动部署入口引用。同类对象的目录规则见 `docs/开发者贡献指导.md` 和 `src/README.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。开发材料和产物按上文归属；部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。

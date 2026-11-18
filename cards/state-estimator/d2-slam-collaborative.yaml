@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: state-estimator.d2-slam-collaborative
-version: fork-f5ea552-aerohub-0.1.0
+version: "0.2.0"
 type: capability
 name: D2SLAM collaborative state estimate
 description: Provides each vehicle's canonical AS2 pose and twist by combining collaborative visual-inertial global correction with high-rate PX4 local odometry.
@@ -36,7 +36,6 @@ lifecycle:
 
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
-  - hardware_type: compute/gpu/cuda
   - hardware_type: sensor/camera/rgb
   - hardware_type: sensor/camera/depth
   - hardware_type: sensor/imu/6dof
@@ -50,7 +49,6 @@ resource_access:
     - vehicle/local-odometry
     - swarm/peer-frames
   shared_writes:
-    - compute/gpu
     - swarm/collaboration
   exclusive_writes:
     - vehicle/self-state

@@ -10,6 +10,32 @@
 > 适配层中的算法逻辑迁移与 prompt 复制的合规边界见 §8，许可咨询邮箱：
 > tommy60718.en10@nycu.edu.tw / jj2095813@gmail.com。
 
+## Navigation Tool：`to_semantic_goal`
+
+SPF 是 Navigation Tool 的 alternative，目前只支持 `to_semantic_goal`，不支持
+`to_pose`。新增公共 Action `uav_planner_interfaces/action/NavigateToSemanticGoal`，
+地址 `/<vehicle>/navigate_to_semantic_goal`；输入为 `description` 与必填的有限正数
+`timeout`（单调墙钟秒数）。AS2 Python 调用：
+
+```python
+drone.navigation.to_semantic_goal("靠近橙球", timeout=60.0, wait=False)
+# 使用已有 done / feedback / result / cancel()；接受不代表完成。
+```
+
+**当前不实现语义到达判定，也不报告 SUCCEEDED。** 超时覆盖推理等待、重试退避与
+运动执行；到期停止后返回 `TIMEOUT`、`success=false`。取消返回 `CANCELED`；算法或
+执行错误仍可提前失败。停止需服务确认、待提交/执行 Action 已收口，以及新鲜三维
+速度 <0.2 m/s 持续 1 秒；停止有额外 10 秒宽限，失败返回 `STOP_UNCONFIRMED` 并保持
+FAULT，不允许新任务交接。不会新增 `guide_by_description`。
+
+旧 `spf/goal` 仅保留为调试入口，`max_cycles` 耗尽返回 `EXECUTION_FAILED/step_limit`，
+不代表目标达成；正式 Action 不带轮数上限。云端调用现已下沉到 Inference Function，
+Tool 只选择 model_name；Function 返回实际图像 header，并拒绝陈旧输入/结果。
+转向符号已按上游 NED 顺时针到 ENU yaw 的约定修正，右/左及非零航向回归通过；飞行结果仍须单独验收。当前真实云端回归见 [记录](../../../../../deployment/airsim/demos/spf_language_nav/live_cloud_validation.md)。
+
+当前变更的验证边界见 [契约验证](../../../../../deployment/airsim/demos/spf_language_nav/semantic_contract_validation.md)。
+历史飞行证据不验证新增 Action 或 timeout 语义。
+
 本文档是 SPF 接入 aerohub 的契约主文档。迁移方案与验收矩阵见
 `.trae/documents/spf-seepointfly-migration-plan.md`；过程记录在 `skill/temp/spf-migration/`。
 
@@ -44,7 +70,7 @@
   收口状态携带共享 NavigateToPose Result 码表（SUCCEEDED/CANCELED/TIMEOUT/
   NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED）+ `detail` 内部子原因 +
   `stop_confirmed`。语言目标无法表达为位姿，故不提供 NavigateToPose 位姿入口，
-  调用面保持 `spf/goal`(String JSON)+`spf/cancel`。
+  历史调用面为 `spf/goal`(String JSON)+`spf/cancel`；当前正式调用面见上方 `to_semantic_goal`。
 
 ## 2. 职责映射与目录归属
 
@@ -52,52 +78,54 @@
 | --- | --- | --- |
 | 语言指令 → 每步位移决策 | Planner（Navigation Tool 实现基础） | `src/tool/navigation/planner/spf/` |
 | 反投影 + 动作分解（算法本体） | Planner 适配层内实现 | `ros2_adapter/uav_spf_planner/` |
-| 云端 VLM 调用 | 外部推理依赖，代理节点承载 | `vlm_proxy/uav_spf_vlm_proxy/`（PC 侧） |
+| VLM 模型执行与云端协议 | Inference Function / Cloud alternative | `src/basic_function/inference/`（算力角色） |
+| SPF prompt 与点/深度解析 | Navigation Tool 算法适配 | `ros2_adapter/uav_spf_planner/prompt.py` |
 | 轨迹执行 | 原生扩展 Behavior（复用，不新建） | `src/behavior/follow_path/` FollowTimedPath |
 | 起飞/降落 | 原生 AS2 Behavior | TakeoffBehavior / LandBehavior |
 | 图像/状态/时钟供给 | 平台与飞控板角色 | flight_board 传感器桥 / 时钟桥 / AS2 self_localization |
 
 不设 `ros1_proxy/`：上游无任何 ROS 进程。
-VLM 代理不放 `src/inference/`：该模块面向本地模型权重与独立 uv 环境；SPF 无权重，
-是纯外部 API 调用，归属 Planner 自身目录（依据开发者贡献指导的推理依赖不改变源码
-归属原则，与 YOPO 的上游留在 `src/planner/yopo/` 同理）。
+旧 `vlm_proxy` ROS 包已移除。云端也是 Inference 的执行 alternative；是否有本地
+权重不决定归属。Tool 不管理 API key、URL 或供应商协议，也不把导航 prompt/点解析
+下沉为通用模型引擎的规则。
 
 ## 3. 最小数据/调用链（AS2 段目标形态）
 
 ```
-mission.py(工作站) --spf/goal{instruction}--> uav_spf_planner(板端)
-uav_spf_planner --query{request_id,instruction,image_stamp}--> uav_spf_vlm_proxy(PC)
-uav_spf_vlm_proxy <--result{point,depth,label}-- 云端 VLM API
+mission.py(工作站) --NavigateToSemanticGoal{description,timeout}--> uav_spf_planner(板端)
+uav_spf_planner --InferVisionLanguage{model_name,prompt}--> Inference Function(算力角色)
+Inference Function --公共 HTTP runtime / Cloud plugin--> 云端 VLM API
+Inference Function --text + actual image header--> SPF Tool 解析 point/depth
 uav_spf_planner --TimedPath(2~3点修订)--> FollowTimedPath(板端 AS2)
 FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> AirSim
 ```
 
-图像数据流止步于 PC（传感器桥→代理），板端仅收发 <2 KB/s JSON；公网访问仅代理出板。
+图像由同命名空间的 Inference Function 消费，不经过 SPF Tool 转发；Function 可部署在
+PC 算力角色，负责向已授权云端发送图像。工作站只调用任务与做仿真评分。
 
 ## 4. 复用决策
 
 | 部分 | 决策 | 理由 |
 | --- | --- | --- |
-| FollowTimedPath + 修订/确认时序 | 直接复用 | 单步前飞+时长语义可完整表达为 2~3 点时间化轨迹，不丢中间语义 |
-| yopo adapter 生命周期模式 | 模式复用（generation/revision/停止门控） | 同为本仓库 TimedPath 消费者；但不引入其 0.1 s 推理预算（SPF 为秒级云推理） |
+| FollowTimedPath | 每轮独立 is_final goal | 单步前飞+时长语义可完整表达为 2~3 点时间化轨迹，不丢中间语义 |
+| yopo adapter 生命周期模式 | 模式参考（单任务占用/revision/停止门控） | 同为本仓库 TimedPath 消费者；但不引入其 0.1 s 推理预算（SPF 为秒级云推理） |
 | 上游 controller/projector/drone_space 算法逻辑 | 语义逐字迁移到 adapter，接口重写 | 输入从 AirSim RPC 换 ROS 话题、输出从速度指令换 TimedPath |
-| 上游 VLM prompt 与响应解析 | 逐字复制进代理，不改一字 | 复现保真；复制原因在文件头声明 |
+| 上游 VLM prompt 与响应解析 | 保留于 SPF Tool | 复现保真；复制原因在文件头声明 |
 | airsim/djitellopy/mss/pynput 依赖 | 不迁移 | 属上游平台直控与屏幕截图路径，AS2 段由平台能力替代 |
-| SDK（google-genai/openai） | 不迁移，纯 stdlib HTTP 等价实现 | OpenHarmony 无 pydantic-core Rust 轮子（偏离 D2） |
+| SDK（google-genai/openai） | 不依赖，Cloud plugin 使用 stdlib HTTP | 云端调用与认证集中在 Inference，ROS 与 worker 环境隔离 |
 
 ## 5. 接口契约（阶段 2 实测后锁定，当前为设计值）
 
-- 输入：`<vehicle_ns>/self_localization/pose|twist`；`sensor_measurements/FrontCamera/rgb/image`
-  + `camera_info`（几何校验与 stamp 对齐）；`spf/goal`（String JSON）；`spf/cancel`（Trigger）。
-- 输出：`follow_timed_path` Action（首段 send_goal、滚动 modify、stop）；`spf/vlm/query|result`；
-  `spf/status|events`。
-- 时间：VLM 结果绑定请求时图像 stamp；`max_result_age_s=6.0`；`use_sim_time` 经 `/clock`。
+- Tool 输入：`<vehicle_ns>/self_localization/pose|twist`、CameraInfo、语义目标；
+  RGB 图像由 Inference Function 直接消费，使用实际图像 header。
+- 调用：`inference/vision_language/infer`（共享 InferVisionLanguage Action）；
+  `follow_timed_path`（每轮独立 send_goal、stop）。状态：`spf/status`。
+- 时间：VLM 结果绑定实际消费图像的采集 stamp；SPF 常量 `RESULT_MAX_AGE_S=30.0`；`use_sim_time` 经 `/clock`。
 - 坐标系：机体系位移经当前 yaw 旋转到 `<vehicle>/odom` ENU；TF 仅取旋转（D6）。
 
 ## 6. 多机外溢声明
 
-`spf/goal` 与 VLM 代理接口按 `<vehicle_namespace>` 复制即可逐机独立运行；但代理的
-图像缓存与 request_id 命名空间须按 vehicle 分帧隔离（本期不实现）。**本期仅单机
+Function 的相机缓存与 Action 按 namespace 隔离；多机部署及资源调度仍未验收。**本期仅单机
 验收，不声称多机能力**；机群级语言任务编排属 Mission 层，不在本 Planner 范围。
 
 ## 7. 待核查条件（进入阶段 1/2 前必须闭环）
@@ -114,3 +142,12 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
 3. 云端 API 出口：OpenAI 兼容端点选定与 key 供给。[已定智谱 GLM-4V-Flash（免费、国内直连，
    偏离 D11）；OpenRouter 论文模型路线保留为需充值时的对标选项]
 4. RoboPi 板端 rclpy 环境下纯 stdlib 实现的 import 闭包审计（阶段 6）。
+
+
+## Cloud Function 配置与验证
+
+复制 `config/inference.cloud.example.yaml` 为被忽略的 `config/inference.cloud.local.yaml`，
+声明 `models.spf.cloud` 并填写 base_url/model/api_key，可用 api_key_env 引用环境变量；
+SPF 始终调用逻辑 model_name=`spf`。多引擎通过 active_engines.spf 显式选择，缺省不支持。
+环境与部署细节见 [Vision-language Function](../../../../basic_function/inference/models/vision_language/README.md)，
+验证边界见 [Cloud 迁移验证](../../../../../deployment/airsim/demos/spf_language_nav/cloud_inference_validation.md)。

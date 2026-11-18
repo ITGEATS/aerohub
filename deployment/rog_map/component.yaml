@@ -16,9 +16,10 @@ cards:
   - cards/perception/rog-map.yaml
 shared_process_group: rog-map
 environment:
-  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.0]
-  algorithm_workspace: deployment/rog_map/prepare_workspace.sh
-  prohibited_runtime: algorithm-specific Docker images and repository px4 source
+  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.1]
+  runtime_image: aerohub/rog-map:ros2-humble
+  image_build: deployment/rog_map/prepare_workspace.sh
+  prohibited_runtime: host source/build overlays, ROS 1 runtime and repository PX4 source
 runtime:
   roles:
     simulator: visible AirSim host process
@@ -52,13 +53,12 @@ authority:
   state_and_tf: read-only consumer; publishes no state or TF
 validation:
   stage: reproduced
-  scope: visible AirSim 1.8.1, image-embedded PX4 SITL, real LiDAR mapping, AS2 motion, queries, faults and cleanup
+  scope: Native ROS 2 Humble self-contained CPU image, visible AirSim + PX4 SITL normal operation, downstream queries, sensor loss and algorithm restart matrix passed.
+  image: sha256:8801b77bad61fc194ad1bab9700db3b15da711da982748da339b5e13c92d89aa
   evidence:
-    - log/workspaces/rog_map
-    - log/airsim/rog-map/final-normal-01
-    - log/airsim/rog-map/final-sensor-fault-01
-    - log/airsim/rog-map/final-algorithm-fault-01
-    - skill/temp/rog_map/README.md
+    - log/airsim/rog-map-normal-20261118/result.json
+    - log/airsim/rog-map-sensor-fault-20261118/result.json
+    - log/airsim/rog-map-algorithm-fault-20261118/result.json
   limitations:
     - AirSim point clouds contain instantaneous XYZ without intensity, ring or per-point time.
     - Point snapshot topics are not a serialized persistent map or generic interchange format.

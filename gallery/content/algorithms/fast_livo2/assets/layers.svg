@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" role="img" aria-labelledby="title description">
 <title id="title">FAST-LIVO2：Tool、Behavior、Function 三层接入关系</title>
-<desc id="description">Tool 与 Behavior 层没有本组件注册或调用的运动能力。Function 层中，ROS 1 传感器或回放输入进入一个 FAST-LIVO2 联合算法进程，经同一个只读输出桥提供状态估计插件和 Perception 配准点云接口。二者共享算法及部署依赖，不是两个独立估计器。无 PX4 外部定位融合或飞行验收声明。</desc>
+<desc id="description">Tool 与 Behavior 层没有本组件注册或调用的运动能力。Function 层中，ROS 2 传感器输入经过消息 Adapter 进入原生 Humble FAST-LIVO2 联合算法进程，再由输出 Adapter 分别提供状态估计插件和 Perception 配准点云接口。二者共享算法及部署依赖，不是两个独立估计器。无 PX4 外部定位融合或飞行验收声明。</desc>
 <defs><marker id="data" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#b86b20"/></marker></defs>
 <g font-family="system-ui, sans-serif" fill="#202d3a"><rect width="1080" height="1080" fill="#f8fafc"/>
 <text x="30" y="42" font-size="28" fill="#202d3a" text-anchor="start" font-weight="700">FAST-LIVO2 · 三层接入关系</text>
@@ -19,14 +19,14 @@
 <rect x="130" y="590" width="250" height="115" rx="10" fill="#eef3f8" stroke="#175da5"/>
 <text x="255.0" y="623" font-size="20" fill="#202d3a" text-anchor="middle" font-weight="700">传感器 / 回放输入</text>
 <text x="255.0" y="655" font-size="17" fill="#202d3a" text-anchor="middle">IMU / 图像 / 激光</text>
-<text x="255.0" y="683" font-size="17" fill="#202d3a" text-anchor="middle">ROS 1 驱动或 rosbag</text>
+<text x="255.0" y="683" font-size="17" fill="#202d3a" text-anchor="middle">ROS 2 topics / rosbag2</text>
 <rect x="440" y="590" width="270" height="115" rx="10" fill="#d9f3ed" stroke="#168b78"/>
 <text x="575.0" y="623" font-size="20" fill="#202d3a" text-anchor="middle" font-weight="700">FAST-LIVO2</text>
 <text x="575.0" y="655" font-size="17" fill="#202d3a" text-anchor="middle">联合定位建图</text>
-<text x="575.0" y="683" font-size="17" fill="#202d3a" text-anchor="middle">保留官方 ROS 1 算法</text>
+<text x="575.0" y="683" font-size="17" fill="#202d3a" text-anchor="middle">原生 ROS 2 Humble</text>
 <rect x="770" y="590" width="250" height="115" rx="10" fill="#d9f3ed" stroke="#168b78"/>
-<text x="895.0" y="623" font-size="20" fill="#202d3a" text-anchor="middle" font-weight="700">只读输出桥</text>
-<text x="895.0" y="655" font-size="17" fill="#202d3a" text-anchor="middle">ROS 1 → ROS 2</text>
+<text x="895.0" y="623" font-size="20" fill="#202d3a" text-anchor="middle" font-weight="700">输出 Adapter</text>
+<text x="895.0" y="655" font-size="17" fill="#202d3a" text-anchor="middle">统一 namespace / frame</text>
 <text x="895.0" y="683" font-size="17" fill="#202d3a" text-anchor="middle">状态与点云分流</text>
 <path d="M380 647 H434" fill="none" stroke="#b86b20" stroke-width="2" marker-end="url(#data)"/>
 <path d="M710 647 H764" fill="none" stroke="#b86b20" stroke-width="2" marker-end="url(#data)"/>

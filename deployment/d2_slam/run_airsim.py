@@ -21,16 +21,9 @@ DDS = ROOT / "deployment/airsim/config/dds/fastdds_udp.xml"
 AS2_CONFIG = ROOT / "deployment/airsim/config/as2/config.yaml"
 AS2_CONTROLLER = ROOT / "deployment/airsim/config/as2/pid_speed_controller.yaml"
 AS2_RUN = ROOT / "deployment/airsim/as2/run.py"
-PROBE = ROOT / "deployment/d2_slam/ground_probe.py"
-MISSION = ROOT / "deployment/d2_slam/flight_validation.py"
 VALIDATION = ROOT / "deployment/d2_slam/validation.yaml"
-AIRSIM_RPC = ROOT / "simulator/airsim/sensors/uav_as2_sensor_adapter/rpc.py"
-WORKSPACE = Path(
-    os.environ.get("D2_SLAM_WORKSPACE", ROOT / "log/workspaces/d2_slam")
-).resolve()
-PX4_WORKSPACE = Path(os.environ.get("PX4_MSGS_OVERLAY_WORKSPACE", WORKSPACE / "px4_msgs"))
 BOARD = os.environ.get("FLIGHT_BOARD_IMAGE", "flight_board:v0.1.0")
-ONBOARD = os.environ.get("ONBOARD_COMPUTER_IMAGE", "onboard_computer:v0.1.0")
+D2_IMAGE = os.environ.get("D2_SLAM_IMAGE", "aerohub/d2-slam:ros2-humble-native")
 DOMAIN = 92
 PREFIX = "aerohub-d2-e2e-"
 
@@ -68,27 +61,12 @@ def image_id(image: str) -> str:
         ["docker", "image", "inspect", "--format", "{{.Id}}", image], text=True).strip()
 
 
-def extract_msgpack(output: Path) -> Path:
-    target = output / "python-overlay"
-    target.mkdir()
-    name = PREFIX + "python-source"
-    execute(["docker", "create", "--name", name, BOARD], stdout=subprocess.DEVNULL)
-    try:
-        execute(["docker", "cp", name + ":/usr/lib/python3/dist-packages/msgpack", target])
-    finally:
-        subprocess.run(["docker", "rm", "--force", name], capture_output=True)
-    if not (target / "msgpack/__init__.py").is_file():
-        raise RuntimeError("flight_board:v0.1.0 does not provide the msgpack runtime")
-    return target
-
-
 def source_manifest(output: Path, topology: dict) -> None:
     paths = [
         ROOT / "deployment/d2_slam", ROOT / "deployment/swarm/configs/d2_slam.yaml",
         ROOT / "deployment/swarm/orchestrator.py", ROOT / "deployment/swarm/topology.py",
         ROOT / "simulator/airsim/scenarios/d2_slam",
         ROOT / "src/basic_function/state_estimator/d2_slam/plugin",
-        ROOT / "src/basic_function/state_estimator/d2_slam/ros1_proxy",
         ROOT / "src/basic_function/state_estimator/d2_slam/ros2_adapter",
     ]
     files = []
@@ -110,13 +88,7 @@ def source_manifest(output: Path, topology: dict) -> None:
         "d2_slam_dirty": bool(subprocess.check_output(
             ["git", "-C", upstream, "status", "--porcelain"])),
         "d2_slam_diff_sha256": hashlib.sha256(upstream_diff).hexdigest(),
-        "images": {"flight_board": image_id(BOARD), "onboard_computer": image_id(ONBOARD)},
-        "workspace": str(WORKSPACE),
-        "px4_msgs_overlay": {
-            "workspace": str(PX4_WORKSPACE),
-            "source_state_sha256": hashlib.sha256(
-                (PX4_WORKSPACE / "source-state.env").read_bytes()).hexdigest(),
-        },
+        "images": {"flight_board": image_id(BOARD), "d2_slam": image_id(D2_IMAGE)},
         "display": os.environ.get("DISPLAY"),
         "render_mode": os.environ.get("AIRSIM_RENDER_MODE"),
         "ros_domain_id": DOMAIN,
@@ -126,7 +98,7 @@ def source_manifest(output: Path, topology: dict) -> None:
     (output / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def gpu_evidence(vehicles: list[dict]) -> dict:
+def compute_backend_evidence(vehicles: list[dict]) -> dict:
     raw = subprocess.check_output([
         "nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
         "--format=csv,noheader,nounits"], text=True)
@@ -149,9 +121,10 @@ def gpu_evidence(vehicles: list[dict]) -> dict:
         matches = [entry for entry in applications if entry["pid"] in pids]
         per_vehicle[vehicle["name"]] = {
             "container": name, "d2vins_pids": pids, "gpu_processes": matches,
-            "passed": bool(pids) and len(matches) == len(pids),
+            "passed": bool(pids),
         }
-    return {"nvidia_compute_apps": applications, "vehicles": per_vehicle,
+    return {"backend": "onnxruntime-cpu", "cuda_required": False,
+            "nvidia_compute_apps": applications, "vehicles": per_vehicle,
             "passed": all(item["passed"] for item in per_vehicle.values())}
 
 
@@ -169,7 +142,7 @@ def graph_evidence(output: Path, authority: bool) -> dict:
         "source /opt/ros/humble/setup.bash && "
         "source /opt/px4_ws/install/setup.bash && "
         "source /root/aerostack2_ws/install/setup.bash && "
-        "source /workspace/ros2/install/setup.bash && "
+        "source /opt/d2_slam_ws/install/setup.bash && "
         "ros2 node list && "
         "ros2 topic info -v /drone0/d2_slam/odometry && "
         "ros2 topic info -v /drone0/d2_slam/landmarks && "
@@ -180,8 +153,7 @@ def graph_evidence(output: Path, authority: bool) -> dict:
     completed = subprocess.run([
         "docker", "run", "--rm", "--network", "host",
         "--env", f"ROS_DOMAIN_ID={DOMAIN}",
-        "--volume", f"{WORKSPACE}:/workspace:ro",
-        "--entrypoint", "bash", ONBOARD, "-lc", command,
+        "--entrypoint", "bash", D2_IMAGE, "-lc", command,
     ], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (output / "ros-graph.txt").write_text(completed.stdout)
     result = {
@@ -222,8 +194,7 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     config = None
     topology = None
-    names = [PREFIX + "clock", PREFIX + "as2", PREFIX + "mission", PREFIX + "probe",
-             PREFIX + "python-source"] + [
+    names = [PREFIX + "clock", PREFIX + "as2", PREFIX + "mission", PREFIX + "probe"] + [
         PREFIX + f"sensor{index}" for index in range(3)] + [
         PREFIX + f"vehicle{index}" for index in range(3)]
     if args.action == "stop":
@@ -243,22 +214,8 @@ def main() -> int:
     for name in names:
         if container_exists(name):
             raise RuntimeError(f"reserved container exists: {name}")
-    for image in (BOARD, ONBOARD):
+    for image in (BOARD, D2_IMAGE):
         execute(["docker", "image", "inspect", image], stdout=subprocess.DEVNULL)
-    for artifact in (
-        WORKSPACE / "catkin_ws/devel/.private/d2vins/lib/d2vins/d2vins_node",
-        WORKSPACE / "ros2/install/setup.bash",
-        WORKSPACE / "onnxruntime-linux-x64-gpu-1.18.1/lib/libonnxruntime.so",
-        PX4_WORKSPACE / "install/setup.bash",
-        PX4_WORKSPACE / "source-state.env"):
-        if not artifact.exists():
-            raise RuntimeError(f"D2SLAM workspace artifact is missing: {artifact}")
-    for catkin_entry in (
-            WORKSPACE / "catkin_ws/devel/setup.bash",
-            WORKSPACE / "catkin_ws/devel/lib/d2vins/d2vins_node"):
-        if not catkin_entry.exists() and not catkin_entry.is_symlink():
-            raise RuntimeError(
-                f"D2SLAM container-relative catkin entry is missing: {catkin_entry}")
 
     sys.path.insert(0, str(ROOT))
     from deployment.swarm.orchestrator import build_services
@@ -266,7 +223,6 @@ def main() -> int:
     from deployment.airsim.demos.catora_open_field.sim_startup import launch_vehicles
 
     config = load_config(CONFIG)
-    os.environ["D2_SLAM_WORKSPACE"] = str(WORKSPACE)
     topology = resolve_topology(config)
     scenario = topology["scenarios"][0]
     settings = render_airsim_settings(config)
@@ -281,7 +237,6 @@ def main() -> int:
     (output / "fleet.yaml").write_text(yaml.safe_dump(fleet, sort_keys=False))
     source_manifest(output, topology)
     current_manifest = json.loads((output / "source-manifest.json").read_text())
-    msgpack_overlay = extract_msgpack(output) if args.action != "ground" else None
     authority_gate = None
     if args.action == "authority":
         if args.shadow_evidence is None:
@@ -317,8 +272,7 @@ def main() -> int:
             index = vehicle["index"]
             command = (
                 "source /opt/ros/humble/setup.bash && "
-                "source /opt/platform_sensors/install/setup.bash && "
-                "source /workspace/ros2/install/setup.bash && "
+                "source /opt/d2_slam_ws/install/setup.bash && "
                 "exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args "
                 "-p use_sim_time:=true -p rpc_port:=42471 "
                 f"-p vehicle_name:={vehicle['airsim_name']} "
@@ -327,11 +281,14 @@ def main() -> int:
                 "-p camera_rate_hz:=10.0 -p imu_rate_hz:=50.0 "
                 f"-r /tf_static:=/{vehicle['name']}/tf_static")
             run_detached(
-                PREFIX + f"sensor{index}", BOARD,
+                PREFIX + f"sensor{index}", D2_IMAGE,
                 {"ROS_DOMAIN_ID": str(DOMAIN),
                  "FASTRTPS_DEFAULT_PROFILES_FILE": "/run/dds.xml"},
-                [(DDS, "/run/dds.xml", "ro"), (WORKSPACE, "/workspace", "ro"),
-                 (output / "settings.json", "/config/settings.json", "ro")], command)
+                [(output / "settings.json", "/config/settings.json", "ro")], command)
+            # AirSim 1.8.1 can race while several RPC clients activate camera
+            # capture components for the first time. Stagger only activation;
+            # steady-state acquisition remains concurrent across vehicles.
+            time.sleep(1.0)
         as2_environment = {
             "ROS_DOMAIN_ID": str(DOMAIN), "AS2_FLEET_FILE": "/results/fleet.yaml",
             "AS2_RUNTIME_DIR": "/results/as2-runtime", "AS2_TF_SCOPE": "per-vehicle",
@@ -342,22 +299,18 @@ def main() -> int:
                 "AS2_STATE_ESTIMATOR_LAUNCH_PACKAGE": "uav_d2_slam",
                 "AS2_STATE_ESTIMATOR_LAUNCH_FILE": "d2_slam.launch.py",
                 "AS2_STATE_ESTIMATOR_CONFIG_FILE":
-                    "/workspace/ros2/install/share/uav_d2_slam/config/estimator.yaml",
+                    "/opt/d2_slam_ws/install/share/uav_d2_slam/config/estimator.yaml",
             })
         run_detached(
-            PREFIX + "as2", ONBOARD,
+            PREFIX + "as2", D2_IMAGE,
             as2_environment,
-            [(output, "/results", "rw"), (WORKSPACE, "/workspace", "ro"),
-             (AS2_RUN, "/opt/aerohub/run_as2.py", "ro"),
-             (ROOT / "deployment/airsim/as2/scoped_tf.launch.py",
-              "/opt/aerohub/scoped_tf.launch.py", "ro"),
-             (AS2_CONFIG, "/config/config.yaml", "ro"),
-             (AS2_CONTROLLER, "/config/pid.yaml", "ro")],
+            [(output, "/results", "rw")],
             "source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "source /workspace/ros2/install/setup.bash && "
-            "AS2_CONFIG_FILE=/config/config.yaml AS2_CONTROLLER_CONFIG_FILE=/config/pid.yaml "
-            "exec python3 /opt/aerohub/run_as2.py")
+            "source /opt/d2_slam_ws/install/setup.bash && "
+            "AS2_CONFIG_FILE=/opt/d2_slam/runtime/as2_config.yaml "
+            "AS2_CONTROLLER_CONFIG_FILE=/opt/d2_slam/runtime/pid.yaml "
+            "exec python3 /opt/d2_slam/runtime/run_as2.py")
         for service in services:
             service.start()
         deadline = time.monotonic() + float(config["validation"]["startup_timeout_s"])
@@ -379,25 +332,27 @@ def main() -> int:
             time.sleep(2)
         if graph is None or not graph["passed"]:
             raise RuntimeError("ROS graph or state-estimator plugin readiness timed out")
-        gpu = gpu_evidence(topology["vehicles"])
-        (output / "gpu-processes.json").write_text(json.dumps(gpu, indent=2) + "\n")
-        if not gpu["passed"]:
-            raise RuntimeError("not every D2VINS process is executing on the NVIDIA GPU")
+        backend = compute_backend_evidence(topology["vehicles"])
+        (output / "compute-backend.json").write_text(json.dumps(backend, indent=2) + "\n")
+        if not backend["passed"]:
+            raise RuntimeError("not every native ROS 2 D2VINS process is running")
         if args.action == "ground":
             probe_command = [
                 "docker", "run", "--rm", "--init", "--network", "host",
                 "--name", PREFIX + "probe", "--env", f"ROS_DOMAIN_ID={DOMAIN}",
                 "--env", "D2_PROBE_OUTPUT=/results/ground-probe.json",
-                "--volume", f"{output}:/results:rw", "--volume", f"{PROBE}:/probe.py:ro",
-                "--entrypoint", "bash", ONBOARD, "-lc",
+                "--volume", f"{output}:/results:rw",
+                "--entrypoint", "bash", D2_IMAGE, "-lc",
                 "source /opt/ros/humble/setup.bash && "
-                "source /root/aerostack2_ws/install/setup.bash && exec python3 /probe.py"]
+                "source /root/aerostack2_ws/install/setup.bash && "
+                "source /opt/d2_slam_ws/install/setup.bash && "
+                "exec python3 /opt/d2_slam/runtime/ground_probe.py"]
             execute(probe_command)
             probe = json.loads((output / "ground-probe.json").read_text())
             result = {"schema_version": 1, "scenario": "ground", "probe": probe,
-                      "gpu": gpu, "graph": graph,
+                      "compute_backend": backend, "graph": graph,
                       "services": [service.record() for service in services],
-                      "passed": probe["passed"] and gpu["passed"] and graph["passed"],
+                      "passed": probe["passed"] and backend["passed"] and graph["passed"],
                       "failure": None}
         else:
             injector_errors = []
@@ -443,21 +398,13 @@ def main() -> int:
                 "--env", f"D2_VALIDATION_SCENARIO={args.action}",
                 "--env", "D2_VALIDATION_OUTPUT=/results", "--env", "AIRSIM_RPC_PORT=42471",
                 "--volume", f"{output}:/results:rw",
-                "--volume", f"{MISSION}:/opt/d2/flight_validation.py:ro",
-                "--volume", f"{VALIDATION}:/config/validation.yaml:ro",
-                "--volume", f"{AIRSIM_RPC}:/opt/d2/airsim_rpc.py:ro",
-                "--volume", f"{msgpack_overlay}:/opt/flight-board-python:ro",
-                "--volume", f"{PX4_WORKSPACE}:/px4-overlay:ro",
-                "--entrypoint", "bash", ONBOARD, "-lc",
+                "--entrypoint", "bash", D2_IMAGE, "-lc",
                 "source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && "
-                "source /px4-overlay/install/setup.bash && "
                 "source /root/aerostack2_ws/install/setup.bash && "
-                "source /workspace/ros2/install/setup.bash && "
-                "cd /opt/d2 && PYTHONPATH=/opt/d2:/opt/flight-board-python:${PYTHONPATH:-} "
+                "source /opt/d2_slam_ws/install/setup.bash && "
+                "cd /opt/d2_slam/runtime && "
                 "exec python3 flight_validation.py",
             ]
-            mission_command[mission_command.index("--entrypoint"):mission_command.index("--entrypoint")] = [
-                "--volume", f"{WORKSPACE}:/workspace:ro"]
             with (output / "mission-console.log").open("w") as stream:
                 execute(mission_command, stdout=stream, stderr=subprocess.STDOUT)
             if injector is not None:
@@ -478,11 +425,11 @@ def main() -> int:
             }, indent=2) + "\n")
             result = {
                 "schema_version": 1, "scenario": args.action,
-                "validation": validation, "gpu": gpu, "graph": graph,
+                "validation": validation, "compute_backend": backend, "graph": graph,
                 "authority_gate": authority_gate,
                 "services": [service.record() for service in services],
                 "overhead": overhead, "overhead_passed": overhead_passed,
-                "passed": validation["passed"] and gpu["passed"] and graph["passed"]
+                "passed": validation["passed"] and backend["passed"] and graph["passed"]
                           and overhead_passed,
                 "failure": None,
             }

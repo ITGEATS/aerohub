@@ -16,13 +16,11 @@ cards:
   - cards/perception/pin-slam-neural-points.yaml
 shared_process_group: pin-slam-gpu
 environment:
-  shared_image: onboard_computer:v0.1.0
-  shared_image_id: sha256:964048afd46a9d394aa771d801d48b57de8a2b2665979b1ba6f2b5e273f9adb9
+  shared_image: onboard_computer:v0.1.1
+  runtime_image: aerohub/pin-slam:ros2-humble
   architectures: [linux/amd64]
-  workspace: log/workspaces/pin_slam
-  python_environment: log/workspaces/pin_slam/venv
-  ros_overlay: log/workspaces/pin_slam/ros/install
-  prepare: deployment/pin_slam/prepare_workspace.sh
+  image_build: deployment/pin_slam/prepare_workspace.sh
+  prohibited_runtime: host source/build overlays and ROS 1 runtime
 runtime:
   roles:
     simulator: AirSim host process
@@ -53,19 +51,13 @@ authority:
 validation:
   stage: reproduced
   gate: deployment/pin_slam/validation.yaml
-  scope: Shared onboard-computer image, visible AirSim + PX4 SITL, real LiDAR input, GPU PIN-SLAM, AS2 authority, canonical freshness, LiDAR interruption, and algorithm-process exit all passed the declared matrix.
+  scope: Native ROS 2 Humble self-contained GPU image, visible AirSim + PX4 SITL shadow, AS2 authority, sensor loss and algorithm-exit matrix passed.
+  image: sha256:a276960113485a124ed5fc95ba47d7f457a0ae0d73cd1d9c74c1179bf130145b
   evidence:
-    - log/pin_slam/shadow-shared-final-20261114-17/gate-report.json
-    - log/pin_slam/shadow-shared-final-20261114-17/result.json
-    - log/pin_slam/authority-20261114-02/gate-report.json
-    - log/pin_slam/authority-20261114-02/result.json
-    - log/pin_slam/authority-20261114-02/canonical-freshness.json
-    - log/pin_slam/sensor-fault-20261114-02/result.json
-    - log/pin_slam/sensor-fault-20261114-02/fault-injection.json
-    - log/pin_slam/sensor-fault-20261114-02/aerohub-pin-slam-as2.log
-    - log/pin_slam/algorithm-fault-20261114-01/result.json
-    - log/pin_slam/algorithm-fault-20261114-01/fault-injection.json
-    - log/pin_slam/algorithm-fault-20261114-01/aerohub-pin-slam-as2.log
+    - log/pin_slam/airsim-shadow-final-20261118/gate-report.json
+    - log/pin_slam/airsim-authority-final-20261118/gate-report.json
+    - log/pin_slam/airsim-sensor-fault-final-20261118/result.json
+    - log/pin_slam/airsim-algorithm-fault-final-20261118/result.json
   limitations:
     - Neural-point anchors are not a collision map or the complete implicit model.
     - Current authority integration deliberately retains PX4 EKF local odometry for control; PIN-SLAM is the global correction source, not the sole inertial estimator.

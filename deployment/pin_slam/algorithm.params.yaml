@@ -5,9 +5,13 @@
     expected_input_frame: drone0/Lidar
     map_frame: pin_slam_map
     sensor_frame: pin_slam_lidar
-    config_path: /config/airsim.yaml
+    config_path: /opt/pin_slam/config/airsim.yaml
     output_root: /results/run
     # This limits only the RViz snapshot; the native neural map remains intact.
     map_max_points: 2000
     map_publish_every_n_frames: 10
     input_queue_depth: 5
+    # Keep the global LiDAR map paused through the vertically degenerate
+    # takeoff phase. The AS2 plugin still publishes high-rate local odometry;
+    # validation starts PIN-SLAM explicitly once airborne.
+    start_paused: true

@@ -12,7 +12,7 @@ fleet:
 
 nodes:
   onboard_computer:
-    image: onboard_computer:v0.1.0
+    image: aerohub/d2-slam:ros2-humble-native
     launch_command:
       - bash
       - deployment/d2_slam/run_compute.sh
