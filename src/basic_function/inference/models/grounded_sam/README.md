@@ -136,6 +136,13 @@ GS_DEVICE=0 .venv/Scripts/python.exe -m uvicorn serve:app --host 127.0.0.1 --por
 
 ## 偏离记录
 
+0. **GS_EMPTY_CACHE（2026-11-18，CityNav 阶段 6 阻塞修复）**：本机 8 GB 显存下
+   fp32 warmup 使 caching allocator reserved 达 ~7.6 GB，UE4 Blocks 被 WDDM 驱逐
+   崩溃。新增默认开启的环境开关：warmup 后与每次推理后 `torch.cuda.empty_cache()`，
+   实测混合尺寸冲击稳态 ~3.7 GB；设 `GS_EMPTY_CACHE=0` 恢复原行为。代价为每请求
+   重分配延迟（百 ms 级），服务空闲期无影响。与 CityNav 飞行验收耦合：Demo 运行
+   前提为本开关开启。
+
 1. DINO 后端为 HF transformers 端口 + 本地转换的 SwinT-OGC 权重（与上游 checkpoint
    同源、骨干配置一致）；非上游钉定的自定义 CUDA 算子版，无数值对照（本机不可运行）。
    曾评估的 `grounding-dino-base`（Swin-B）保留为备选。Swint-OGC 本地 HF 转换已落地：

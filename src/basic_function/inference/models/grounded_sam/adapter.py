@@ -97,6 +97,16 @@ class Predictor:
                                boxes=self.sam.transform.apply_boxes_torch(dummy, warmup.shape[:2]).to(device),
                                multimask_output=False)
         self.warmup_seconds = time.perf_counter() - started
+        # GS_EMPTY_CACHE (default on): release the caching allocator's reserved
+        # blocks after warmup and after each inference. On this 8 GB host the
+        # fp32 SAM/DINO warmup reserves ~7.6 GB, leaving no room for UE4
+        # Blocks (WDDM evicts it -> crash). empty_cache keeps reserved close to
+        # live weights; the service is idle between planner requests, so the
+        # re-allocation cost is acceptable. Set GS_EMPTY_CACHE=0 to disable.
+        self._empty_cache = (os.environ.get("GS_EMPTY_CACHE", "1") != "0"
+                             and device != "cpu" and torch.cuda.is_available())
+        if self._empty_cache:
+            torch.cuda.empty_cache()
         if device != "cpu" and torch.cuda.is_available():
             allocated = torch.cuda.memory_allocated() / 2 ** 20
             reserved = torch.cuda.memory_reserved() / 2 ** 20
@@ -201,6 +211,8 @@ class Predictor:
 
         masks = masks.cpu()
         final_mask = torch.any(masks[0], dim=0).numpy()
+        if self._empty_cache:
+            torch.cuda.empty_cache()
         return final_mask, seg_success, pred_phrases
 
     def greedy_mask_predict(self, image, text_prompt, box_threshold=0.3, text_threshold=0.25):
