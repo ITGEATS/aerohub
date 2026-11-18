@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Onboard Tool servers. Platform/algorithm dependencies remain onboard."""
 import json
+import base64
 from pathlib import Path
 import signal
 import threading
@@ -18,6 +19,8 @@ from uav_target_tracking.node import TrackingNode
 def main():
     import argparse
     p = argparse.ArgumentParser()
+    p.add_argument('--image-storage',choices=['raw','png'],default='raw')
+    p.add_argument('--recovery-window', type=float, default=.5)
     p.add_argument('--output', type=Path, required=True)
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -28,6 +31,7 @@ def main():
         '-p', 'registered_depth:=true', '-p', 'depth_is_perspective:=false',
         '-p', 'output_frame:=drone0/odom', '-p', 'camera_reliable:=false',
         '-p', 'position_method:=known_height_vertical_v1', '-p', 'target_height_m:=1.7',
+        '-p', f'max_prediction_time:={args.recovery_window}',
         '-p', 'measurement_stddev_m:=1.0', '-p', 'association_policy:=soft_innovation_v1', '-p', 'position_filter:=none'])
     system, inference, detector, tracking = SystemTool(), YoloNode(), ObjectDetectionTool(), TrackingNode()
     detector._ensure_position_inputs()
@@ -40,16 +44,26 @@ def main():
     executor = MultiThreadedExecutor(num_threads=10)
     for node in (system, inference, detector, tracking):
         executor.add_node(node)
+    if args.image_storage=='png':
+        # Reuse the exact lossless PNG already encoded for the HTTP inference call.
+        # No second encode and no changes to the model's input pixels.
+        request=inference.detector.client.request
+        def recorded_request(path, body=None):
+            if path=='/infer' and body is not None and not (args.output.parent/'evidence-stop').exists():
+                (args.output/(str(body['stamp_ns'])+'.png')).write_bytes(base64.b64decode(body['image_base64'],validate=True))
+            return request(path,body)
+        inference.detector.client.request=recorded_request
     # Save only actual request RGB, rather than screenshots unrelated to detection.
     original = detector.infer
     def audited(task, **kwargs):
         image = task.image
         key = str(image.header.stamp.sec*10**9+image.header.stamp.nanosec)
         path = args.output/(key+'.rgb')
-        path.write_bytes(bytes(image.data))
+        if args.image_storage=='raw' and not (args.output.parent/'evidence-stop').exists():
+            path.write_bytes(bytes(image.data))
         (args.output/(key+'.json')).write_text(json.dumps(dict(width=image.width,
             height=image.height, step=image.step, encoding=image.encoding,
-            frame=image.header.frame_id, stamp_ns=int(key))))
+            frame=image.header.frame_id, stamp_ns=int(key),storage=args.image_storage)))
         started = time.monotonic()
         try:
             frame = original(task, **kwargs)

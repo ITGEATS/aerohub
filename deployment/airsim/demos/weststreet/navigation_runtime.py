@@ -20,6 +20,7 @@ import yaml
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--continuous-yaw', action='store_true')
     parser.add_argument('--target-yaw', action='store_true', help='Enable SUPER target yaw planning and Adapter execution')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -90,7 +91,8 @@ def main():
         start('super', ['ros2','run','super_planner','fsm_node','--ros-args',
             '-p','use_sim_time:=true','-p','config_name:='+str(path)])
         start('adapter', ['ros2','run','uav_super_adapter','super_timed_path_adapter','--ros-args',
-            '-r','__ns:=/drone0','-p','use_sim_time:=true','-p','navigation_action:=true','-p','target_yaw_enabled:='+str(args.target_yaw).lower()])
+            '-r','__ns:=/drone0','-p','use_sim_time:=true','-p','navigation_action:=true','-p','target_yaw_enabled:='+str(args.target_yaw).lower(),
+            '-p','continuous_yaw_enabled:='+str(args.continuous_yaw).lower()])
         wait(lambda:state['map']>=3, 60)
         (args.output/'ready.json').write_text(json.dumps(dict(ready=True, origin=[origin.x,origin.y,origin.z])))
         wait(lambda:False, 600)

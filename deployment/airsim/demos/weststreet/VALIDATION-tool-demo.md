@@ -1,4 +1,10 @@
-# WestStreet Tool Demo 真实验证（2026-11-16）
+# WestStreet Tool Demo 历史验证记录
+
+当前维护版本及 side 会话修复见 [恢复版说明](README-before-plaza.md)，
+入口为 `launch_before_plaza.py → demo_before_plaza.py`。
+本文各轮结果保留为历史证据，不代表当前版本的结论或启动方式。
+失败的绕柱／转场实现及其 Navigation 停止更新补丁已撤出活跃源码。
+本次整理遵照用户要求，未重新运行测试或仿真。
 
 **结论：真实链路已运行，5秒移动追踪未通过，整体未完成。**
 
@@ -275,3 +281,294 @@ System Land成功、landed/disarmed确认、无清理错误；执行服务已停
 keep-scene保留所属观察资源。host rmem_max恢复212992。evaluation.json
 phase_passed=false。证据yaw-audit.json、yaw-reference-probe.json、录包及
 各服务日志在本轮log目录。停止实验，未声称转弯验收通过。
+
+## 连续yaw首轮：live-continuous-yaw-35s-01（未通过）
+
+新增CONTINUOUS_YAW可选模式，默认关闭；位置/PVA仍用SUPER，yaw在
+同一个FollowTimedPath执行器中限角速度/角加速度，统一发布运动参考。
+目标更新服务仅刷新活动任务yaw，不启动运动、无独立控制发布者。
+任务ID/版本/有效期校验，位置滚动替换不重置yaw；取消/过期停止。
+C++限速/环绕/所有权数学测试、真实ROS编译Behavior的独立朝向更新、
+错误任务/旧版本拒绝、取消/过期测试通过。反向协议测试最初0.6s比较
+因限加速度减速过程不满足，按物理减速时间改为0.8s后通过，不改控制限制。
+
+接口、Behavior、Framework、Adapter、Navi API和工作站接口在已有overlay
+重新编译，没有重建镜像。Adapter23项、Framework32项、Demo10项回归通过，
+Timeline和YawTracker两项CTest通过。原FollowPath/TimedPath ROS冒烟通过。
+这些是接口和执行协议证据，不替代实飞任务结果。
+
+实飞沿用35秒预算、人物5m/s、2m起飞/相机下悬0.8m、原位置偏移和缺测
+门。实际起飞1.940m，首弯在acquired后21.436s，首invalid为23.171s。
+任务失败：Tracking target unavailable: predicted。
+
+|sim时间|目标yaw°|执行参考yaw°|机头yaw°|
+|---|---:|---:|---:|
+|71.127|20.49|8.46|0.77|
+|71.412|35.31|15.77|2.43|
+|71.694|48.11|27.17|7.26|
+
+相比末端yaw模式（近45度目标时参考3.4度），参考显著提前，证明新执行
+路径生效。但本轮仍有目标到平滑参考的延迟，以及参考到实际机头的延迟；
+不能再单独归因SUPER末端规划，也不能声称无人机已能及时反应。
+当前角度控制经AS2 yaw PID产生yaw_speed，实测配置kp=1，ki=0、kd=.001；
+这提供下游延迟的待核查方向，不以一次飞行认定唯一根因或直接修改飞控。
+
+正常System Land、landed/disarmed、无cleanup_errors；停止执行服务，按
+预声明保留观察场景。host rmem_max恢复212992。evaluation.json标失败。
+证据目录包含yaw-audit.json、yaw-reference-probe.json、原始录包与服务日志。
+未放宽门限，不改失败结果，不继续无证据调参。
+
+## 原路线1秒短时恢复：live-recovery-1s-original-35s-01（失败）
+
+仅算法侧显式延长预测窗口至1秒，原急弯路线/5m/s/连续yaw/位置偏移不变；
+恢复状态冻结最后位置目标、继续yaw，不宣称机体立即停止加速。默认0.5秒
+与关联门/修正限幅原预算保留。真实先前0.804秒缺测回放已通过1秒候选。
+
+实飞35秒预算仍未通过，约23.695秒首次invalid：最后有效测量54.630s，
+截止55.630s；恢复采样55.500s（间隔0.870s）在55.656s才返回，晚于截止
+26ms，尚未被Tracker消费时Mission已失效。不能把后来恢复倒写成该轮成功。
+提示恢复预算应包含采样缺口和观测消费延迟，而不只看帧时间差。
+后续1.2秒为独立候选，不修改本轮预算或结果。
+
+System Land返回FAILED，landed=true但disarmed=false/stop_confirmed=false，
+不能写正常起降通过；独立PX4最终确认disarm，所有所属执行/仿真资源停止。
+fixture持有的小窗在finally退出，本轮不保留场景。原始录包和eval保留。
+
+## 原路线1.2秒恢复：live-recovery-1p2s-original-35s-01（仍未通过）
+
+基于上一轮0.870秒采样缺口+0.156秒到达延迟，独立预声明1.2秒预测预算，
+不改变原1秒轮的失败结论，原路线和其他门保持不变。
+首弯后recovery_started（age=.471s）到recovered（age=.156s），并持续
+收到有效三维目标；末段Tracking仍valid=true，说明这次跨过了短时缺测。
+
+随后Navigation update rejected: STOPPING；服务端精确原因是滚动轨迹
+不连续：position=.001675m、velocity=.059314m/s、acceleration=1.508881m/s²，
+超过当前1.4m/s²门。此轮不是再次因失跟失败；不能只看Mission最终STOPPING
+而丢掉下游原始拒绝原因。未增加门限、未忽略拒绝，后续需核查恢复时的
+目标/计划衔接，不能把局部恢复成功当35秒任务成功。
+
+正常System Land、landed/disarmed、无cleanup_errors；全部所属服务停止，
+小窗及子进程未保留，rmem_max恢复212992。eval phase_passed=false。
+UE温和路线尚未用于该轮，不混入算法侧A/B。
+
+## UE路线单变量：live-smooth-turn-default-window-35s-01（失败）
+
+独立新地图WestStreetSmoothTurn与序列WestSmoothTurnMotion已实际落盘、
+重载；runner-reset确认duration=110.8s。原地图和序列SHA256与生成前一致。
+真实UE地面/人物胶囊检查通过，生成期间遇到原新直线切入障碍处，已通过
+与原路径出弯切线正确拼接修正，没有跳过检查或缩小半径；详见支线记录。
+
+本轮保持原0.5秒Tracking窗口，排除与算法侧1.2秒组合混淆。首弯独立
+Actor真值7个样本：半径3.998806–3.999364m，速度中位2.749602m/s；
+直线速度中位4.999505m/s。新路线运行与速度得到验证，不等于无人机
+跟踪或无碰撞通过；动画逐帧相位/脚滑尚未进行独立视觉验收。
+
+任务约27.506秒失效，最后有效观测58.050s。但在此之前，UE于
+07:20:47.093 UTC记录Frame与light_streetlight_complete8碰撞，约为
+acquired后25.656秒，z=193.615cm，早于首次失效约1.85秒。
+存在碰撞后观测/状态漂移，不能只把本轮失败归因为0.5秒窗口。
+
+System Land最终SUCCEEDED、landed/disarmed且无cleanup_errors；
+全部所属服务及小窗停止，rmem_max恢复212992。eval phase_passed=false。
+原始日志、actor-route-audit.json、录包都保留在该轮log目录。
+按用户此前暂缓碰撞处理的范围，本轮未修改避障；组合实验因这个已知
+新阻塞暂缓，未通过的35秒矩阵仍保留，不能删去碰撞项改判成功。
+
+UE资产绑定复核另有缺口：已存override列表含旧runner和相机条目，
+尚未逐GUID证明当前新序列唯一绑定；实际人物沿新路线运动的证据成立，
+但不提升为绑定唯一性验收。生成/finalize源码补显式reset_bindings，
+未重写本轮已落盘资产；该补充尚需实际UE执行验证，不能据语法通过改判。
+
+
+### 2026-11-17 首弯右移2m独立实飞
+
+用户授权清理的两个旧生成包 package-course-v7、hud-v1/package 已删除；
+其余日志及WMM包保留。新独立地图 WestStreetShiftRight2m / 序列
+WestShiftRight2mMotion 保留原图；起点不变，首弯沿UE-X负向平移2m，
+进出段平滑过渡，保留4m圆弧、直线5m/s、弯道2.75m/s。
+真实UE生成成功，新资产binding override恰为1；几何7项、图像2项、
+ROS环境Demo13项测试通过，不代替实飞。
+
+实际任务 live-shift-right2m-default-window-35s-01，continuous-yaw启用，
+恢复窗口保持默认0.5秒。获得目标后26.05秒仍接触同一根
+light_streetlight_complete8，随后失跟，任务失败。
+原轮首次接触位置局部坐标(105.3481,5.2709,1.9041)m；新轮为
+(105.1293,5.4962,1.8940)m，水平差约0.314m。
+这是各自接触时刻的位置比较，不是同一时刻轨迹位移或净空提升；
+人物路线右移不能等同于无人机轨迹同样右移2m，不据此断言继续平移即可解决。
+新轮接触时参考与实际位置差约0.192m；需区分目标路线、规划参考和实际运动，
+暂不修改碰撞体、避障参数或继续扩大平移。
+
+Land SUCCEEDED，landed/disarmed确认，cleanup_errors为空；全部所属
+服务及小窗停止，host rmem恢复212992。碰撞audit含降落路面接触，
+不能把其airborne_contacts计数解释为追踪中的独立碰撞次数。
+PNG证据模式复用实际HTTP推理请求已有PNG，无新增传感器采集或二次编码；
+默认仍raw。磁盘低于128MiB则停止图像落盘、终止任务并走降落清理。
+证据：log/projectairsim/weststreet-shift-right2m/ 及上述实飞目录。
+
+
+### 延后4m候选真实结果（2026-11-17）
+
+live-shift-right2m-late4m-default-window-35s-01已完成，mission success=true，
+pursuit_window_complete=true，116个不同capture目标更新，追踪水平位移
+115.79m，1740条实际执行参考；没有撞light_streetlight_complete8，
+35秒预算覆盖首弯及后续段，未触发失跟。continuous-yaw及0.5秒窗口保持。
+这是一轮有界首弯追踪通过，不代表全loop/重复可靠性或完整复现通过。
+
+collision-audit仍passed=false：首次接触为wall1794903785.805，
+ground_mod_curb_a136，局部高度0.1338m、垂直速度-0.525m/s，
+发生在35秒追踪结束之后的降落阶段；共2条路沿接触日志。
+必须保留该碰撞失败，不能以mission成功宣称全程无碰撞。
+Land SUCCEEDED、disarmed=true、cleanup_errors=[]；所有所属服务/小窗停止，
+rmem212992恢复。原地图未覆盖，无新Git提交。
+证据：该轮mission/result.json、evaluation.json、collision-audit.json，
+以及log/projectairsim/weststreet-shift-right2m-late4m/live-audits.log。
+
+
+### 候选观察点第一轮结果：失败，保留默认关闭
+
+live-observation-candidates-65s-01在获得目标约50秒后失效，未跑满65秒，
+没有优于原第二弯约51秒失败，不能宣称方案有效。Land SUCCEEDED、
+disarmed、cleanup_errors为空、所有所属服务及小窗清理、rmem恢复212992。
+可见追踪段无接触，随后落地有道路接触，不能宣称全程无碰撞。
+
+policy-failure-summary.json：t83.412估计人机距5.353m，之后t84.294
+拉回7.354m，但目标方位与实际机头偏差增至约34.44度。YOLO原框
+t83.871左边x9.78..75.64，t83.949开始左裁框，随后空检测。
+与原轮从右侧裁框不同；距离改善和持续可见性不是等价指标。
+该距离使用Tracking预测位置与同sim时间最近自身odom，含测距/同步误差，
+不是精确人物真值距离。候选模型输出的转头需求可超过1.5rad/s，
+其朝向状态直接按限速转动，未建模真实机头响应/加速度及跟随误差；
+因此不能以简化rollout筛选当作真实轨迹可行性。
+
+本轮没有调整跟丢/测距/连续性门，未加历史路径跟随，未改镜像或控制出口。
+实验脚本与默认关闭开关保留，下一步先校准实际位置/转向响应后离线筛选，
+不盲目扩候选或把仅选终点提升为Elastic轨迹优化。两圈目标仍未完成。
+
+
+### 温和第二弯实飞复核：问题依旧，75秒未通过
+
+live-gentle-second-75s-01获得目标后57.7367秒首次lost，未跑满75秒。
+独立actor记录30个第二圆弧样本，速度1.9982..2.0010m/s；路线改动真实生效。
+但出弯加速后再度迎面接近：sim86.112估计距离5.718m，sim89.631
+2.993m，sim90.516仅1.526m；最后一刻机头与估计目标方位偏差约7.76度，
+说明该失效不能主要归因yaw。90042000000.png人物正面占满画面，
+下半身超幅，随后连续空检测；原2D框在下边缘附近，测距仍偶有接受，
+因此不能把所有失败描述为明确truncated拒绝，本轮末态为lost/空检测。
+
+同sim90.516，自身局部(90.598,118.051)，估计人物(92.098,117.771)，
+下达目标(84.098,117.771)，人物运动朝局部-X；固定-8m偏移仍位于
+人物前进方向一侧，无人机在其前方退让，没有变成后方跟随。
+UE actor近邻坐标的粗略对齐同样支持近距离，但含原点标定和采样时差，
+不把粗算0.3m当精确真值。review-geometry.json保留对照及时间差。
+
+原生日志追踪期无接触记录，降落路面接触；Land SUCCEEDED、
+landed/disarmed、cleanup_errors=[]，全部所属服务小窗清理，rmem恢复212992。
+场景仅延缓失效，没有解决固定跟随几何和出弯接近问题；暂不继续
+扩大半径、降低全程速度或新飞行，按用户要求审阅汇报。
+
+
+### p/v负切向首轮实飞失败复核
+
+live-tangent-pv-65s-01获得目标后27.993秒失效，尚未到第二弯，
+Land SUCCEEDED、landed/disarmed、cleanup_errors=[]。追踪阶段无原生接触，
+所属服务停止及rmem恢复另以cleanup元数据确认。
+末段目标框30..40px高并间歇空检测，机体到Tracking目标估计约15.9..17.6m，
+到下达参考点误差约9.4..10.9m，不能称已稳定保持8m或长期轨迹验收通过。
+
+用户指出暂时跟丢即fail；逐帧复核支持退出过早是直接触发点：
+最后有效采样59.115，默认截止59.615；59.499已有下一次有效三维检测，
+但结果59.700才返回，晚85ms；两次采样间隔384ms，含处理201ms。
+之后59.571/59.871/59.952也有有效三维检测。
+这证明有效检测在恢复，尚未证明延长窗口后关联、轨迹和后续任务通过。
+可用已有显式recovery-window=1候选独立实测：新鲜度/观测时间保持，
+短暂缺测冻结位置目标、继续yaw；0.5默认不改，不无限续期或忽略lost。
+
+
+### 两轮1秒恢复实测结论
+
+第一轮recovery1s在29.440秒失败，18次recovered，26/96次更新冻结；
+第二轮entry600ms在29.366秒失败，1次recovered，3/95次更新冻结。
+降低正常延迟误触发并未延长追踪，不能把冻结多认定为主要根因。
+第二轮最后有效采样59.247、返回59.481，框高29.2px；下一有效采样
+60.249、返回60.489，间隔1.002秒且有0.240秒处理延迟，
+已超过60.247有效期。不是仅85ms迟到的旧轮事件。
+
+末段TargetState估计人机距离15.27..18.53m（非精确真值），
+reference误差约7.62..3.99m；人物太小伴随连续空检测。
+1秒窗口允许部分短时恢复，但未解决转弯后距离拉大和检测可靠性。
+不继续放宽窗口；下一步应核对实际位置速度和下达轨迹响应，
+区分参考点本身移动和SUPER/Behavior跟随滞后。
+两轮均Land SUCCEEDED、disarmed、cleanup_errors为空，所属服务全部
+清理、rmem212992恢复；65秒矩阵仍失败，两圈目标未完成。
+证据recovery-review.json、mission/result.json、各轮calls.jsonl。
+
+
+### 失跟真实帧CUDA检测对照（不飞行、不改部署）
+
+log/weststreet-demo/yolo-loss-replay/保留compare.py、results.json、
+summary.json、roi-review.jpg、background-results.json。模型独立venv
+实际CUDA Predictor、锁定相同权重/预处理，原默认阈值0.35。
+58.029..61.284s共33帧：默认8/33，0.2阈值14/33，0.1阈值18/33；
+256x256因果ROI（由前一已接纳检测框中心初始化/更新）原阈值28/33。
+默认重推33/33帧与录制输出一致；ROI不是按当前人物真值裁剪，
+没有增加信息或使用未来帧。接纳ROI框逐帧人工看均为同一人物。
+检出采样最大间隔默认1.002秒，ROI0.252秒；不含下游延迟/关联，
+因此不能断言闭环窗口必通过。
+
+同图右侧[384,128,256,256]无人背景33张，阈值0.35/0.1均0假人；
+仅有限负对照，不能称通用误检率通过。降低阈值出现同目标重复框，
+不把所有候选数等同人物召回。模型调用含已有PNG编码的中位耗时
+全图12.62ms/ROI8.94ms（去前2帧），非ROS/DDS端到端延迟。
+未启动workerHTTP/ROS/场景，未改变在线配置。建议后续显式ROI模式
+恢复原图框/掩码坐标，用原相机内参/TF；追踪初始化/丢失须全图兜底。
+
+
+### 不改感知重复轮：新执行故障，不判为漏检复现
+
+live-tangent-pv-recovery1s-entry600ms-65s-02约20.80秒中止，
+最终Navigation错误FOLLOW_PATH_REJECTED；继续读取录包和执行端时序
+发现最早故障为STALE_LOCALIZATION，不是检测lost：
+wall1794914068.464275，ROS52.473，revision188旧执行失败；
+Adapter随后发布旧任务失败状态；wall4068.758新task出现，
+4068.806新Action拒绝“initial point is not continuous with vehicle position”。
+coverage_handoffs=0，不将此归因final覆盖切换；自行状态新鲜度门
+既拒绝过旧也拒绝未来时间，具体原因仍未查明，不称定位数据源已断流。
+
+YOLO0.35、无ROI保持，人物观测仍有效，此轮无法回答漏检是否偶发。
+没有放宽连续性/定位门、没有启动同参数第三轮。Land SUCCEEDED、
+disarmed、cleanup_errors=[]，全部服务小窗停止、rmem恢复212992。
+证据onboard.log、rejection-adapter-states.json、mission/result.json。
+
+
+### 1秒前看65秒实飞通过，继续长跑
+
+live-tangent-pv-lead1s-recovery1s-65s-01完整65秒success=true，
+3次恢复后接续，Land SUCCEEDED、disarmed、cleanup_errors=[]、
+所属服务清理。YOLO仍0.35，无ROI，未额外增加漏检机制。
+估计人机距min6.67/median10.91/max17.10m，非精确人物真值；
+参考跟随误差median7.99/max13.37m，尚非精确8m跟随或速度前馈完成。
+追踪阶段原生无接触，降落有路面接触，不能称全程无碰撞。
+相对0.35秒前看本轮通过，单轮对照不能证明普遍因果/可靠性。
+
+继续同参数live-tangent-pv-lead1s-recovery1s-240s-01，
+预声明覆盖112.067秒路线两次回环，不重启跟踪会话；
+真值仅用于评分回环，实际安全降落/清理另检。
+
+
+### 长跑新限制：广场柱墩实体遮挡
+
+live-tangent-pv-lead1s-recovery1s-240s-01获得目标后78.752秒失效，
+无STALE_LOCALIZATION或接管错误，原执行故障未复现但未声称已修复。
+65秒预算通过不代替长跑，两圈矩阵未完成。
+最后有效采样108.075，截止109.075；下一有效采样108.981但结果
+109.161返回，晚86ms。随后109.068/109.140持续有效且Tracker已恢复，
+外层任务已退出。原图108075000000.png人物在右侧柱墩旁，
+108489000000.png主体被实体柱墩遮挡，108981000000.png绕出重新可见。
+属于真实遮挡，不是上一段中央小目标纯漏检；不据此盲目调YOLO阈值。
+
+Land SUCCEEDED、disarmed、cleanup_errors=[]、全部服务清理、rmem恢复；
+追踪阶段无原生接触记录，降落有地砖接触，保留全程碰撞边界。
+本次按用户要求绕过偶发bug持续推进，依次完成同配置重试、1秒前看
+65秒成功、同参数240秒新遮挡失败。当前候选可覆盖前65秒，
+后续需讨论绕柱路径/可见性或遮挡恢复，尚不能持续循环。

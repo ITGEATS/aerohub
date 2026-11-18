@@ -2,6 +2,9 @@
 """Feed same-frame YOLO predictions to the official ProjectAirSim ImageDisplay."""
 import argparse
 import json
+import math
+import signal
+import threading
 from pathlib import Path
 import sys
 import time
@@ -16,8 +19,16 @@ def native_frame(folder, row):
     width, height = meta['width'], meta['height']
     if meta['encoding'] not in ('rgb8', 'bgr8'):
         raise ValueError('Unsupported encoding: '+meta['encoding'])
-    raw = (folder/(stamp+'.rgb')).read_bytes()
-    step = meta['step']
+    if meta.get('storage','raw')=='png':
+        from PIL import Image
+        with Image.open(folder/(stamp+'.png')) as image:
+            if image.size!=(width,height):raise ValueError('PNG geometry differs from source metadata')
+            raw=image.convert('RGB').tobytes()
+        meta=dict(meta,encoding='rgb8')
+        step=width*3
+    else:
+        raw = (folder/(stamp+'.rgb')).read_bytes()
+        step = meta['step']
     if step < width*3 or len(raw)!=step*height:
         raise ValueError('Invalid RGB stride or size')
     packed = bytearray().join(raw[y*step:y*step+width*3] for y in range(height))
@@ -71,9 +82,15 @@ def main():
     from simulator.projectairsim.image_windows import ImageWindow, ImageWindows, _ProcessDisplay
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run_dir', type=Path)
+    parser.add_argument('--exit-on-idle', type=float, default=0., help='Close LIVE window after this many seconds without new results; 0 disables')
     parser.add_argument('--replay', action='store_true')
     parser.add_argument('--start', type=float, default=0, help='Replay offset from first inference, seconds')
     args = parser.parse_args()
+    if not math.isfinite(args.exit_on_idle) or args.exit_on_idle<0:
+        parser.error('exit-on-idle must be finite and nonnegative')
+    stopped=threading.Event()
+    for sig in (signal.SIGINT,signal.SIGTERM):
+        signal.signal(sig,lambda *_:stopped.set())
     folder = args.run_dir/'detections'
     name = 'YOLO '+('REPLAY' if args.replay else 'LIVE')+' - same frame'
     with (folder/'calls.jsonl').open() as source, ImageWindows(
@@ -83,8 +100,8 @@ def main():
         position = 0
         pending = []
         first = None
-        started = time.monotonic()
-        while windows._display.running:
+        started = last_frame = time.monotonic()
+        while windows._display.running and not stopped.is_set():
             while True:
                 source.seek(position)
                 line = source.readline()
@@ -104,8 +121,11 @@ def main():
             elif pending:
                 selected = pending[-1]; pending.clear()
             if selected is not None:
+                last_frame=time.monotonic()
                 windows.receive('yolo',labeled_frame(folder,selected,'REPLAY' if args.replay else 'LIVE'))
-            time.sleep(.02)
+            if not args.replay and args.exit_on_idle>0 and time.monotonic()-last_frame>args.exit_on_idle:
+                break
+            stopped.wait(.02)
 
 
 if __name__ == '__main__':

@@ -21,5 +21,15 @@ class SameFrameTest(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 viewer.native_frame(folder,dict(stamp_ns=124))
 
+    def test_lossless_png_preserves_input_pixels(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as folder:
+            folder=Path(folder)
+            rgb=bytes([255,0,0,0,255,0])
+            Image.frombytes('RGB',(2,1),rgb).save(folder/'77.png')
+            (folder/'77.json').write_text(json.dumps(dict(width=2,height=1,step=6,encoding='rgb8',storage='png')))
+            frame=viewer.native_frame(folder,dict(stamp_ns=77))
+            self.assertEqual(frame['data'],bytes([0,0,255,0,255,0]))
+
 if __name__ == '__main__':
     unittest.main()

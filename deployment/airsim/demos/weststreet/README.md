@@ -1,5 +1,13 @@
 # WestStreet：PC 模拟算力板验证
 
+当前维护入口：[`launch_before_plaza.py`](launch_before_plaza.py)，任务实现为
+[`demo_before_plaza.py`](demo_before_plaza.py)。使用方法、side 会话修复及验收边界见
+[恢复版说明](README-before-plaza.md)。`demo.py` 仅委托到同一实现。
+
+恢复版使用专用 `log/weststreet-before-plaza/runtime/`，请保留该目录。
+此前失败的柱区航点、空中转场和预置分支已移除；不再提供对应启动参数。
+下面的 System 短程入口与历史实验说明不代表当前追踪默认配置。
+
 运行链为工作站 ROS 任务容器 → PC 上的 onboard_computer 容器 → AS2 原生 Behavior / 控制器 / 平台 → flight_board 容器中的 PX4 SITL → 主机 ProjectAirSim。无人机状态由 PX4 提供。HUD 显示无人机，Global 可观察已配置的行人跟随相机。
 
 复用固定镜像 `onboard_computer:v0.1.1`、`flight_board:v0.1.1` 和 `osrf/ros:humble-desktop-full-jammy`。无需重新打包场景；使用已安装插件的 UE5.2 工程以 `-game` 启动。
@@ -381,3 +389,71 @@ bbox2d的center/size，并转换RGB/BGR与行stride。annotations仅来自模型
 向Navigation.to_pose下达位置与纯yaw朝向。默认关闭，旧任务调用不变。
 新代码真实35秒预算已执行但在首弯后失跟，尚未通过转弯验收；问题是
 原生末端yaw约束的参考响应过慢，详见VALIDATION-tool-demo.md。
+
+### 连续yaw实验入口
+
+`run_tool_demo.py --continuous-yaw`同时开启Adapter和任务的CONTINUOUS_YAW，
+与`--target-yaw`互斥。位置仍用SUPER；FollowTimedPath在同一输出中
+限速更新朝向，不另启转向Behavior。接口变化后需重建导航执行overlay及
+工作站接口overlay。原默认关闭，不自动改变历史场景。
+首轮真实任务仍失跟，不能标为转弯修复；详见VALIDATION-tool-demo.md。
+
+### 小窗与任务生命周期
+
+使用`run_tool_demo.py --yolo-window`由fixture持有显示进程；正常结束、
+异常和中断均关闭该窗口，即使`--keep-scene`也不保留YOLO窗口。
+显示进程处理SIGINT/SIGTERM并关闭官方显示子进程；另带5秒无新结果
+自动退出。独立调试时可用`yolo_viewer.py --exit-on-idle 5`，回放仍可
+手动关闭，不自动把回放结束当成实时过期。实际idle/SIGTERM测试均无子进程残留。
+
+### 有界短时恢复实验
+
+`--recovery-window 1`显式把Tracking预测有效期从默认0.5秒延至1秒，
+默认配置不变。目标原观测stamp不重盖，输入capture新鲜度仍0.5秒，
+软关联距离门和单帧速度修正限幅仍使用原0.5秒模型预算。
+任务观察年龄大于0.3秒时标recovery，冻结最后位置目标但继续更新朝向；
+恢复新测量后恢复位置更新。冻结目标不代表物理速度立刻为零，也不保证
+不加速，减速和连续性仍归Planner/Behavior。超过声明有效期仍失败收口。
+与UE温和转弯路线分别验收，不能混用两个变量宣称算法单独改善。
+
+### 独立圆弧降速路线
+
+`--ue-map /Game/Aerohub/WestStreetSmoothTurn`显式选择新地图，原
+WestStreetCircuit可显式选择；新动作序列WestSmoothTurnMotion，全长约
+110.8秒。主街角采用4m圆弧、弯中2.75m/s、直路5m/s、加减速1.25m/s²，
+原障碍段保留。生成与检查脚本在simulator/projectairsim/weststreet/，
+既有资产拒绝覆盖；地图与sequence是外部UE资产，不随Git分发。
+
+实际首弯半径约3.999m、速度2.750m/s已通过观察记录验证，原地图/序列
+哈希未变。但单独采用新路线、原0.5秒窗口的35秒任务仍未通过：无人机
+先撞路灯，随后失跟。人物胶囊通行不代表无人机净空；目前不能宣称两项
+改动已完成联合验收。详细结果见VALIDATION-tool-demo.md。
+
+
+实验参数 `--predictive-observation` 默认关闭：7候选点、1.5秒预测的
+简化模型，经既有Navigation执行，不提供地图可见性或轨迹可行性保证。
+65秒真实测试约50秒在第二弯裁框失跟，未通过；不能作为持续循环配置。
+详见 VALIDATION-tool-demo.md。
+
+
+### 当前追踪场景基线恢复
+
+按用户要求，`run_tool_demo.py`默认地图恢复为
+`/Game/Aerohub/WestStreetShiftRight2mLate4m`：第二弯半径4m、弯道2.75m/s、
+直线5m/s，首弯右移2m与延后4m保留。现有UE资产可直接使用，无需
+重生成/重烘焙。10m/2m/s旧地图仅保留外部历史资产，不再提供生成或启动入口。
+候选观察点策略默认关闭。此操作只恢复下一轮运行入口，没有启动新飞行，
+不改变旧失败结果。
+
+下一步跟随策略使用Tracking已有TargetState.position/velocity及其header时间、
+observation_stamp和valid_until；速度大小由水平velocity求模，方向由向量归一化，
+低速方向不可靠。现有EKF已输出p/v，不应在Demo重复差分建立第二套估计器；
+其动态精度与响应仍需评估。暂不新增a估计，但执行层速度/加速度约束仍保留。
+
+
+p/v实验入口：`--tangent-follow --tangent-lead 1 --continuous-yaw
+--recovery-window 1 --ue-map /Game/Aerohub/WestStreetShiftRight2mLate4m`。
+前看默认仍0.35秒，1秒为显式候选；两种实验跟随模式不能同时开启。
+YOLO保持0.35、无ROI。该候选一次65秒任务通过，但240秒任务在约
+78.8秒因广场柱墩遮挡失效，两圈尚未通过。位置前看不是速度前馈，
+距离允许浮动，不能声称严格保持8米。详见VALIDATION-tool-demo.md。

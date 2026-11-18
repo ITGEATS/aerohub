@@ -11,4 +11,9 @@ for package in uav_system_python_api uav_planner_python_api uav_target_tracking_
   prefix=$(ros2 pkg prefix "$package")
   export AS2_MODULES_PATH="$prefix/share/$package/modules${AS2_MODULES_PATH:+:$AS2_MODULES_PATH}"
 done
-exec python3 "$repo/deployment/airsim/demos/weststreet/demo.py" "$@"
+mission=${WESTSTREET_MISSION_FILE:-demo_before_plaza.py}
+case "$mission" in
+  demo.py|demo_before_plaza.py) ;;
+  *) echo "Unsupported WestStreet mission: $mission" >&2; exit 2 ;;
+esac
+exec python3 "$repo/deployment/airsim/demos/weststreet/$mission" "$@"

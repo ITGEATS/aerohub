@@ -61,3 +61,30 @@ class PolicyTests(unittest.TestCase):
     def test_initial_horizontal_overlap_rejected(self):
         with self.assertRaises(ValueError):
             policy.follow_offset((1., 1.), (1., 1.), 8.)
+
+
+class RecoveryPolicyTests(unittest.TestCase):
+    def test_extended_prediction_freezes_waypoint_but_expires(self):
+        state=target();state.status='predicted';state.valid_until=stamp(11.)
+        previous=(11.,9.,3.)
+        point,recovering=policy.recovery_destination(state,now=10.8,frame='drone0/odom',
+            altitude=3.,offset=(-8.,0.),previous=previous,window=1.)
+        self.assertTrue(recovering);self.assertEqual(point,previous)
+        with self.assertRaises(ValueError):
+            policy.recovery_destination(state,now=11.01,frame='drone0/odom',
+                altitude=3.,offset=(-8.,0.),previous=previous,window=1.)
+    def test_fresh_measurement_resumes_position_updates(self):
+        point,recovering=policy.recovery_destination(target(),now=10.2,frame='drone0/odom',
+            altitude=3.,offset=(-8.,0.),previous=(0.,0.,3.),window=1.)
+        self.assertFalse(recovering);self.assertEqual(point,(12.,10.,3.))
+
+
+class TangentRecoveryEntryTests(unittest.TestCase):
+    def test_processing_delay_does_not_freeze_but_long_gap_does(self):
+        state=target();state.status='predicted';state.valid_until=stamp(11.)
+        previous=(11.,9.,3.)
+        for age,expected in [(.35,False),(.55,False),(.65,True),(.9,True)]:
+            point,recovering=policy.recovery_destination(state,now=10+age,frame='drone0/odom',
+                altitude=3.,offset=(-8.,0.),previous=previous,window=1.,freeze_after=.6)
+            self.assertEqual(recovering,expected)
+            self.assertEqual(point,previous if expected else (12.,10.,3.))

@@ -25,3 +25,20 @@ def follow_offset(own, target, distance):
     if not math.isfinite(length) or length < .25:
         raise ValueError('Initial horizontal separation too small')
     return (distance*dx/length, distance*dy/length)
+
+
+def recovery_destination(state, *, now, frame, altitude, offset, previous=None, window=.5, freeze_after=.3):
+    """Validate prediction lifetime; during extended recovery freeze the last waypoint.
+
+    This stops advancing the requested position, not a claim of zero physical
+    acceleration: the deployed planner/Behavior still owns braking and feasibility.
+    """
+    if not math.isfinite(window) or not .5<=window<=2.:
+        raise ValueError('recovery window must be within .5..2 seconds')
+    if not math.isfinite(freeze_after) or not 0<freeze_after<window:
+        raise ValueError("freeze_after must be within (0, window)")
+    point=destination(state,now=now,frame=frame,altitude=altitude,offset=offset,
+                      max_age=max(.6,window))
+    age=now-(state.observation_stamp.sec+state.observation_stamp.nanosec/1e9)
+    recovering=window>.5 and age>freeze_after
+    return (previous if recovering and previous is not None else point),recovering
