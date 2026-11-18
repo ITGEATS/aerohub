@@ -30,7 +30,7 @@
     ]
   },
   "exploit1": {
-    "status": "BLOCKED (2026-11-18): reuse chain partially substantiated; execution segment blocked by two environment/model-layer defects",
+    "status": "BLOCKED (updated 2026-11-18 late): z-swing blocker now attributed+mitigated and goal-acceptance verified (see z_limcycle.verification, run-20261118z); remaining gates: (a) CLIP discriminative margin for a non-degenerate walk (0.003 inverted on existing nodes), (b) a completed expansion run that saves a close-ball-node memory graph (run z ended segment_failed before save; planner saves only on completing paths), (c) host instability - the post-fix reuse session (run-20261118aa) died at Blocks startup. Chain evidence through CLIP+route+degenerate-walk remains from run o; no exploit_executed was fabricated.",
     "evidence_path": "log/citynav/pc-e2e/run-20261118o/exploit1/ (+ p/q/r/s/t/u expand attempts)",
     "substantiated": [
       "memory load: planner event memory_loaded path=/evidence/citynav_memory.json nodes=2 (run g graph injected as prior task memory, sha256 recorded in run o dir)",
@@ -45,6 +45,19 @@
     ],
     "expansion_attempts": "6 Blocks sessions spent on the sanctioned expand-then-reuse path (p: EKF teleport; q: goal_rejected, same-session re-run artifacts, takeoff timeout after session degradation; r/t: startup deaths; s/u: goal_rejected). The chain was never faked: no exploit_executed event exists without a real prior hit + real CLIP + real walk.",
     "not_relaxed": "the pre-locked gate (hit + execute + converge) stands; partial chain evidence is recorded, the round is NOT marked passed"
+  },
+  "z_limcycle": {
+    "status": "ATTRIBUTED + MITIGATED (2026-11-18, user ruling option A)",
+    "root_cause": "platform/firmware layer: PX4 EKF altitude estimate oscillates ~0.1 Hz (p2p 0.9-1.9 m scene-truth swing) with constant +0.63..0.67 m bias in this AirSim lockstep SITL configuration; the PX4 velocity loop drives the plant to chase the phantom estimate. Proven gain-independent (kp swept 1.0/0.5/0.2+kd0.2/0.05 identical or worse amplitudes, expB2/A4/K/H/L) with motion_reference constant and AS2 commanded vz only 0.02-0.05 m/s while truth vz reaches +-0.3 m/s. Not cameras (expB2 sensor-bridge-off still swings), not planner, not Blocks rendering.",
+    "evidence": "log/citynav/z-limcycle/{expA3,expF,expK}/*.jsonl + analyze outputs; skill/temp/citynav-migration/2026-11-18-z-limit-cycle.md (per-experiment table incl. invalid attempts expE glob-kill no-op, expE2 landed-drone artifact, expI degraded session)",
+    "mitigation_demo_layer": [
+      "controller.yaml keeps the SPF-validated gains (1.0/0.01/0) with the full attribution documented in the header (no untested retune shipped)",
+      "mission.py: takeoff_height 1.5->2.5 m headroom; hover_settle gate switched from a position-range window (unmeetable under the swing) to a velocity criterion |twist.z|<0.06 m/s held 2 s",
+      "planner node.py: _wait_quiet() (|3D twist|<0.08 for 1.5 s, 40 s timeout then send-anyway) + path start re-anchored to a FRESH pose immediately before every FollowTimedPath send (explore and exploit); the old code built the path from the decision-time pose that predated the 10-70 s LLM+grounding block - the direct cause of the q/s/u/y continuity rejections",
+      "run.py: CITYNAV_BLOCKS_ARGS override + disarmed-confirmed.json cleanup artifact support; land_once.py recovery probe"
+    ],
+    "verification": "run-20261118z/expand-ball (previously-blocked expansion scenario): 4 cycles, 4 FollowTimedPath goals sent, 4 observed on _action/status, 3 SUCCEEDED, 33 timed steps executed, collision 0, Blocks survived 338 s. The z swing no longer rejects goals. Residual (recorded, not hidden): 4th goal segment_failed ended the task before landmark completion; memory file only saved on completing paths (segment_failed skips _save_memory) so this run produced no reuse input; Land result read timed out though the drone landed+disarmed (confirmed via land_once probe, run-20261118z/disarmed-confirmed.json).",
+    "upstream_fix_needed": "PX4-side parameters (EKF2 altitude aiding / MPC_Z_VEL time constants) live in the flight_board image autostart - team-level change per AGENTS (shared images not rebuilt per source iteration). Recommendation for the main task: dedicated PX4 tuning ticket; SPF avoided the failure only because its cold cloud VLM delayed the first goal past the swing."
   },
   "formal1": {
     "status": "PASSED (run-20261118g, 2026-11-18)",

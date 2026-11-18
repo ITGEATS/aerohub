@@ -93,7 +93,12 @@ def test_locked_contract_values():
 def test_controller_yaml_is_pid_speed_controller_tuning():
     params = yaml.safe_load((APP / 'controller.yaml').read_text())
     tuning = params['/**']['ros__parameters']['pid_speed_controller']
+    # SPF-validated values retained; the 2026-11-18 z-oscillation study
+    # (log/citynav/z-limcycle) proved the swing is PX4-EKF-driven and
+    # gain-independent, so the demo mitigates via takeoff headroom +
+    # velocity settle gate instead of retuning.
     assert tuning['position_control']['kp']['z'] == 1.0
+    assert tuning['position_control']['ki']['z'] == 0.01
     assert tuning['trajectory_control']['kp']['x'] == 0.4
 
 

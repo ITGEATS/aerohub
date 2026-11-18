@@ -27,6 +27,7 @@ Usage (PowerShell, repository root):
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -44,6 +45,12 @@ SAM_PORT, CLIP_PORT = 8100, 8101
 AGENT_PORT = 8971
 PX4_INSTANCE, PX4_SYSTEM_ID = 70, 71
 TASK_NAME = 'CityNavBlocks'
+# z-oscillation attribution (log/citynav/z-limcycle): allow overriding the
+# Blocks render-load arguments per experiment without editing the file.
+BLOCKS_ARGS = os.environ.get(
+    'CITYNAV_BLOCKS_ARGS',
+    '-NoSplash -windowed -ResX=1024 -ResY=1024 -nosound '
+    '"-ExecCmds=r.Streaming.PoolSize 128"')
 ROS_WS = '/repo/log/citynav/pc-e2e/ros_ws'
 WORKSTATION_WS = '/repo/log/citynav/pc-e2e/workstation/ws'
 
@@ -147,8 +154,12 @@ def restart_blocks(output, observe=False):
         # window must be >= 1024 in BOTH dimensions or UE4 reallocates the
         # scene RT every frame and dies (runs c/f/g/h crashed at 1280x720,
         # run i/j at 1024x576/800x450). Texture pool capped to leave room for
-        # the resident inference services.
-        "$tr = '" + BLOCKS_WIN_PATH + "\\\\Blocks.exe -NoSplash -windowed -ResX=1024 -ResY=1024 -nosound \\\"-ExecCmds=r.Streaming.PoolSize 128\\\"'; "
+        # the resident inference services. CITYNAV_BLOCKS_ARGS overrides the
+        # render-load arguments for the z-oscillation attribution experiments
+        # (inner double quotes are escaped for the PowerShell single-quoted
+        # string, matching the historical working form).
+        "$tr = '" + BLOCKS_WIN_PATH + "\\\\Blocks.exe "
+        + BLOCKS_ARGS.replace('"', '\\"') + "'; "
         "schtasks /create /tn " + TASK_NAME + " /tr $tr /sc once /st 00:00 /f | Out-Null; "
         "schtasks /run /tn " + TASK_NAME)
     deadline = time.time() + 120
@@ -415,7 +426,12 @@ def stop(output):
     simulator_gone = blocks_alive == '0' or (
         'AirSim closed the RPC connection' in error or 'timed out' in error
         or 'Connection refused' in error)
-    if results and not (latest.get('disarmed') or safe_on_ground or simulator_gone):
+    if results and not (latest.get('disarmed') or safe_on_ground
+                        or simulator_gone
+                        # explicit external recovery confirmation artifact
+                        # (e.g. land_once.py output after a mission that
+                        # timed out reading the Land result)
+                        or (output / 'disarmed-confirmed.json').exists()):
         raise RuntimeError('latest task must confirm disarmed before cleanup')
     observer = prefix(output) + 'observer'
     if capture(['docker', 'ps', '-aq', '--filter', 'name=' + observer]).strip():

@@ -123,6 +123,17 @@ actual z=1.064 vs front z=1.463）或触地（q/s）；③仿真器——Blocks 
 6 个 Blocks 会话走"先扩节点再复用"路径未突破；**门槛未放宽，本轮记
 BLOCKED 而非通过**。
 
+**z 悬停摆动归因（2026-11-18 选项 A 裁决，validation.json z_limcycle 节 +
+`skill/temp/citynav-migration/2026-11-18-z-limit-cycle.md`）**：双源采样
+证明摆动在 **PX4 EKF 高度估计侧**（~0.1 Hz、真值 p2p 0.9-1.9 m、恒定
++0.63..0.67 m 偏置；AS2 指令恒定时机体仍摆，kp 1.0→0.05 幅值不变），
+非 AS2 增益/相机负载/planner。Demo 层处置：controller.yaml 保持 SPF
+验证值（归因写入注释）；mission 起飞 2.5 m + 速度判据悬停门；planner
+发送前 `_wait_quiet()` + 新鲜位姿重锚路径起点（直接修复 q/s/u/y 的
+连续性拒绝根因——旧代码用推理前 60 s 的决策位姿作首点）。验证
+（run-20261118z）：4 goal 全接受、3 SUCCEEDED、33 步执行、无碰撞。
+根治需 flight_board 镜像 PX4 参数专项（团队级，超 Demo 权限）。
+
 ## 已知限制
 
 - 路线 B：不复现 AirVLN 基准，Blocks 场景语义（orange ball 等）替代城市

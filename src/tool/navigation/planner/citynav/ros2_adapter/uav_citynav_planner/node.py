@@ -124,6 +124,7 @@ class CityNavPlannerNode(Node):
         self._pose_hist = collections.deque()  # (stamp, x, y, z, qx, qy, qz, qw)
         self._pose_latest = None
         self._twist_speed = None
+        self._twist_vz = None
         self._failures = 0
 
         self._landmarks = None
@@ -215,6 +216,7 @@ class CityNavPlannerNode(Node):
         v = msg.twist.linear
         with self._lock:
             self._twist_speed = (time.monotonic(), math.hypot(v.x, v.y))
+            self._twist_vz = (time.monotonic(), v.z)
 
     def _on_goal(self, msg: String):
         try:
@@ -397,6 +399,15 @@ class CityNavPlannerNode(Node):
             self._publish_event("landmark_advanced", idx=self._next_landmark_idx,
                                 landmark=self._landmarks[self._next_landmark_idx - 1])
 
+        # The decision pose `cur` predates the ~10-70 s LLM+grounding block;
+        # the platform hover swing (z-limcycle attribution) makes a stale
+        # first point fail the Behavior continuity check. Re-anchor the path
+        # start to a fresh, quiet-moment pose; waypoint targets stay in
+        # world coordinates.
+        self._wait_quiet()
+        cur_fresh = self._current_pose()
+        if cur_fresh is not None:
+            cur = cur_fresh
         wp = plan["waypoint"]
         if wp is None:  # 分割全失败：原地（上游 route_coords=cur_pos），仅旋转分解
             wp = [float(cur[0]), float(cur[1]), float(cur[2]), float(cur[3])]
@@ -447,6 +458,11 @@ class CityNavPlannerNode(Node):
             self._save_memory()
             self._finish("STOPPED", "task_complete")
             return
+        # same re-anchor as the explore path (see _run_one_cycle comment)
+        self._wait_quiet()
+        cur_fresh = self._current_pose()
+        if cur_fresh is not None:
+            cur = cur_fresh
         timed = build_timed_path(waypoints, (cur[0], cur[1], cur[2], cur[3]),
                                  base_velocity=self._cfg["base_velocity"],
                                  base_yaw_rate=self._cfg["base_yaw_rate"],
@@ -493,6 +509,34 @@ class CityNavPlannerNode(Node):
         time.sleep(self._cfg["retry_backoff_s"])
 
     # ---------- FollowTimedPath 执行 ----------
+    def _wait_quiet(self, limit=0.08, hold=1.5, timeout=40.0):
+        """Gate the path send on a still moment (|3D twist| < limit held for
+        `hold` s). The platform-layer hover z swing (attribution:
+        log/citynav/z-limcycle, skill/temp/citynav-migration/
+        2026-11-18-z-limit-cycle.md) is PX4-EKF-driven and reaches ~0.6 m/s;
+        the Behavior's continuity check compares the path's first point with
+        the vehicle position ~0.5-1 s later, so sending at a swing extremum
+        (velocity near zero) is what makes the goal acceptable. Returns False
+        on timeout (caller sends anyway; the Behavior still arbitrates)."""
+        deadline = time.monotonic() + timeout
+        quiet_since = None
+        while time.monotonic() < deadline:
+            with self._lock:
+                sp = self._twist_speed
+                vz = self._twist_vz
+            if sp and vz and time.monotonic() - sp[0] < 0.5:
+                v = math.hypot(sp[1], vz[1])
+                if v < limit:
+                    if quiet_since is None:
+                        quiet_since = time.monotonic()
+                    elif time.monotonic() - quiet_since >= hold:
+                        return True
+                else:
+                    quiet_since = None
+            time.sleep(0.1)
+        self.get_logger().warn("wait_quiet timed out; sending anyway")
+        return False
+
     def _ready(self):
         with self._lock:
             has_pose = bool(self._pose_latest)

@@ -1,5 +1,20 @@
-# Demo-local horizontal hover tuning (same values as the validated SPF demo);
-# shared controller configuration is preserved.
+# Demo-local hover tuning; shared controller configuration is preserved.
+# Values identical to the validated SPF tuning. The post-takeoff z
+# oscillation investigated 2026-11-18 (log/citynav/z-limcycle/ +
+# skill/temp/citynav-migration/2026-11-18-z-limit-cycle.md) is NOT driven by
+# these gains: dual-source sampling (expB2/A4/G/H/L) shows the scene-truth
+# aircraft swings p2p 0.9-1.9 m at ~0.1 Hz with a CONSTANT motion_reference
+# and an AS2 commanded vz of only ~0.02-0.05 m/s (kp swept 1.0/0.5/0.2+kd
+# 0.05 - identical amplitude), i.e. the PX4 EKF altitude estimate oscillates
+# in this AirSim lockstep configuration and the PX4 velocity loop drives the
+# plant to chase it. Fixing that needs PX4-side parameters (image autostart;
+# team-level change, out of demo scope). Demo mitigation: takeoff_height
+# 2.5 m headroom (mission.py) + velocity-based settle gate (mission.py)
+# which times the first goal to an oscillation extremum where short-horizon
+# drift is minimal, matching the FollowTimedPath continuity check exactly.
+# Also recorded: PX4 EKF z sits a constant +0.63..0.67 m above scene truth
+# after teleport+takeoff (expH std 0.023) - platform-layer, affects
+# min_altitude semantics (odom-frame floor ~0.6 m lower in truth).
 /**:
   ros__parameters:
     pid_speed_controller:

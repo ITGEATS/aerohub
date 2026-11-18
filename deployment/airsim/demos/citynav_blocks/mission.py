@@ -21,7 +21,6 @@ Reserved switches for later rounds (not part of formal1):
 --use-memory toggles the goal payload memory flag (exploit reuse round).
 """
 import argparse
-import collections
 import json
 import math
 from pathlib import Path
@@ -34,7 +33,7 @@ from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from action_msgs.msg import GoalStatusArray
 from as2_msgs.action import Takeoff, Land
 from as2_msgs.msg import PlatformInfo
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import String
@@ -60,7 +59,8 @@ class Mission(Node):
         # first carried it.
         self.terminal_detail = None
         self.terminal_stop_confirmed = None
-        self._settle_win = collections.deque()  # (monotonic, x, y, z)
+        self._settle_quiet_since = None  # velocity-gate quiet window start
+        self.twist = None
         # The clock bridge publishes best-effort; a reliable subscription is
         # rejected by DDS (SPF phase-2 note), so match best-effort here.
         self.create_subscription(Clock, '/clock', lambda m: setattr(
@@ -68,6 +68,9 @@ class Mission(Node):
             QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.create_subscription(PoseStamped, '/drone0/self_localization/pose',
                                  lambda m: setattr(self, 'pose', m), 10)
+        self.create_subscription(TwistStamped, '/drone0/self_localization/twist',
+                                 lambda m: setattr(self, 'twist', m),
+                                 qos_profile_sensor_data)
         self.create_subscription(CameraInfo,
                                  '/drone0/sensor_measurements/CityFront/rgb/camera_info',
                                  lambda m: setattr(self, 'camera_info', m), qos_profile_sensor_data)
@@ -153,26 +156,27 @@ class Mission(Node):
         return abs(now - stamp) <= limit
 
     def _settled(self):
-        """Pose must hold inside a 0.15 m range over a sliding 8 s window.
-        Run-20261118h/j showed a post-takeoff z limit cycle of +-0.3 m for
-        ~15-50 s (warm services make the planner decide inside it, and the
-        Behavior rejects a first point >0.15 m from the vehicle position);
-        a 3 s endpoint check could pass by luck mid-oscillation, so the gate
-        compares window max-min per axis instead."""
-        if not self.pose:
+        """Velocity-based hover-stability gate (2026-11-18 z-oscillation
+        attribution, log/citynav/z-limcycle): the post-takeoff z swing is
+        PX4-EKF-driven and gain-independent (p2p up to ~1.9 m at ~0.1 Hz),
+        so a position-range window cannot be met; but the FollowTimedPath
+        continuity check only needs the path's first point (the pose at
+        decision time) to still match the vehicle ~0.5-1.5 s later. At an
+        oscillation extremum the short-horizon drift is minimal, so the
+        gate waits for |vz| to stay below 0.06 m/s for 2 s - exactly the
+        quantity the Behavior compares."""
+        if not self.twist:
             return False
-        p = self.pose.pose.position
         now = time.monotonic()
-        self._settle_win.append((now, p.x, p.y, p.z))
-        while self._settle_win and now - self._settle_win[0][0] > 8.0:
-            self._settle_win.popleft()
-        if len(self._settle_win) < 40 or now - self._settle_win[0][0] < 7.5:
+        vz = self.twist.twist.linear.z
+        quiet = abs(vz) < 0.06
+        if not quiet:
+            self._settle_quiet_since = None
             return False
-        for axis in (1, 2, 3):
-            vals = [w[axis] for w in self._settle_win]
-            if max(vals) - min(vals) >= 0.15:
-                return False
-        return True
+        if self._settle_quiet_since is None:
+            self._settle_quiet_since = now
+            return False
+        return now - self._settle_quiet_since >= 2.0
 
 
 def main():
@@ -259,7 +263,11 @@ def main():
         mission.spin_until(lambda: mission.platform and mission.platform.offboard,
                            20, 'not offboard')
         goal = Takeoff.Goal()
-        goal.takeoff_height = 1.5
+        # 2.5 m (was 1.5): the EKF/lockstep z transient observed once per
+        # gain family (run l kp1.0, run v kp0.05, both coincident with a
+        # grounding GPU burst, ~1 m drop in ~1 s) needs headroom so a
+        # transient cannot reach the ground before the next decision.
+        goal.takeoff_height = 2.5
         goal.takeoff_speed = 0.5
         handle = mission.run_action(mission.takeoff, Takeoff, goal, 60)
         if handle.status != 4 or not handle.result.takeoff_success:

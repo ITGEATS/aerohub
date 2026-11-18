@@ -113,6 +113,16 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
   rejected）。最终修复：`_init_memory` 记录 `_memory_floor`（加载时的既往
   节点数），exploit 仅在 `floor > 0` 时检查，`MemoryGraph.closest_node`
   新增 `until`（默认 None 全搜）限定只搜既往节点 `[0, floor)`。
+- **发送时刻静止门 + 新鲜起点重锚（阶段 6 z 摆动归因，2026-11-18）**：
+  平台层悬停 z 摆动（PX4 EKF 驱动，见 `log/citynav/z-limcycle/` 与
+  `skill/temp/citynav-migration/2026-11-18-z-limit-cycle.md`）使
+  LLM+grounding 阻塞 10-70 s 后、以决策时刻旧位姿构建的 TimedPath 首点
+  与 Behavior 收到时刻的实际位置偏差 >0.15 m，首 goal 被连续性检查拒绝
+  （run q/s/u/y 实测）。修复：`_send_path` 前 `_wait_quiet()`（|3D twist|
+  <0.08 m/s 持续 1.5 s，超时 40 s 后仍发送由 Behavior 仲裁）并用
+  `_current_pose()` 新鲜位姿重锚路径起点（waypoint 目标保持世界系不变）；
+  explore 与 exploit 两路同修。`_on_twist` 增存 vz。单测 45 passed；
+  静止门参数无独立单测（node 级 ROS 测试仍为占位，M2 缺口不变）。
 
 ## 运行（阶段 6 Demo 前为开发入口）
 
