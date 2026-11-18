@@ -1,7 +1,7 @@
 """hspm 单测：viewpoint 解析逐字语义、landmark JSON 解析、探索管线编排
 （is_found 可见即推进、grounding 全失败→原地、alpha 收缩 waypoint）、
 卡死判据逐字（sum(hist[-4:-1])）、LLM payload 对齐权威契约
-（无 prompt/图像字段，view_stamps ns 整数）。"""
+（无 prompt/system_prompt 字段，images 三元组 label/rgb/stamp ns）。"""
 import numpy as np
 import pytest
 
@@ -66,6 +66,23 @@ def test_extract_landmarks_payload_and_text_field():
     assert extract_landmarks(llm_fail, "x", 30.0)["error_code"] == "busy"
 
 
+def test_llm_frames_client_prompt_construction():
+    """llm_client 的 prompt 构造与帧转换（不触 DDS：仅测纯函数路径）。"""
+    from uav_citynav_planner import prompts
+    from uav_citynav_planner.llm_client import rgb_to_image
+
+    p = prompts.route_planning_prompt_builder("INSTR", ["orange ball"], [],
+                                              "orange ball")
+    assert "Navigation instruction: INSTR" in p
+    img = np.zeros((4, 6, 3), np.uint8)
+    msg = rgb_to_image(img, 1234567890123, "drone0/front_image")
+    assert msg.encoding == "rgb8" and msg.height == 4 and msg.width == 6
+    assert msg.step == 18 and len(msg.data) == 72
+    assert msg.header.stamp.sec == 1234 and msg.header.stamp.nanosec == 567890123
+    with pytest.raises(ValueError):
+        rgb_to_image(np.zeros((4, 6), np.uint8), 1, "f")
+
+
 def test_plan_next_waypoint_is_found_and_waypoint_math():
     # 前视 ψ=0、pose 原点、mask 像素中心 d=2 → ENU 点 (2,0,0)；
     # alpha=0.6 → (1.2,0,0)；z=0 < min_alt 1.2 → 钳制 1.2
@@ -91,15 +108,17 @@ def test_plan_next_waypoint_is_found_and_waypoint_math():
     assert wp[0] == pytest.approx(1.2) and wp[1] == pytest.approx(0.0)
     assert wp[2] == pytest.approx(1.2)
     assert wp[3] == pytest.approx(0.0)  # yaw=atan2(0,1.2)
-    # 权威契约 payload：结构化字段 + view_stamps(ns)，无 prompt/图像
+    # Tool 化契约 payload：结构化字段 + images[(label, rgb, stamp_ns)]
+    # （与反投影同 batch、顺序=OBS_VIEWPOINTS）；prompt 由 Tool 侧构造，
+    # 不出现在编排层调用里
     assert seen["op"] == "viewpoint"
     assert seen["instruction"] == "go to building"
     assert seen["landmarks"] == ["building"] and seen["traversed"] == []
     assert seen["next"] == "building"
-    assert set(seen["view_stamps"]) == set(OBS_VIEWPOINTS)
-    assert all(isinstance(v, int) for v in seen["view_stamps"].values())
+    assert [i[0] for i in seen["images"]] == list(OBS_VIEWPOINTS)
+    assert all(isinstance(i[2], int) for i in seen["images"])
     assert seen["max_age_s"] == pytest.approx(90.0)
-    for forbidden in ("prompt", "images", "image_b64"):
+    for forbidden in ("prompt", "system_prompt", "image_b64"):
         assert forbidden not in seen
 
 

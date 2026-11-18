@@ -22,24 +22,29 @@ from pathlib import Path
 import time
 
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from uav_planner_interfaces.action import NavigateToSemanticGoal
 
 NS = "/drone0"
 
-# 契约方向性事实（graph_probe 实测）：ActionClient 的 send_goal/get_result/
-# cancel_goal 是 SERVICE 端点，feedback/status 才是话题；planner 以生产同款
-# view_cameras（City* 五目）参数启动。
+# Tool 化契约（2026-11-18）：任务入口 = to_semantic_goal ActionServer；
+# 云 LLM = InferVisionLanguageFrames ActionClient（客户端侧仅 feedback/status
+# 话题可见）；原 citynav/goal 话题与 llm/query|result 随私有代理删除。
+# 契约方向性事实（graph_probe 实测）：Action 的 send_goal/get_result/
+# cancel_goal 是 SERVICE 端点，feedback/status 才是话题。
 EXPECTED_TOPICS = {
     "publish": [
         f"{NS}/citynav/status",
         f"{NS}/citynav/events",
-        f"{NS}/citynav/llm/query",
     ],
     "subscribe": [
-        f"{NS}/citynav/goal",
-        f"{NS}/citynav/llm/result",
+        f"{NS}/navigate_to_semantic_goal/_action/feedback",
+        f"{NS}/navigate_to_semantic_goal/_action/status",
+        f"{NS}/inference/vision_language_frames/infer/_action/feedback",
+        f"{NS}/inference/vision_language_frames/infer/_action/status",
         f"{NS}/self_localization/pose",
         f"{NS}/self_localization/twist",
         f"{NS}/follow_timed_path/_action/feedback",
@@ -53,6 +58,9 @@ EXPECTED_TOPICS = {
 }
 EXPECTED_SERVICES = [
     f"{NS}/citynav/cancel",
+    f"{NS}/navigate_to_semantic_goal/_action/send_goal",
+    f"{NS}/navigate_to_semantic_goal/_action/get_result",
+    f"{NS}/navigate_to_semantic_goal/_action/cancel_goal",
     f"{NS}/follow_timed_path/_action/send_goal",
     f"{NS}/follow_timed_path/_action/get_result",
     f"{NS}/follow_timed_path/_action/cancel_goal",
@@ -71,7 +79,8 @@ class Checker(Node):
                                  lambda m: self._tap(self.statuses, m), 10)
         self.create_subscription(String, f"{NS}/citynav/events",
                                  lambda m: self._tap(self.events, m), 10)
-        self.goal_pub = self.create_publisher(String, f"{NS}/citynav/goal", 10)
+        self.goal_cli = ActionClient(self, NavigateToSemanticGoal,
+                                     f"{NS}/navigate_to_semantic_goal")
         self.cancel_cli = self.create_client(Trigger, f"{NS}/citynav/cancel")
 
     @staticmethod
@@ -165,18 +174,25 @@ def main():
             return res.message
         check("cancel_idempotent_in_idle", cancel_idle)
 
-        # 5. goal -> RUNNING -> not_ready 收口（无传感器路径）
+        # 5. to_semantic_goal -> RUNNING -> not_ready 收口（无传感器路径）
         def goal_cycle(tag):
             ck.events.clear()
             ck.statuses.clear()
-            ck.goal_pub.publish(String(data=json.dumps(
-                {"instruction": f"dds lifecycle probe {tag}", "use_memory": False})))
+            if not ck.goal_cli.wait_for_server(timeout_sec=10):
+                raise TimeoutError("navigate_to_semantic_goal server missing")
+            goal = NavigateToSemanticGoal.Goal()
+            goal.description = "dds lifecycle probe %s" % tag
+            goal.timeout = 120.0
+            sent = ck.goal_cli.send_goal_async(goal)
+            ck.wait_for(lambda: sent.done(), 10, "goal send hung")
+            handle = sent.result()
+            if handle is None or not handle.accepted:
+                raise AssertionError("goal rejected in IDLE state")
             ck.wait_for(
                 lambda: any(e.get("event") == "goal_accepted" for e in ck.events),
                 10, "goal_accepted event missing")
-            # started 是 _on_goal 同步发布的 status（state="started"）；
-            # RUNNING 在本无传感器路径下是亚心跳瞬时态（_ready 假立即收口），
-            # 0.5 s 心跳不可见属预期，不作为判据。
+            # started 是 _start_job 同步发布的 status；RUNNING 在本无传感器
+            # 路径下是亚心跳瞬时态（_ready 假立即收口），心跳不可见属预期。
             ck.wait_for(
                 lambda: any(s.get("state") == "started" for s in ck.statuses),
                 10, "planner never reported started")
@@ -184,10 +200,24 @@ def main():
                 lambda: any(s.get("state") == "STOPPED" and s.get("detail") == "not_ready"
                             for s in ck.statuses),
                 15, "planner did not converge to STOPPED/not_ready")
+            fut = handle.get_result_async()
+            ck.wait_for(lambda: fut.done(), 15, "action result never arrived")
+            wrapped = fut.result()
+            res = wrapped.result
+            if wrapped is None or res is None:
+                raise AssertionError("empty action result")
+            # 契约：NOT_READY 不是 SUCCEEDED；success 恒假；abort 终态(6)。
+            if res.success or res.code != "NOT_READY":
+                raise AssertionError("bad result contract: %r" % (
+                    (res.success, res.code, res.reason),))
+            if int(wrapped.status) != 6:
+                raise AssertionError("expected ABORTED terminal, got %d"
+                                     % wrapped.status)
             faulted = [s for s in ck.statuses if s.get("state") == "FAULT"]
             if faulted:
                 raise AssertionError(f"unexpected FAULT: {faulted}")
-            return "goal_accepted -> RUNNING -> STOPPED(not_ready)"
+            return ("goal_accepted -> started -> STOPPED(not_ready); "
+                    "result code=NOT_READY status=ABORTED")
         check("goal_lifecycle_first", lambda: goal_cycle("1"))
         check("goal_lifecycle_reentrant", lambda: goal_cycle("2"))
     finally:

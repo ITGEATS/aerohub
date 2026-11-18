@@ -14,6 +14,22 @@ until the real cloud operation completes; a timeout is not proof the provider st
 There are no automatic retries or unbounded queues. Old-image and identity-mismatched
 results are rejected, not re-stamped.
 
+## Frames variant (multi-image requests, added 2026-11-18 for CityNav Tool-ification)
+
+Public ROS Action: `uav_inference_interfaces/action/InferVisionLanguageFrames` at
+`/<vehicle>/inference/vision_language_frames/infer`, served by
+`uav_inference.vision_language_frames_node`. Unlike the single-image Function above,
+**the caller supplies the frames explicitly** (ordered `image_labels` + images,
+empty list = text-only request) plus `prompt`, optional `system_prompt`, positive
+`timeout` and `max_result_age`. This exists because callers such as the CityNav
+Navigation Tool hold upstream prompts verbatim and must send the exact batch they
+act on; the provider message shape is the upstream one (per-frame
+`"{label} image: "` text block + image, prompt block last, system message only
+when `system_prompt` is non-empty). No navigation semantics (landmark/viewpoint
+JSON, is_found parsing) live here — the Function returns raw model text. HTTP
+surface: `/infer_frames` on the same uv-isolated worker
+(`INFERENCE_MODEL_NAMES` registers the logical entries, e.g. `citynav`).
+
 ## Configuration
 
 ```bash

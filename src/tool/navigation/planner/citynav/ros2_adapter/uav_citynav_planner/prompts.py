@@ -1,50 +1,18 @@
-"""CityNavAgent 上游提示词与响应解析的逐字复制。
+"""CityNavAgent 上游提示词的逐字复制（Tool 侧持有，2026-11-18 Tool 化改造）。
+
+原居 llm_proxy 包（私有代理）；按"被复现工作的形式是 Tool"原则，prompt 属
+导航 Tool 的算法语义，随 planner 迁移；Inference Function 只按 model_name
+执行"帧+prompt → 文本"，不含任何导航语义（与 SPF prompt.py 同法）。
 
 复制来源（upstream 子模块锁定提交 4b6e926c3325995483576523b18c9d0de5eb0710）：
   - src/llm/prompt_builder.py L304-334 route_planning_prompt_builder
   - src/llm/prompt_builder.py L282-301 landmark_caption_prompt_builder
-  - src/llm/prompt_builder.py L30-54   parse_viewpoint_response_v2
   - utils/landmark_extraction.py L35-47 landmark 抽取 system/user 提示词
-    （决策 7 代决：Blocks 无 AirVLN-E 标注可消费，landmark 序列由 LLM 从指令
-    抽取，即论文离线标注生成方法本身；README §2 称提示词取
-    src/llm/prompt_builder.py，但该文件不含抽取提示词，逐字来源以本行为准）
+    （决策 7）
 
-复制原因：复现保真（迁移方案阶段 3）。许可证依据上游 README 徽章声明的 MIT
-意图（CODE_LICENSE 文件断链缺口已记入过程记录，仅限组内非商业研究）。
-
-prompt 文本（含空白与示例）与解析逻辑不得修改；tests/test_prompts.py 对
-upstream 源文件做逐字比对，防止漂移。landmark_extraction_messages 是本包新增
-薄封装，消息结构逐字取自 utils/landmark_extraction.py 的 create 调用，不改
-提示词文本；其余三个函数为源段逐字复制。
+prompt 文本（含空白与示例）不得修改；tests/test_prompts.py 对 upstream 源
+文件做逐字比对防漂移。
 """
-import json  # 上游 prompt_builder.py L3；parse_viewpoint_response_v2 依赖
-
-
-def parse_viewpoint_response_v2(resp):
-    cleaned_resp = resp.strip('`json\n').strip('`')
-    cleaned_resp = cleaned_resp.replace("True", "true").replace("False", "false")
-
-    json_resp = json.loads(cleaned_resp)
-    reformat_resp = {}
-    if "is_found" not in json_resp:
-        print("Warning: LLM output missing 'is_found'")
-        reformat_resp["is_found"] = False
-    else:
-        reformat_resp["is_found"] = json_resp["is_found"]
-
-    for k in json_resp:
-        if "slightly" in k and "left" in k:
-            reformat_resp["slightly_left"] = json_resp[k]
-        elif "slightly" in k and "right" in k:
-            reformat_resp["slightly_right"] = json_resp[k]
-        elif "left" in k:
-            reformat_resp["left"] = json_resp[k]
-        elif "right" in k:
-            reformat_resp["right"] = json_resp[k]
-        elif "front" in k:
-            reformat_resp["front"] = json_resp[k]
-
-    return reformat_resp
 
 
 def landmark_caption_prompt_builder(scene_objects):
@@ -107,10 +75,3 @@ LANDMARK_EXTRACTION_SYSTEM_PROMPT = 'You are a navigation aircraft, and now you 
 
 def landmark_extraction_user_prompt(instruction):
     return f'The instruction is <{instruction}>'
-
-
-def landmark_extraction_messages(instruction):
-    return [
-        {"role": "system", "content": LANDMARK_EXTRACTION_SYSTEM_PROMPT},
-        {"role": "user", "content": landmark_extraction_user_prompt(instruction)},
-    ]

@@ -8,6 +8,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/InferVisionLanguage.action"
+  "action/InferVisionLanguageFrames.action"
   "msg/YopoCandidate.msg"
   "msg/Detection.msg"
   "msg/DetectionFrame.msg"

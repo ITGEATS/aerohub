@@ -1,13 +1,15 @@
-"""prompts/parse 与 upstream 锁定提交的逐字一致性测试（阶段 3，验收 M-1 前置）。
+"""Tool 侧 prompts 与 upstream 锁定提交的逐字一致性测试（Tool 化改造迁移）。
 
-防止复制模板随时间漂移：直接从子模块源码提取比对，不依赖网络与 rclpy。
+原居 llm_proxy/tests/test_prompts.py；prompt 现由 Tool 持有（prompts.py），
+防漂移职责不变：直接从子模块源码提取比对，不依赖网络与 rclpy。
+parse_viewpoint_response_v2 的逐字比对在 test_prompts_alignment.py（hspm 副本）。
 """
 import ast
 from pathlib import Path
 
 import pytest
 
-from uav_citynav_llm_proxy import prompts
+from uav_citynav_planner import prompts
 
 UPSTREAM = Path(__file__).resolve().parents[2] / "upstream"
 PB = (UPSTREAM / "src" / "llm" / "prompt_builder.py").read_text(encoding="utf-8")
@@ -28,7 +30,6 @@ def _fn_src(text, name):
 @pytest.mark.parametrize("name", [
     "route_planning_prompt_builder",
     "landmark_caption_prompt_builder",
-    "parse_viewpoint_response_v2",
 ])
 def test_functions_verbatim(name):
     assert _fn_src(LOCAL, name) == _fn_src(PB, name)
@@ -66,12 +67,6 @@ def test_landmark_extraction_user_prompt_verbatim():
                     {}, {"instruction": "fly past the orange ball"})
     assert prompts.landmark_extraction_user_prompt(
         "fly past the orange ball") == rendered
-
-
-def test_landmark_extraction_messages_shape():
-    msgs = prompts.landmark_extraction_messages("go to the building")
-    assert [m["role"] for m in msgs] == ["system", "user"]
-    assert msgs[1]["content"] == "The instruction is <go to the building>"
 
 
 def test_route_prompt_contains_inputs_and_examples():

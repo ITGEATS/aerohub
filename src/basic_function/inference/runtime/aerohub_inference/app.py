@@ -9,7 +9,10 @@ from fastapi import FastAPI, HTTPException
 from starlette.concurrency import run_in_threadpool
 
 
-def create_app(factory, request_type, response_type, path="/infer"):
+def create_app(factory, request_type, response_type, path="/infer",
+               method="infer", extra_routes=()):
+    """extra_routes: iterable of (path, request_type, response_type, method)
+    served by the same predictor instance and busy slot (e.g. /infer_frames)."""
     @asynccontextmanager
     async def lifespan(app):
         app.state.predictor = await run_in_threadpool(factory)
@@ -36,7 +39,7 @@ def create_app(factory, request_type, response_type, path="/infer"):
             raise HTTPException(503, "model is not ready")
         return dict(app.state.predictor.metadata, busy=app.state.busy)
 
-    async def infer(body):
+    async def infer(body, _method=method):
         if not app.state.ready:
             raise HTTPException(503, "model is not ready")
         # No await between checking and acquiring: this runs on one event loop.
@@ -46,8 +49,9 @@ def create_app(factory, request_type, response_type, path="/infer"):
 
         async def execute():
             try:
+                predictor_method = getattr(app.state.predictor, _method)
                 return await run_in_threadpool(
-                    partial(app.state.predictor.infer, body.model_dump())
+                    partial(predictor_method, body.model_dump())
                 )
             except ValueError as error:
                 raise HTTPException(422, str(error)) from error
@@ -64,4 +68,9 @@ def create_app(factory, request_type, response_type, path="/infer"):
 
     infer.__annotations__["body"] = request_type
     app.post(path, response_model=response_type)(infer)
+    for extra_path, extra_request, extra_response, extra_method in extra_routes:
+        async def handler(body, _method=extra_method):
+            return await infer(body, _method=_method)
+        handler.__annotations__["body"] = extra_request
+        app.post(extra_path, response_model=extra_response)(handler)
     return app

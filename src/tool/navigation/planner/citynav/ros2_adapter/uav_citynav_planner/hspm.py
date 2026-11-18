@@ -2,17 +2,16 @@
 
 语义来源：
   - landmark 抽取（op=landmark）：payload 仅 {instruction}；system/user 提示词
-    由 uav_citynav_llm_proxy 内部构造（prompts.landmark_extraction_messages），
-    planner 不发送任何 prompt 文本（权威契约，proxy node.py L13-17）。响应解析
-    逐字复制 upstream/utils/landmark_extraction.py L56-65（```json 正则 +
-    "Landmark sequence"）。
+    由 Tool 侧 prompts.landmark_extraction_* 逐字构造（Tool 化改造后 prompt
+    不再在代理侧）。响应解析逐字复制 upstream/utils/landmark_extraction.py
+    L56-65（```json 正则 + "Landmark sequence"）。
   - viewpoint 路线查询（op=viewpoint）：payload
-    {instruction, landmarks, traversed, next, view_stamps, max_age_s}；
-    route_planning_prompt_builder 与图像消息由代理按 view_stamps 从其相机缓存
-    取帧后内部构造（决策：图像数据流止步算力容器/PC GPU 之外的代理侧，公网
-    访问仅代理出板，README §3）。本包保留 parse_viewpoint_response_v2 一份
-    逐字复制用于字段提取——代理已校验响应可解析（error_code=parse），但
-    viewpoint/object 字段消费在 planner。
+    {instruction, landmarks, traversed, next, images[(label, rgb, stamp_ns)],
+    max_age_s}；route_planning_prompt_builder 与消息构造在 Tool 侧
+    （llm_client + prompts.py 逐字复制），帧与反投影共用同一 batch
+    （Tool 化改造 2026-11-18，原代理取帧契约已移除）。本包保留
+    parse_viewpoint_response_v2 一份逐字复制用于字段提取，viewpoint/object
+    字段消费在 planner。
   - 主链：SimRun.py L227-321 explore_pipeline_by_sam——五视角名
     left/slightly_left/front/slightly_right/right、逐视角 grounding、
     成功即反投影、>30 点统计滤波、只取首个非空类、alpha=0.6 收缩、
@@ -112,20 +111,25 @@ def plan_next_waypoint(llm_request: Callable[..., Dict],
     batch 项：{"view", "rgb"(uint8 HxWx3), "depth"(float32 HxW 米 axial),
     "K"(3x3), "R"(3x3 base←optical), "pose"([x,y,z,qx,qy,qz,qw] 与图像 stamp
     匹配), "stamp"(s), "stamp_ns"(int)}。cur_pose：[x,y,z] odom ENU。
-    viewpoint 查询只发结构化字段与 view_stamps（各视角图像 stamp ns），图像与
-    prompt 由代理构造。返回 {"ok","waypoint"([x,y,z,yaw]|None),"is_found",
-    "seg_success","selected","error_code"}。
+    viewpoint 查询随请求显式提供五目帧（与反投影共用同一 batch，顺序=上游
+    obs_viewpoint）与 prompts.py 逐字 prompt（Tool 化改造 2026-11-18，原
+    view_stamps 代理取帧契约已移除）。返回 {"ok","waypoint"([x,y,z,yaw]|None),
+    "is_found","seg_success","selected","error_code"}。
     """
     views = {b["view"]: b for b in batch}
 
     traversed_landmarks = landmarks[:next_landmark_idx]
-    view_stamps = {v: int(views[v]["stamp_ns"]) for v in OBS_VIEWPOINTS if v in views}
+    # Tool 化改造：帧随请求显式提供（与反投影共用同一 batch，顺序=上游
+    # obs_viewpoint），prompt 由 llm_client 经 prompts.py 逐字构造；原
+    # view_stamps 代理取帧契约随私有代理一并移除。
+    images = [(v, views[v]["rgb"], int(views[v]["stamp_ns"]))
+              for v in OBS_VIEWPOINTS if v in views]
     result = llm_request(op="viewpoint", timeout_s=llm_timeout_s,
                          instruction=instruction,
                          landmarks=list(landmarks),
                          traversed=list(traversed_landmarks),
                          next=landmarks[next_landmark_idx],
-                         view_stamps=view_stamps,
+                         images=images,
                          max_age_s=float(max_age_s))
     if not result.get("ok"):
         return {"ok": False, "error_code": result.get("error_code", "llm_fail")}

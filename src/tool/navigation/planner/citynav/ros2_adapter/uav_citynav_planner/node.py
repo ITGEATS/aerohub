@@ -1,4 +1,12 @@
-"""uav_citynav_planner：CityNavAgent 语言导航 Planner 板端节点（迁移方案阶段 5）。
+"""uav_citynav_planner：CityNavAgent 语言导航 Planner 板端节点（迁移方案阶段 5，
+2026-11-18 Tool 化改造）。
+
+任务入口 = 共享 Navigation Tool 函数 `to_semantic_goal`
+（uav_planner_interfaces/NavigateToSemanticGoal Action，SPF 同契约）；云 LLM
+经共享 Inference Function `InferVisionLanguageFrames`（prompt 在本 Tool 的
+prompts.py 逐字持有，帧随请求显式提供）；原私有 citynav/goal 话题与
+uav_citynav_llm_proxy 已移除。status/events 话题保留为观测面，citynav/cancel
+Trigger 保留为运维入口。
 
 依赖闭包 = rclpy + numpy/scipy + stdlib（onboard-computer v0.1.1 容器 py3.10
 实测无 networkx，D24 包内最小图替代；禁
@@ -42,7 +50,8 @@ from uav_planner_interfaces.msg import TimedPath, TimedTrajectoryPoint
 from .clip_client import ClipScoreClient
 from .grounding_client import ClientError, GroundingClient, encode_png
 from .hspm import OBS_VIEWPOINTS, extract_landmarks, is_stuck, plan_next_waypoint
-from .llm_client import LlmQueryClient
+from .llm_client import LlmFramesClient
+from .semantic_navigation import SemanticNavigationServer
 from .memory import MemoryGraph
 from .perception import rotation_body_from_optical
 from .trajectory import build_timed_path, calculate_movement_steps
@@ -52,6 +61,7 @@ STATES = ("IDLE", "RUNNING", "STOPPING", "STOPPED", "FAULT")
 # D13 同款收口码表（共享 NavigateToPose Result.code 词表，与 SPF 一致）
 SHARED_CODES = {"task_complete": "SUCCEEDED", "cancelled": "CANCELED",
                 "not_ready": "NOT_READY", "goal_timeout": "TIMEOUT",
+                "budget": "TIMEOUT",
                 "llm_failures": "EXECUTION_FAILED",
                 "service_failures": "EXECUTION_FAILED",
                 "goal_rejected": "EXECUTION_FAILED",
@@ -91,6 +101,10 @@ class CityNavPlannerNode(Node):
         self.declare_parameter("retry_backoff_s", 5.0)
         self.declare_parameter("pose_history_s", 5.0)
         self.declare_parameter("handoff_lead_s", 0.5)
+        # Tool 化：逻辑模型名交给共享 Inference Function；use_memory 从任务
+        # 参数降为部署参数（共享 NavigateToSemanticGoal 契约无此字段）。
+        self.declare_parameter("llm_model_name", "citynav")
+        self.declare_parameter("use_memory", True)
         self.declare_parameter("grounding_url",
                                "http://127.0.0.1:8100/models/grounded_sam/greedy_mask_predict")
         self.declare_parameter("clip_url", "http://127.0.0.1:8101/models/clip/score")
@@ -160,7 +174,10 @@ class CityNavPlannerNode(Node):
                                  self._on_pose, qos_profile_sensor_data)
         self.create_subscription(TwistStamped, "self_localization/twist",
                                  self._on_twist, qos_profile_sensor_data)
-        self.create_subscription(String, "citynav/goal", self._on_goal, 10)
+        # Tool 化改造：任务入口 = 共享 to_semantic_goal Action（下方
+        # SemanticNavigationServer）；原 citynav/goal 私有话题已移除，不留
+        # 兼容垫片。status/events 保留为观测面，cancel Trigger 保留为与
+        # Action cancel 等价的运维入口（SPF 卡片 cancel_task 同法）。
         self.create_service(Trigger, "citynav/cancel", self._on_cancel)
         self._status_pub = self.create_publisher(String, "citynav/status", 10)
         self._events_pub = self.create_publisher(String, "citynav/events", 10)
@@ -169,7 +186,9 @@ class CityNavPlannerNode(Node):
         self._modify = self.create_client(FollowTimedPath_SendGoal,
                                           "follow_timed_path/_behavior/modify")
         self._stopper = self.create_client(Trigger, "follow_timed_path/_behavior/stop")
-        self._llm = LlmQueryClient(self, self.get_parameter("max_result_age_s").value)
+        self._llm = LlmFramesClient(
+            self, self.get_parameter("llm_model_name").value,
+            self.get_parameter("max_result_age_s").value)
         self._grounding = GroundingClient(self.get_parameter("grounding_url").value,
                                           timeout_s=self._cfg["service_timeout_s"])
         self._clip = ClipScoreClient(self.get_parameter("clip_url").value,
@@ -177,6 +196,8 @@ class CityNavPlannerNode(Node):
 
         self._worker = threading.Thread(target=self._work_loop, daemon=True)
         self._worker.start()
+        self._nav = SemanticNavigationServer(self)
+        self._deadline = None
         self.create_timer(0.5, self._publish_heartbeat)
         self._publish_status("ready", reason="init")
 
@@ -221,21 +242,16 @@ class CityNavPlannerNode(Node):
             self._twist_speed = (time.monotonic(), math.hypot(v.x, v.y))
             self._twist_vz = (time.monotonic(), v.z)
 
-    def _on_goal(self, msg: String):
-        try:
-            payload = json.loads(msg.data)
-            instruction = str(payload["instruction"])
-        except (ValueError, KeyError):
-            self._publish_status("rejected", reason="bad_goal")
-            return
+    def _start_job(self, instruction, timeout_s):
+        """to_semantic_goal 入口（SemanticNavigationServer 已独占校验）。
+
+        max_steps/use_memory 为部署参数；timeout_s 是含推理与运动的墙钟预算，
+        耗尽走 STOPPED/budget→TIMEOUT（原 mission 侧 --timeout 监督职责随
+        契约上移到 Tool）。"""
         with self._lock:
-            if self._state == "RUNNING":
-                self._publish_status("rejected", reason="busy")
-                return
             self._job = {"instruction": instruction,
-                         "max_steps": int(payload.get("max_steps",
-                                                      self._cfg["max_steps"])),
-                         "use_memory": bool(payload.get("use_memory", True))}
+                         "max_steps": int(self.get_parameter("max_steps").value),
+                         "use_memory": bool(self.get_parameter("use_memory").value)}
             self._state = "RUNNING"
             self._generation += 1  # 作废上一任务的异步回调
             self._task_id = f"citynav-{int(time.time())}"
@@ -247,9 +263,20 @@ class CityNavPlannerNode(Node):
             self._step_size = 0
             self._hist_step_size.clear()
             self._hist_progress.clear()
+            self._deadline = time.monotonic() + float(timeout_s)
         self._init_memory()
         self._publish_event("goal_accepted", instruction=instruction)
-        self._publish_status("started", instruction=instruction)
+        self._publish_status("started", instruction=instruction,
+                             budget_s=float(timeout_s))
+
+    def _request_stop(self):
+        with self._lock:
+            if self._state not in ("RUNNING", "STOPPING"):
+                return
+            self._generation += 1  # 作废推理与执行响应（yopo 同法）
+            self._stop_requested = True
+            self._state = "STOPPING"
+        self._publish_status("cancel_requested")
 
     def _on_cancel(self, request, response):
         with self._lock:
@@ -257,9 +284,7 @@ class CityNavPlannerNode(Node):
                 response.success = True
                 response.message = f"already {self._state}"
                 return response
-            self._generation += 1  # 作废推理与执行响应（yopo 同法）
-            self._stop_requested = True
-            self._state = "STOPPING"
+        self._request_stop()
         response.success = True
         response.message = "cancel initiated"
         return response
@@ -323,6 +348,21 @@ class CityNavPlannerNode(Node):
         yaw = math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
         return np.array([x, y, z, yaw], dtype=np.float64)
 
+    def _current_pose_msg(self):
+        """最新定位原始四元数 → PoseStamped（Action feedback/final_pose）。"""
+        with self._lock:
+            if not self._pose_latest:
+                return None
+            stamp, x, y, z, qx, qy, qz, qw = self._pose_latest
+        msg = PoseStamped()
+        msg.header.stamp = rclpy.time.Time(nanoseconds=int(stamp * 1e9)).to_msg()
+        msg.header.frame_id = f"{self._ns}/odom"
+        p = msg.pose.position
+        p.x, p.y, p.z = float(x), float(y), float(z)
+        q = msg.pose.orientation
+        q.x, q.y, q.z, q.w = float(qx), float(qy), float(qz), float(qw)
+        return msg
+
     # ---------- 主循环 ----------
     def _work_loop(self):
         while rclpy.ok():
@@ -337,6 +377,10 @@ class CityNavPlannerNode(Node):
             self._run_one_cycle(job)
 
     def _run_one_cycle(self, job):
+        if self._deadline is not None and time.monotonic() >= self._deadline:
+            self._save_memory()
+            self._finish("STOPPED", "budget")
+            return
         if not self._ready():
             self._finish("STOPPED", "not_ready")
             return
@@ -671,6 +715,9 @@ class CityNavPlannerNode(Node):
         self._publish_status("fault", reason="STOP_UNCONFIRMED",
                              detail=f"{reason}_stop_gate_timeout",
                              stop_confirmed=False)
+        self._nav.complete({"code": "STOP_UNCONFIRMED",
+                            "detail": f"{reason}_stop_gate_timeout",
+                            "stop_confirmed": False})
 
     def _do_fault(self, reason):
         try:
@@ -683,6 +730,8 @@ class CityNavPlannerNode(Node):
             self._stop_requested = False
         self._publish_status("fault", reason=SHARED_CODES.get(reason, "EXECUTION_FAILED"),
                              detail=reason, stop_confirmed=None)
+        self._nav.complete({"code": SHARED_CODES.get(reason, "EXECUTION_FAILED"),
+                            "detail": reason, "stop_confirmed": False})
 
     def _finish(self, state, reason):
         with self._lock:
@@ -693,6 +742,16 @@ class CityNavPlannerNode(Node):
         self._publish_status(state, reason=SHARED_CODES.get(reason, "EXECUTION_FAILED"),
                              detail=reason, step_size=step_size,
                              stop_confirmed=(state == "STOPPED"))
+        # Action 结果：task_complete 的 SUCCEEDED 语义为"landmark 序列推进
+        # 完毕（VLM 可见性确认，无位置到达检测器）"，见 semantic_navigation
+        # 模块注释与偏离 D25；status 话题 detail 保持 task_complete 不破坏
+        # 既有验收判据。
+        code = SHARED_CODES.get(reason, "EXECUTION_FAILED")
+        detail = ("landmark_sequence_complete_semantic_only_"
+                  "no_positional_verification"
+                  if reason == "task_complete" else reason)
+        self._nav.complete({"code": code, "detail": detail,
+                            "stop_confirmed": state == "STOPPED"})
 
     def _save_memory(self):
         path = self.get_parameter("memory_graph_path").value
@@ -738,10 +797,17 @@ class CityNavPlannerNode(Node):
 def main():
     rclpy.init()
     node = CityNavPlannerNode()
+    # to_semantic_goal 的 execute 回调长驻等待（ReentrantCallbackGroup），
+    # 单线程 spin 会饿死传感器订阅与心跳定时器——MultiThreadedExecutor
+    # 与 SPF 节点同配置。
+    from rclpy.executors import MultiThreadedExecutor
+    executor = MultiThreadedExecutor(num_threads=3)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        node._nav.destroy()
         node.destroy_node()
         rclpy.try_shutdown()

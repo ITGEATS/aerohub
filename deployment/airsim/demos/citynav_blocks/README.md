@@ -12,8 +12,9 @@ planner/proxy 包 README 和 [validation.json](validation.json) 为准。
 | 仿真器 | Windows 宿主 Blocks.exe（本 Demo settings 变体写入 Documents\AirSim，原文件自动备份；经 schtasks 计划任务启动） |
 | 飞控板 | Docker Desktop：flight-board v0.1.1 `vehicle` 容器（PX4 SITL + Agent，传感器关闭）+ `clock` 容器 |
 | 传感器桥 | flight-board 镜像独立 `sensor` 容器：City* 五目阵 10 路图像（5×rgb + 5×depth_planar，256×256@5Hz）+ camera_info + 静态 TF |
-| 算力板 | onboard-computer v0.1.1 `compute` 容器（AS2 + FollowTimedPath + `uav_citynav_planner`） |
-| 工作站 | `proxy` 容器（osrf/ros humble，`uav_citynav_llm_proxy`，出公网调智谱）+ `mission.py` 一次性容器 + `--observe` 时的 observer 容器 |
+| 算力板 | onboard-computer v0.1.1 `compute` 容器（AS2 + FollowTimedPath + `uav_citynav_planner`，任务入口 = 共享 `NavigateToSemanticGoal` Action `to_semantic_goal`） |
+| Inference | onboard-computer v0.1.1 `inference` 容器（Tool 化改造 2026-11-18：共享 Inference Function `uav_inference` 的 `InferVisionLanguageFrames` ActionServer + uv 隔离云 worker，逻辑模型名 `citynav` → glm-4v-flash，出公网调用在此层；替代已删除的私有 `proxy`/`uav_citynav_llm_proxy` 容器） |
+| 工作站 | `mission.py` 一次性容器（osrf/ros humble，经 Action 调用算力板 Tool 函数）+ `--observe` 时的 observer 容器 |
 | 推理服务 | Windows 宿主 GPU：grounded_sam :8100 / clip :8101（主任务维护，本 Demo 只消费并健康检查，不停止） |
 
 与 WSL 版 spf_language_nav 骨架的偏离（记录于
@@ -25,7 +26,9 @@ planner/proxy 包 README 和 [validation.json](validation.json) 为准。
   `host_probe.py` 实测选定（host.docker.internal 或 vEthernet IPv4，需同时
   打通 RPC TCP 与两服务 /health/ready），写入 `topology.json`；
 - planner 参数文件中的 `__HOST__` 占位符由 run.py 替换后生成
-  `<output>/planner.yaml`，compute 与 proxy 都加载该生成副本；
+  `<output>/planner.yaml`，compute 加载该生成副本（Tool 化改造后云 LLM 不再
+  经 planner.yaml 代理节配置，供应商绑定在 gitignored 的
+  `config/inference.cloud.local.yaml`）；
 - 起点偏离：任务书起点 (-10,-10,-8) 为 AirSim NED（z 负=上）。空中投放会在
   解锁前自由落体碰地，故按 SPF 已验证模式落地为**地面 teleport (-10,-10) +
   原生起飞 1.5 m**；评分目标 OrangeBall NED (34.25,33.10,-3.68) 换算为 odom
@@ -47,7 +50,7 @@ python deployment/airsim/demos/citynav_blocks/run.py stop    --output log/cityna
 ```
 
 智谱 key 从 `src/tool/navigation/planner/citynav/legacy_stub/.env` 读取并经
-`docker -e` 注入 proxy 容器，不落库。GPU 推理服务由主任务在宿主运行，
+`docker -e` 注入 inference 容器的云 worker，不落库。GPU 推理服务由主任务在宿主运行，
 `start` 的 host_probe 与 `health` 会检查其可达性；本 Demo 不启动也不停止它们。
 
 预留开关（本轮不启用）：`--cancel-after N`（goal 后 N 秒注入 `citynav/cancel`）、
@@ -61,8 +64,9 @@ python deployment/airsim/demos/citynav_blocks/run.py stop    --output log/cityna
   `time_stamp` 比对法，触地/粘滞标志不计入导航期碰撞门控；
 - 观察视图复用 `deployment/swarm/` 基础设施；`--once` 健康检查仅证明相机
   连通与摆放，随动成功只以任务期 `overhead/track.jsonl` 质心序列移动为准；
-- 相机名两侧包默认值不同（planner `LeftCamera*` vs proxy `CityLeft*`），
-  本 Demo 在 planner.yaml 统一为 City*（`test_config_contract.py` 防漂移）；
+- 相机名包默认值（planner `LeftCamera*`）与 Blocks settings 的 City* 阵
+  不同，本 Demo 在 planner.yaml `view_cameras` 统一为 City*（Tool 化后
+  Inference 节点不订阅相机，帧由 planner 随请求提供，命名仅一处配置）；
 - `start` 后须预热 ≥3 分钟再 `health`（UE4 首帧 shader 编译期 RPC 3 s 超时，
   run d 教训）；容器→宿主地址由 `host_probe.py` 实测 IPv4 优先
   （host.docker.internal 解析 IPv6，PX4 C++ TCP 无 v4 回退，run a 教训）。
@@ -186,6 +190,25 @@ FAULT 收口"授权，本移植改喂位移进展位（`build_timed_path` 返回
 本 Demo 与能力卡片持续显式声明"**跨任务记忆复用未获飞行验收**"（建图/
 落盘/加载/命中/LM-Nav 搜索各环节均有飞行实证，唯执行末环没有）；判别
 信号增强仍列后续项不删除（validation.json exploit_retry_20261118）。
+
+**Tool 化改造轮（2026-11-18/19，追加裁决三"被复现工作的形式是 Tool"）**：
+任务入口改为共享 Navigation Tool 函数 `to_semantic_goal`
+（`NavigateToSemanticGoal` Action，`max_steps`/`use_memory` 降为部署参数），
+云 LLM 改走共享 Inference Function `InferVisionLanguageFrames`（私有
+`llm_proxy` 包删除，prompt 逐字迁入 planner `prompts.py` + AST 防漂移；
+偏离 D25/D26/D27 见 `ros2_adapter/README.md`）。已闭环：容器单测
+**53 passed**、新契约真实 DDS 生命周期 **6/6 PASS**
+（`log/citynav/ros/dds-lifecycle-20261118-toolified/`）。**新契约下 formal1
+飞行重验通过（run-20261118tool12，2026-11-19，12/12 门全 PASS）**：5 循环 /
+3 goal 全 SUCCEEDED / 15 时间化步、无碰撞、`STOPPED task_complete`、
+action result `SUCCEEDED + landmark_sequence_complete_semantic_only_no_positional_verification`
+（D25 语义 live 验证）、NE 33.5→8.3 m（仅记录）、随动证据 342 条 + 32 帧。
+尝试史（tool4–12：4 次 Blocks 宿主死亡、1 次 RPC 停顿已修、3 次穿墙决策族
+碰撞 FAIL）与系统性归因见 [validation.json](validation.json)
+`toolification_20261118` 节——穿墙分支为供应商侧 VLM 决策随机性 + Blocks
+走廊几何（已知 run f/expand3 族），**非 Tool 化回归**，且通过依赖尝试
+（4 次飞行尝试 3 次落穿墙分支）已如实记录为残余风险。门槛未放宽；
+cancel1/fault1 新契约重验列为未完成项（stuck2 路径未变，引用旧证据加注）。
 
 ## 已知限制
 

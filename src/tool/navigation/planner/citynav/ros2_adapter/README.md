@@ -18,13 +18,14 @@ py3.10 实测无 networkx，底层图用包内最小实现，见 D24）；
 | 文件 | 职责 | 逐字/等价移植来源 |
 | --- | --- | --- |
 | `perception.py` | 五目批次 mask 像素反投影 odom ENU（optical→FLU 静态旋转 D6→位姿）、`isfinite & 0<d<50 m` 过滤、cKDTree 统计滤波、类均值 + alpha=0.6 收缩 + `min_altitude_m` 下限 | `upstream/utils/maps.py` L258-339、L53-67；`SimRun.py` L292-306 |
-| `hspm.py` | landmark 抽取（op=landmark，payload 仅 instruction）→ viewpoint 路线查询（op=viewpoint，payload 结构化字段 + view_stamps，图像与 prompt 由代理构造）→ 解析 → 选中视角 grounding → 点云 → waypoint；is_found 可见即推进、卡死判据逐字保留；本包保留 `parse_viewpoint_response_v2` 逐字复制（tests AST 比对 upstream 防漂移） | `SimRun.py` L227-321、L534；`prompt_builder.py` L30-54；`utils/landmark_extraction.py` L56-65 |
+| `hspm.py` | landmark 抽取（op=landmark，纯文本请求）→ viewpoint 路线查询（op=viewpoint，五目帧 + 本包 `prompts.py` 逐字 prompt 随请求显式提供）→ 解析 → 选中视角 grounding → 点云 → waypoint；is_found 可见即推进、卡死判据逐字保留；本包保留 `parse_viewpoint_response_v2` 逐字复制（tests AST 比对 upstream 防漂移） | `SimRun.py` L227-321、L534；`prompt_builder.py` L30-54；`utils/landmark_extraction.py` L56-65 |
 | `memory.py` | 在线拓扑图（节点=位置+front/back 两图 bytes+可选文本；边=欧氏距离；20 m 合并）、包内最小无向图 `UndirectedGraph`（D24 替代 networkx）、JSON 落盘/加载、`find_closest_node`、`dijskra_transform` 逐字移植、LM-Nav 搜索与 exploit | `maps.py` L10-31；`external/lm_nav/navigation_graph.py` L45-58、`optimal_route.py` L17-102、`pipeline.py` |
 | `trajectory.py` | `calculate_movement_steps` 逐字移植（15°/5 m/2 m，分解顺序=时间顺序）→ FollowTimedPath 分段（偏航段 t=Δyaw/yaw_rate 且 15° 子步合并单段、水平段 t=d/v、垂直段 vz=v·dz/dxy 比例+下限保护） | `utils/utils.py` L195-277；契约 §5 |
-| `llm_client.py` | `citynav/llm/query|result` ROS 话题客户端（权威契约字段、request_id 匹配、`max_result_age_s=90`、超时） | 代理侧契约（`llm_proxy/.../node.py` L13-17）；仿 `spf/ros2_adapter` vlm_client |
+| `prompts.py` | 上游 prompt 逐字复制（landmark 抽取 / viewpoint 路线 / caption），Tool 化改造后由本包持有并随请求显式发送（D26）；`tests/test_prompts.py` AST 比对 upstream 防漂移 | `upstream/utils/landmark_extraction.py` L35-47、`src/llm/prompt_builder.py` L30-54 |
+| `llm_client.py` | `InferVisionLanguageFrames` Action 客户端（共享 `uav_inference_interfaces`；多帧 + system/user prompt 显式提供，空 images=纯文本；request 绑定图像 stamp、`max_result_age_s=90`、超时）（Tool 化改造 2026-11-18，原 `citynav/llm/query|result` 话题客户端已删除） | 仿 `spf/ros2_adapter` vlm_client |
 | `grounding_client.py` | `POST /models/grounded_sam/greedy_mask_predict`（字段名锁定：image_b64/text_prompt/box_threshold/text_threshold → mask_b64/seg_success/phrases）+ 纯 Python PNG 编解码 | grounded_sam README 服务契约 |
 | `clip_client.py` | `POST /models/clip/score`：`{"images_b64","texts"} → {"similarity","model_version"}`（并行任务建设，按固定契约实现；服务端 ≤16 图/请求，客户端分块） | 任务规格 + `models/clip/schemas.py` |
-| `node.py` | 状态机 IDLE/RUNNING/STOPPING/STOPPED/FAULT（仿 spf）+ generation/revision 时序、`citynav/goal`（String JSON `{instruction,max_steps,use_memory}`）、`citynav/cancel`（Trigger）、`follow_timed_path` Action 客户端、`citynav/status|events`、`citynav/llm/query|result` 转发；订阅 5×(rgb/depth_planar/camera_info)+`self_localization/pose|twist`；批次新鲜度 `view_freshness_s=2.0`、连续失败 3 次 FAULT、卡死判据升级 FAULT 收口 | spf/yopo adapter 模式 |
+| `node.py` | 状态机 IDLE/RUNNING/STOPPING/STOPPED/FAULT（仿 spf）+ generation/revision 时序、任务入口 = `navigate_to_semantic_goal` ActionServer（共享 `uav_planner_interfaces/NavigateToSemanticGoal`，`to_semantic_goal` Tool 函数，SPF 同契约；原私有 `citynav/goal` 话题已删除）、`citynav/cancel`（Trigger，运维入口）、`follow_timed_path` Action 客户端、`citynav/status|events` 观测面；订阅 5×(rgb/depth_planar/camera_info)+`self_localization/pose|twist`；批次新鲜度 `view_freshness_s=2.0`、连续失败 3 次 FAULT、卡死判据升级 FAULT 收口 | spf/yopo adapter 模式 |
 
 参数默认值（任务规格）：`base_velocity=1.0, base_yaw_rate=30.0, min_altitude_m=1.2,
 alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵相机名，
@@ -33,7 +34,15 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
 `view_yaws_deg`（ROS 逆时针约定，默认 `90,45,0,-45,-90`）、`grounding_url`、
 `clip_url`、`memory_graph_path`（默认 `citynav_memory.json`，跨任务复用 D4）。
 
-## LLM 话题 JSON 契约（权威：uav_citynav_llm_proxy，node.py L13-17 定型）
+## LLM 话题 JSON 契约（历史，已被 D26 共享 Inference Action 取代）
+
+> **Tool 化改造（2026-11-18）**：本节描述的私有 `citynav/llm/query|result`
+> 话题与工作站代理已删除。云 LLM 调用改用共享 Inference Function
+> `uav_inference_interfaces/InferVisionLanguageFrames` Action（多帧图像 +
+> system/user prompt 由本包 `prompts.py` 逐字持有并随请求显式提供，空
+> images=纯文本请求），语义解析（`parse_viewpoint_response_v2`、is_found、
+> landmark 抽取解析）全部留在本 planner——Inference 层只返回模型原始文本。
+> 以下为改造前的代理契约记录，保留供历史对照。
 
 - query（`citynav/llm/query`，std_msgs/String JSON）：
 
@@ -133,14 +142,41 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
   恒空桩注入）：4 个零进展循环 → FAULT detail=stuck，goal 从未发出，
   悬停保持 → Land/disarm/碰撞 0 全 PASS。
 
+- **D25（SUCCEEDED 语义=纯语义完成，Tool 化轮 2026-11-18）**：共享
+  `NavigateToSemanticGoal` 契约的 `SUCCEEDED` 判定沿用上游"landmark 序列全部
+  is_found 即任务结束"（`SimRun.py` L530，无位置核验）：landmark 序列完成 →
+  `success=true` + `code=SUCCEEDED` + `reason=
+  landmark_sequence_complete_semantic_only_no_positional_verification`。
+  位置到达量由工作站 mission 用真值离线评分（仅记录，不进门槛）。该语义决策
+  待项目负责人复核。
+- **D26（云 LLM 改共享 Inference Function，Tool 化轮 2026-11-18）**：私有
+  `citynav/llm/query|result` 话题与 `uav_citynav_llm_proxy` 包删除；改为共享
+  `uav_inference_interfaces/InferVisionLanguageFrames` Action（多帧 +
+  system_prompt；空 images=纯文本请求）。上游 prompt 逐字复制从代理包迁移到
+  本包 `prompts.py`（`tests/test_prompts.py` AST 比对 upstream 防漂移），帧图像
+  随请求显式提供，不再由代理按 `view_stamps` 自取缓存。语义解析
+  （landmark/viewpoint JSON、is_found）全部保留在本 planner——Inference 层只
+  返回模型原始文本，符合"算法留在 Planner 层"边界。模型选择经 planner 部署
+  参数 `llm_model_name`（逻辑模型名，默认 `citynav`）交给 Inference 运行时解析。
+- **D27（grounding/CLIP 仍宿主 HTTP，Tool 化轮已知偏离）**：grounded_sam
+  (:8100) 与 clip (:8101) 仍按宿主 HTTP 直连消费，未走 ROS 2 Inference
+  Action 面。原因：两服务由并行主任务维护、契约已锁定（字段名逐字），本轮
+  Tool 化范围=任务入口与云 LLM；接入共享 Inference 面列为后续项。
+
 ## M2 容器内验证与 DDS 生命周期（2026-11-18 缺口补齐轮闭环）
 
-容器内 pytest：46 passed + 1 skip（本 README 早期"node 级测试占位、M2
+容器内 pytest（改造前基线）：46 passed + 1 skip（本 README 早期"node 级测试占位、M2
 缺口"表述已闭环——占位 skip 保留为历史标记，实质由真实 DDS 生命周期测试
 替代：`src/tool/navigation/planner/citynav/validation/dds_lifecycle_check.py`
 6/6 PASS + SIGINT 优雅退出 exit=0，证据 `log/citynav/ros/`）。networkx
 对照库经宿主 wheel 只读挂载注入（镜像未动）；注意 onboard 镜像 pytest
 6.2.5 遇模块级 skip 会中断同批收集，须带 networkx 跑全量。
+
+**Tool 化改造轮（2026-11-18）**：容器内 pytest **53 passed**（`test_node.py`
+占位删除——其实质验证由真实 DDS 生命周期测试承担；新增 `test_prompts.py`
+AST 比对锁定迁移后的 prompt；LLM 客户端/节点契约测试同步改写）。新契约
+生命周期 6/6 PASS（`log/citynav/ros/dds-lifecycle-20261118-toolified/`：
+ActionServer 发现、goal 契约、IDLE 心跳、cancel、busy 拒绝、not_ready 收口）。
 
 ## 运行（阶段 6 Demo 前为开发入口）
 
@@ -149,15 +185,18 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
 colcon build --packages-select uav_citynav_planner   # 需 uav_planner_interfaces 先建
 ros2 run uav_citynav_planner citynav_planner --ros-args -p vehicle_namespace:=drone0 \
   --remap __ns:=/drone0
-# 任务：ros2 topic pub --once citynav/goal std_msgs/String \
-#   '{\"instruction\": \"fly past the orange ball to the building\", \"max_steps\": 60, \"use_memory\": true}'
-# 取消：ros2 service call citynav/cancel std_srvs/srv/Trigger
+# 任务（Tool 化后 = 共享 Navigation Tool 函数 to_semantic_goal）：
+# ros2 action send_goal /drone0/navigate_to_semantic_goal \
+#   uav_planner_interfaces/action/NavigateToSemanticGoal \
+#   "{description: 'fly past the orange ball to the building', timeout: 400.0}"
+# 取消：ros2 service call citynav/cancel std_srvs/srv/Trigger（运维入口保留）
 ```
 
 前置：grounded_sam 服务（默认 `127.0.0.1:8100`）与 CLIP 服务（默认
-`127.0.0.1:8101`）在 PC GPU 侧运行；`uav_citynav_llm_proxy` 在工作站运行；
-传感器桥按 CityNav Demo 变体配置五目阵 + ImageType 1 深度（契约 §1 缺口项，
-阶段 6 落地）。
+`127.0.0.1:8101`）在 PC GPU 侧运行；共享 Inference Function
+`uav_inference` 的 `InferVisionLanguageFrames` ActionServer 在 Inference 容器
+运行（`llm_model_name` 逻辑名经其运行时解析到云模型）；传感器桥按 CityNav
+Demo 变体配置五目阵 + ImageType 1 深度（契约 §1 缺口项，阶段 6 落地）。
 
 ## 测试
 

@@ -60,7 +60,7 @@ max_step_size=60、vlm_name="sam"）。每 episode 主循环（`CityNavAgent()` 
 | CityNavAgent 部分 | aerohub 层归属 | 目录 |
 | --- | --- | --- |
 | HSPM 决策 + 语义点云 + 记忆图 | Planner（Navigation Tool 实现基础） | `src/tool/navigation/planner/citynav/ros2_adapter/`（`uav_citynav_planner`，onboard-computer 容器） |
-| 云端 gpt-4o → glm-4v-flash 调用 | 外部推理依赖，代理节点承载 | `llm_proxy/uav_citynav_llm_proxy/`（工作站侧） |
+| 云端 gpt-4o → glm-4v-flash 调用 | 外部推理依赖，共享 Inference Function 承载（Tool 化改造 2026-11-18，D26：私有 `llm_proxy` 包已删除，prompt 逐字复制移至 planner 包 `prompts.py`，请求经 `InferVisionLanguageFrames` Action） | `src/basic_function/inference/ros2_adapter/uav_inference/`（`vision_language_frames_node`）+ `interfaces/action/InferVisionLanguageFrames.action` |
 | GroundingDINO + SAM 本地推理 | Inference Robotic Function | `src/basic_function/inference/models/grounded_sam/`（uv 隔离，model-migration-cuda） |
 | 轨迹执行 | 原生扩展 Behavior（复用，不新建） | `src/behavior/follow_path/` FollowTimedPath（共享 `uav_planner_interfaces`） |
 | 起飞/降落 | 原生 AS2 Behavior | TakeoffBehavior / LandBehavior |
@@ -77,15 +77,18 @@ landmark 抽取（决策 7 代决）：Blocks 无标注可消费，landmark 序�
 ## 3. 最小数据/调用链（AS2 段目标形态）
 
 ```
-mission.py(工作站) --citynav/goal{instruction}--> uav_citynav_planner(算力容器)
-uav_citynav_planner --landmark/viewpoint/route 查询--> uav_citynav_llm_proxy(工作站)
-uav_citynav_llm_proxy <--文本/JSON-- 云端 glm-4v-flash API
+mission.py(工作站) --NavigateToSemanticGoal Action(to_semantic_goal)--> uav_citynav_planner(算力容器)
+uav_citynav_planner --InferVisionLanguageFrames Action(帧+prompt 逐字持有于 prompts.py)--> uav_inference 节点(Inference 容器)
+uav_inference 节点 <--文本/JSON-- 本地 FastAPI runtime --云端 glm-4v-flash API
 uav_citynav_planner --greedy_mask_predict(image,text)--> inference grounded_sam(PC GPU)
 uav_citynav_planner --TimedPath(偏航段→水平段→垂直段)--> FollowTimedPath(AS2)
 FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> AirSim Blocks
 ```
 
-图像数据流止步于算力容器/PC GPU；公网访问仅代理出板。
+图像数据流止步于算力容器/PC GPU；公网访问仅 Inference 运行时的云后端出板。
+（Tool 化改造 2026-11-18：任务入口与云 LLM 调用均改为共享接口，私有
+`citynav/goal` 话题与 `llm_proxy` 包删除；`citynav/status|events` 保留为观测面，
+`citynav/cancel` 保留为运维入口。）
 
 ## 4. 复用决策
 
@@ -94,7 +97,7 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
 | FollowTimedPath + 修订/确认时序 | 直接复用 | 动作分解（15°/5 m/2 m）可完整时间化表达，不丢中间语义 |
 | 共享 `uav_planner_interfaces` | 直接复用 | 与 SPF/YOPO/SUPER 同一 FollowTimedPath 契约与收口码表 |
 | 上游 `calculate_movement_steps` / 反投影 / 统计滤波 | 语义逐字迁移到 adapter | 输入从 airsim RPC 换 ROS 话题，输出从 setPoses 换 TimedPath |
-| 上游 prompt（caption/route/viewpoint/landmark 抽取） | 逐字复制进代理 | 复现保真；复制原因在文件头声明 |
+| 上游 prompt（caption/route/viewpoint/landmark 抽取） | 逐字复制进 planner 包 `prompts.py`（Tool 化后，原代理包已删除） | 复现保真；复制原因在文件头声明，`tests/test_prompts.py` 防漂移 |
 | `external/lm_nav` 图搜索 | 逻辑移植进 `memory.py` | 纯 networkx/scipy，无平台耦合 |
 | AirVLNSimulatorClientTool / 场景服务器 | 阶段 1 用最小桩，AS2 段不迁移 | 平台能力由传感器桥替代 |
 | openai SDK | 不迁移，纯 stdlib HTTP 等价实现 | 与 SPF D2 同理；容器内也避免 Rust 轮子依赖 |
@@ -106,10 +109,14 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
   `sensor_measurements/<Cam>/rgb/image|camera_info` +
   `sensor_measurements/<Cam>/depth_planar/image`（**32FC1 米 axial，ImageType 1**；
   现有 px4-sensors.json 的 ImageType 2 为 Perspective，不可混用）；
-  `citynav/goal`（String JSON `{instruction, max_steps, use_memory}`）；
-  `citynav/cancel`（Trigger）。
+  `navigate_to_semantic_goal` Action（共享 `uav_planner_interfaces/
+  NavigateToSemanticGoal`，Tool 化改造 2026-11-18：description+timeout 为任务
+  契约，`max_steps`/`use_memory` 降为 planner 部署参数；原 `citynav/goal`
+  String 话题已删除）；`citynav/cancel`（Trigger，运维入口保留）。
 - 输出：`follow_timed_path` Action（共享 `uav_planner_interfaces`）；
-  `citynav/llm/query|result`；`citynav/status|events`。
+  `InferVisionLanguageFrames` Action 客户端（共享 `uav_inference_interfaces`，
+  替代原 `citynav/llm/query|result` 私有话题）；`citynav/status|events`
+  （观测面保留）。
 - 采集：**五目固定阵（Yaw -90/-45/0/+45/+90）替代原地旋转**（D8'）；批次内以最新
   stamp 为参考，任一视角超 `view_freshness_s`（2.0 s）整批作废；图像新鲜度按
   有界定位历史匹配（YOPO 教训），不与最新定位比较。
@@ -131,8 +138,9 @@ FollowTimedPath --Motion Reference--> AS2 控制器 --> PX4(flight_board) --> Ai
 
 ## 6. 多机外溢声明
 
-`citynav/goal` 与 LLM/感知接口按 `<vehicle_namespace>` 复制即可逐机独立；但代理缓存
-键、记忆图文件路径与 request_id 命名空间须按 vehicle 隔离（本期不实现）。
+`navigate_to_semantic_goal` 与推理/感知接口按 `<vehicle_namespace>` 复制即可逐机
+独立；但推理服务缓存键、记忆图文件路径与 request_id 命名空间须按 vehicle 隔离
+（本期不实现）。
 **本期仅单机验收，不声称多机能力**；机群级语言任务编排属 Mission 层，不在本 Planner 范围。
 
 ## 7. 待核查条件（进入阶段 1/2 前必须闭环）

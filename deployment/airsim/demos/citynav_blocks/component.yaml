@@ -1,18 +1,18 @@
 schema_version: '0.1'
 id: aerohub.planner.citynav-single
-version: '0.1.0'
+version: '0.2.0'
 source:
   upstream: src/tool/navigation/planner/citynav/upstream
   revision: 4b6e926c3325995483576523b18c9d0de5eb0710
-  integration: [src/tool/navigation/planner/citynav/ros2_adapter,
-                src/tool/navigation/planner/citynav/llm_proxy]
+  integration: [src/tool/navigation/planner/citynav/ros2_adapter]
   license: 'Upstream badge declares MIT (CODE_LICENSE file missing - broken link, recorded gap in src/tool/navigation/planner/citynav/README.md); git submodule reference only, internal non-commercial research use'
 provides: [planner.citynav-single]
 cards:
 - cards/planner/citynav-single.yaml
 roles:
   compute: [citynav-planner, AS2, FollowTimedPath]
-  workstation: [ROS-task-client, citynav-llm-proxy, simulation-collision-scoring]
+  inference: [InferVisionLanguageFrames-ActionServer, cloud-vlm-worker(glm-4v-flash)]
+  workstation: [ROS-task-client(to_semantic_goal), simulation-collision-scoring]
   simulator: [AirSim, sensor-bridge-five-eye]
   flight_controller: [PX4-SITL]
 runtime:
@@ -21,15 +21,16 @@ runtime:
            'osrf/ros:humble-desktop-full-jammy']
   platform: Windows host (Blocks.exe via schtasks) + Docker Desktop dockerd; containers on --network host inside the VM (see README deviations)
   dependencies: [uav_planner_interfaces, uav_follow_path_execution, uav_citynav_planner,
-                 uav_citynav_llm_proxy, ROS-2-Humble, AirSim-Blocks, PX4-SITL,
-                 grounded_sam-service(:8100), clip-service(:8101), cloud-LLM(glm-4v-flash)]
+                 uav_inference_interfaces, uav_inference, ROS-2-Humble, AirSim-Blocks,
+                 PX4-SITL, grounded_sam-service(:8100), clip-service(:8101),
+                 cloud-LLM(glm-4v-flash via shared Inference Function)]
   build: 'run.py prepare (colcon overlay into log/citynav/pc-e2e/ros_ws; shared images untouched, per AGENTS overlay policy)'
   launch: deployment/airsim/demos/citynav_blocks/run.py
   configuration: deployment/airsim/demos/citynav_blocks/planner.yaml (run.py rewrites __HOST__ into <output>/planner.yaml)
   camera_rate_hz: 5.0
   sensors: deployment/airsim/demos/citynav_blocks/settings.json (City* five-eye array, ImageType 0+1, 256x256, FOV 90; ImageType 2 forbidden by contract)
   inference: 'GPU services run on the Windows host (0.0.0.0:8100/8101); containers reach them via the address chosen by host_probe.py (host.docker.internal or vEthernet IPv4), recorded in topology.json'
-  vlm: 'cloud OpenAI-compatible endpoint (glm-4v-flash, substitute model); proxy on workstation, images never leave the PC network namespace except to the API'
+  vlm: 'cloud OpenAI-compatible endpoint (glm-4v-flash, substitute model); Tool-ified 2026-11-18: served through the shared Inference Function (inference container, uv-isolated worker, provider binding in gitignored config/inference.cloud.local.yaml, logical model name citynav); images never leave the PC network namespace except to the API'
   overlay: log/citynav/pc-e2e/ros_ws/install
   workstation_overlay: log/citynav/pc-e2e/workstation/ws/install
   clock: AirSim-clock-bridge (SteppableClock, best-effort /clock)
@@ -43,7 +44,7 @@ resources:
   tf_authority: AS2-self-localization-and-sensor-static-bridge
 validation:
   evidence: deployment/airsim/demos/citynav_blocks/validation.json
-  status: formal1 (run-20261118g), cancel1 (run-20261118n), fault1 (run-20261118gap) and stuck2 (run-20261118stk) acceptance PASSED 2026-11-18; M2 closed (container pytest 46+1 / proxy 34, real DDS lifecycle 6/6); M-1 PASSED under the revised criterion per user ruling 2026-11-18 addendum-2 (original >=90% gate result 70% retained on record); decision-6 executed-walk downgraded from mandatory-demo to follow-up item by the same ruling - cross-task memory reuse NOT flight-validated, evidence state 未完成 retained (validation.json exploit_retry_20261118); M0-M8 matrix green under revised scope; claim level partial-verification-passed, not reproduced
+  status: "formal1 (run-20261118g), cancel1 (run-20261118n), fault1 (run-20261118gap) and stuck2 (run-20261118stk) acceptance PASSED 2026-11-18 under the pre-Tool-ification contract; M2 closed (container pytest 46+1 / proxy 34, real DDS lifecycle 6/6); M-1 PASSED under the revised criterion per user ruling 2026-11-18 addendum-2 (original >=90% gate result 70% retained on record); decision-6 executed-walk downgraded from mandatory-demo to follow-up item by the same ruling - cross-task memory reuse NOT flight-validated, evidence state 未完成 retained (validation.json exploit_retry_20261118); M0-M8 matrix green under revised scope; Tool-ification round (addendum-3 ruling 2026-11-18, to_semantic_goal + shared InferVisionLanguageFrames): unit 53 passed + new-contract DDS lifecycle 6/6 CLOSED, formal1 flight re-verification PASSED (run-20261118tool12, 12/12 gates, D25 verified live; cancel1/fault1 new-contract re-runs open, pass attempt-dependent on the wall-crossing decision family - validation.json toolification_20261118); claim level partial-verification-passed, not reproduced"
   limitations: [cross-task-memory-reuse-not-flight-validated-executed-walk-open, full-matrix-open, single-vehicle-only, no-AirVLN-benchmark-route-B,
                 substitute-VLM-model, board-deployment-open, blocks-scene-not-urban-city,
                 host-precondition-grounded-sam-GS_EMPTY_CACHE, hover-z-limit-cycle-post-takeoff]

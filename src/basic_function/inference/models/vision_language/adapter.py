@@ -48,6 +48,28 @@ class Predictor:
         result['latency_ms'] = (time.monotonic() - started) * 1000
         return result
 
+    def infer_frames(self, request):
+        """Ordered caller-supplied frames; empty list is a text-only request."""
+        name = request['model_name']
+        if name not in self.engines:
+            raise ValueError('unsupported model_name')
+        started = time.monotonic()
+        result = dict(request_id=request['request_id'], model_name=name,
+                      images=request['images'], text='', error_code='', message='')
+        try:
+            frames = [(image['label'], image['image_base64'])
+                      for image in request['images']]
+            engine = self.engines[name]
+            if not hasattr(engine, 'infer_frames'):
+                raise ValueError('selected engine has no frames implementation')
+            result['text'] = engine.infer_frames(request['prompt'], frames,
+                                                 request['timeout'],
+                                                 request.get('system_prompt', ''))
+        except CloudError as error:
+            result.update(error_code=error.code, message=str(error))
+        result['latency_ms'] = (time.monotonic() - started) * 1000
+        return result
+
     def close(self):
         for engine in self.engines.values():
             engine.close()

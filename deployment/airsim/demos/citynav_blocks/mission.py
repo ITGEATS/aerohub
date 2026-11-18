@@ -1,8 +1,9 @@
 """CityNav language-navigation workstation mission (four-part topology).
 
 Readiness -> teleport initial pose (official RPC, Blocks ignores settings X/Y)
--> native Takeoff -> citynav/goal (String JSON {instruction, max_steps,
-use_memory}) -> monitor citynav/status + citynav/events + the FollowTimedPath
+-> native Takeoff -> NavigateToSemanticGoal action goal (description +
+timeout budget; Tool-ified 2026-11-18, the private citynav/goal String topic
+was removed) -> monitor citynav/status + citynav/events + the FollowTimedPath
 action status topic -> gates -> native Land -> disarm. Ground truth is used
 for scoring only (per validation skill); the planner never consumes it.
 
@@ -18,7 +19,8 @@ Blocks build has no resetLastCollision).
 
 Reserved switches for later rounds (not part of formal1):
 --cancel-after N injects citynav/cancel N seconds after the goal;
---use-memory toggles the goal payload memory flag (exploit reuse round).
+--use-memory is record-only (the exploit window moved to the planner
+deployment parameter in planner.yaml with the Tool-ified contract).
 """
 import argparse
 import json
@@ -39,6 +41,7 @@ from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from std_srvs.srv import SetBool
+from uav_planner_interfaces.action import NavigateToSemanticGoal
 from uav_as2_sensor_adapter.rpc import Rpc
 
 
@@ -88,7 +91,11 @@ class Mission(Node):
         # node name (TakeoffBehavior/LandBehavior), matching the spf demo.
         self.takeoff = ActionClient(self, Takeoff, '/drone0/TakeoffBehavior')
         self.land = ActionClient(self, Land, '/drone0/LandBehavior')
-        self.goal_pub = self.create_publisher(String, '/drone0/citynav/goal', 10)
+        # Tool 化改造：任务入口 = 共享 Navigation Tool 函数 to_semantic_goal
+        # （原 /drone0/citynav/goal 私有话题随代理一并移除）。
+        self.goal_cli = ActionClient(self, NavigateToSemanticGoal,
+                                     '/drone0/navigate_to_semantic_goal')
+        self.goal_result = None
         self.cancel_cli = self.create_client(Trigger, '/drone0/citynav/cancel')
         self.create_subscription(PlatformInfo, '/drone0/platform/info',
                                  lambda m: setattr(self, 'platform', m), qos_profile_sensor_data)
@@ -194,15 +201,19 @@ def main():
     parser.add_argument('--instruction', required=True)
     parser.add_argument('--max-steps', type=int, default=60)
     parser.add_argument('--use-memory', type=int, default=1,
-                        help='1: goal payload use_memory=true (exploit reuse '
-                             'allowed); 0: explore-only control')
+                        help='record-only since the Tool-ization: the exploit '
+                             'window is the planner deployment parameter '
+                             'use_memory in planner.yaml (shared semantic-goal '
+                             'contract carries no such field)')
     parser.add_argument('--cancel-after', type=float, default=0.0,
                         help='inject citynav/cancel this many seconds after '
                              'the goal (0 = disabled; formal1 keeps it off)')
     parser.add_argument('--expect-fault', action='store_true',
                         help='M6 fault1 case: the LLM path is persistently '
-                             'broken (proxy points at a dead endpoint, set in '
-                             '<output>/planner.yaml before restart-compute). '
+                             'broken (Tool-ified: the inference role is '
+                             'removed/unreachable, the InferVisionLanguageFrames '
+                             'action server reports NO_SERVER/NOT_READY to the '
+                             'planner every cycle). '
                              'Gates switch to FAULT convergence: state FAULT '
                              'with detail llm_failures/service_failures, no '
                              'FollowTimedPath goal ever sent, airborne at '
@@ -217,6 +228,10 @@ def main():
                              'from the upgraded progress criterion, >=4 zero-'
                              'progress cycles, no goal ever sent, airborne, '
                              'clean land/disarm.')
+    parser.add_argument('--timeout-budget', type=float, default=400.0,
+                        help='to_semantic_goal timeout: finite positive budget '
+                             'including inference and motion (Tool-enforced; '
+                             'exhaustion converges as TIMEOUT, not SUCCEEDED)')
     parser.add_argument('--target', type=float, nargs=3, required=True,
                         help='ground-truth target x y z (odom ENU frame, scoring only)')
     parser.add_argument('--spawn', type=float, nargs=3, default=[10.0, 10.0, 45.0],
@@ -317,20 +332,35 @@ def main():
         # contacts are detected by the time_stamp changing (this build lacks
         # resetLastCollision).
         collision_events = []
+        collision_probe_errors = []
         collision_baseline = None
         if rpc:
-            info0 = rpc.call('simGetCollisionInfo', 'PX4')
-            collision_baseline = {'has_collided': info0.get('has_collided'),
-                                  'time_stamp': info0.get('time_stamp')}
+            try:
+                info0 = rpc.call('simGetCollisionInfo', 'PX4')
+            except Exception as probe_exc:
+                collision_probe_errors.append(
+                    {'t': mission.clock, 'baseline': True,
+                     'error': str(probe_exc)})
+            else:
+                collision_baseline = {'has_collided': info0.get('has_collided'),
+                                      'time_stamp': info0.get('time_stamp')}
 
         stage = 'navigation'
         tx, ty, tz = args.target
         start = mission.pose.pose.position
         d0 = math.dist((start.x, start.y, start.z), (tx, ty, tz))
-        goal_msg = String(data=json.dumps({
-            'instruction': args.instruction, 'max_steps': args.max_steps,
-            'use_memory': bool(args.use_memory)}))
-        mission.goal_pub.publish(goal_msg)
+        if not mission.goal_cli.wait_for_server(20):
+            raise TimeoutError('navigate_to_semantic_goal server unavailable')
+        goal = NavigateToSemanticGoal.Goal()
+        goal.description = args.instruction
+        goal.timeout = float(args.timeout_budget)
+        gf = mission.goal_cli.send_goal_async(goal)
+        mission.spin_until(lambda: gf.done(), 30, 'semantic goal send hung')
+        handle = gf.result()
+        if handle is None or not handle.accepted:
+            raise RuntimeError('navigate_to_semantic_goal rejected '
+                               '(busy/invalid description/timeout?)')
+        mission.goal_result = handle.get_result_async()
         # Wait for the planner to enter RUNNING before monitoring: when a
         # second mission reuses the same session, the planner heartbeat still
         # publishes the PREVIOUS task's STOPPED for up to 0.5 s, which would
@@ -378,17 +408,33 @@ def main():
                     {'t': mission.clock, 'pos': [p.x, p.y, p.z],
                      'status': mission.status, 'events': len(mission.events)})
                 if rpc:
-                    info = rpc.call('simGetCollisionInfo', 'PX4')
-                    if (info.get('has_collided') and
-                            info.get('time_stamp') !=
-                            collision_baseline['time_stamp']):
-                        collision_events.append(
-                            {'t': mission.clock, 'pos': [p.x, p.y, p.z],
-                             'object_name': info.get('object_name'),
-                             'collision_normal': info.get('normal'),
-                             'impact_point': info.get('impact_point'),
-                             'time_stamp': info.get('time_stamp')})
-                        collision_baseline['time_stamp'] = info.get('time_stamp')
+                    # A transient Blocks RPC stall (observed under host memory
+                    # pressure: 3 s socket timeout mid-navigation) must not
+                    # discard the whole session: the probe is auxiliary
+                    # evidence, and a truly dead simulator still fails the
+                    # status/segment gates. Record probe errors instead; a
+                    # failed baseline is re-established lazily on the next
+                    # successful probe.
+                    try:
+                        info = rpc.call('simGetCollisionInfo', 'PX4')
+                    except Exception as probe_exc:
+                        collision_probe_errors.append(
+                            {'t': mission.clock, 'error': str(probe_exc)})
+                    else:
+                        if collision_baseline is None:
+                            collision_baseline = {
+                                'has_collided': info.get('has_collided'),
+                                'time_stamp': info.get('time_stamp')}
+                        elif (info.get('has_collided') and
+                                info.get('time_stamp') !=
+                                collision_baseline['time_stamp']):
+                            collision_events.append(
+                                {'t': mission.clock, 'pos': [p.x, p.y, p.z],
+                                 'object_name': info.get('object_name'),
+                                 'collision_normal': info.get('normal'),
+                                 'impact_point': info.get('impact_point'),
+                                 'time_stamp': info.get('time_stamp')})
+                            collision_baseline['time_stamp'] = info.get('time_stamp')
             status = mission.status or {}
             if status.get('state') in ('STOPPED', 'FAULT'):
                 break
@@ -404,6 +450,25 @@ def main():
                               'net_approach_ratio': round((d0 - d1) / d0, 4) if d0 > 0.1 else None}
         result['final_status'] = status
         result['goal_statuses'] = {k: v for k, v in mission.goal_statuses.items()}
+        # Authoritative Tool contract surface: the to_semantic_goal result.
+        # The terminal status is published before the action server's execute
+        # callback returns (0.1 s wake-up) - wait for the result, bounded.
+        if mission.goal_result is not None:
+            try:
+                mission.spin_until(lambda: mission.goal_result.done(), 15,
+                                   'action result not delivered')
+            except TimeoutError:
+                pass
+        action_result = None
+        if mission.goal_result is not None and mission.goal_result.done():
+            wrapped = mission.goal_result.result()
+            if wrapped is not None:
+                action_result = {'status': int(wrapped.status),
+                                 'success': bool(wrapped.result.success),
+                                 'code': wrapped.result.code,
+                                 'reason': wrapped.result.reason,
+                                 'stop_confirmed': bool(wrapped.result.stop_confirmed)}
+        result['action_result'] = action_result
 
         # Waypoint-segment accounting (pre-locked interpretation, README):
         # revision == number of FollowTimedPath goals the planner sent; the
@@ -487,6 +552,14 @@ def main():
             result['gates']['airborne_at_fault'] = (
                 'PASS' if zs and zs[-1] > 1.0 else 'FAIL')
             result['fault_detail'] = mission.terminal_detail
+            want = 'stuck' if args.expect_stuck else ('llm_failures', 'service_failures')
+            result['gates']['action_result'] = (
+                'PASS' if action_result
+                and action_result['code'] == 'EXECUTION_FAILED'
+                and (action_result['reason'] == want
+                     if isinstance(want, str)
+                     else action_result['reason'] in want)
+                and not action_result['success'] else 'FAIL')
         elif args.cancel_after > 0:
             result['gates']['waypoints'] = 'NOT-EXECUTED'
             result['gates']['revision_match'] = 'NOT-EXECUTED'
@@ -498,6 +571,12 @@ def main():
                 'PASS' if status.get('state') == 'STOPPED'
                 and mission.terminal_detail == 'cancelled'
                 and mission.terminal_stop_confirmed is True else 'FAIL')
+            # CANCELED is only returned after stop confirmation (contract).
+            result['gates']['action_result'] = (
+                'PASS' if action_result
+                and action_result['code'] == 'CANCELED'
+                and action_result['stop_confirmed']
+                and not action_result['success'] else 'FAIL')
         else:
             result['gates']['waypoints'] = ('PASS' if steps_executed >= 3 and revision >= 1
                                             else 'FAIL')
@@ -510,6 +589,14 @@ def main():
                                              ('STOPPED', 'FAULT') else 'FAIL')
             result['gates']['final_reason'] = (
                 'PASS' if mission.terminal_detail == 'task_complete' else 'FAIL')
+            # SUCCEEDED semantics (D25): landmark sequence complete under
+            # VLM visibility confirmation; positional arrival is scored
+            # offline by this mission's ground truth, never claimed here.
+            result['gates']['action_result'] = (
+                'PASS' if action_result and action_result['success']
+                and action_result['code'] == 'SUCCEEDED'
+                and action_result['reason'].startswith(
+                    'landmark_sequence_complete_semantic_only') else 'FAIL')
         result['terminal_detail'] = mission.terminal_detail
         # Decision-6 exploit evidence summary (events stream is the primary
         # record; these are the load/hit/walk markers the reuse round needs).
@@ -529,8 +616,11 @@ def main():
 
         if rpc:
             result['collision'] = {'baseline': collision_baseline,
-                                   'events': collision_events}
-            result['gates']['collision'] = 'PASS' if not collision_events else 'FAIL'
+                                   'events': collision_events,
+                                   'probe_errors': collision_probe_errors}
+            result['gates']['collision'] = (
+                'NOT-EXECUTED' if collision_baseline is None else
+                ('PASS' if not collision_events else 'FAIL'))
         result['duration_s'] = round(time.time() - t_start, 1)
         # NOT-EXECUTED marks a structurally inapplicable gate (e.g. waypoints
         # for a cancel case); it is neither a pass nor a failure.
@@ -540,6 +630,12 @@ def main():
         result['error'] = f'{type(exc).__name__} at {stage}: {exc}'
         result['success'] = False
         result['duration_s'] = round(time.time() - t_start, 1)
+        # Preserve partial evidence even on the failure path (tool6: an RPC
+        # stall aborted the mission while samples/events had been collected,
+        # and result.json showed empty samples, hiding what actually ran).
+        result['samples'] = mission.samples
+        result['events'] = mission.events
+        result['final_status'] = mission.status
         # Bounded recovery: native Land even after task failure.
         try:
             mission.run_action(mission.land, Land, Land.Goal(land_speed=0.5), 30)

@@ -53,6 +53,8 @@ BLOCKS_ARGS = os.environ.get(
     '"-ExecCmds=r.Streaming.PoolSize 128"')
 ROS_WS = '/repo/log/citynav/pc-e2e/ros_ws'
 WORKSTATION_WS = '/repo/log/citynav/pc-e2e/workstation/ws'
+CLOUD_ENV = str(ROOT / 'log' / 'citynav' / 'pc-e2e' / 'cloud-env')
+INFERENCE_CONFIG = str(ROOT / 'config' / 'inference.cloud.local.yaml')
 
 
 def run(args, **kwargs):
@@ -219,9 +221,11 @@ def probe_host(output):
 
 
 def pick_domain(output):
-    used = {json.loads(p.read_text())['domain']
-            for p in (ROOT / 'log/citynav/pc-e2e').rglob('domain.json')} \
-        if (ROOT / 'log/citynav/pc-e2e').exists() else set()
+    # Only RUNNING containers can occupy a DDS domain; exited/stopped ones
+    # hold no sockets. The earlier union of every historical domain.json
+    # exhausted the 180-232 window after ~20 runs (tool11 start, 2026-11-18)
+    # - recorded files are evidence, not reservations.
+    used = set()
     identifiers = capture(['docker', 'ps', '-q']).split()
     if identifiers:
         for container in json.loads(capture(['docker', 'inspect', *identifiers])):
@@ -229,8 +233,8 @@ def pick_domain(output):
                 if entry.startswith('ROS_DOMAIN_ID='):
                     used.add(int(entry.split('=', 1)[1]))
     available = [v for v in range(180, 233) if v not in used]
-    # 180-199 (the SPF-era window) exhausted after ~20 citynav runs; Fast DDS
-    # accepts domain ids up to 232 (RTPS port arithmetic stays in range).
+    # 180-199 (the SPF-era window); Fast DDS accepts domain ids up to 232
+    # (RTPS port arithmetic stays in range).
     if not available:
         raise RuntimeError('no unused DDS domain')
     (output / 'domain.json').write_text(json.dumps({'domain': available[0]}) + '\n')
@@ -259,13 +263,26 @@ def launch_compute(output):
            entrypoint='bash')
 
 
-def launch_proxy(output):
-    launch(output, 'proxy', GROUND, ['-lc',
+def launch_inference(output):
+    """Shared Inference Function (frames variant) in the compute-role image.
+
+    Tool 化改造：私有 uav_citynav_llm_proxy 已删除；云 LLM 走
+    InferVisionLanguageFrames → vision_language_frames ROS 节点 + uv 隔离
+    worker（逻辑模型名 citynav，供应商绑定在 config/inference.cloud.local.yaml，
+    gitignored）。与 SPF 的 launch_inference 同构（同一 worker 进程，
+    /infer_frames 路由）。"""
+    launch(output, 'inference', ONBOARD, ['-lc',
            'source /opt/ros/humble/setup.bash && '
            'source ' + ROS_WS + '/install/setup.bash && '
-           'exec ros2 run uav_citynav_llm_proxy citynav_llm_proxy --ros-args '
-           '-r __ns:=/drone0 --params-file /evidence/planner.yaml'],
-           env=['-e', 'OPENAI_API_KEY=' + api_key()], entrypoint='bash')
+           'exec python3 /repo/deployment/inference/vision_language_frames_run.py'],
+           env=['-e', 'INFERENCE_MODEL_NAMES=citynav',
+                '-e', 'INFERENCE_MODEL_CONFIG=/run/inference/models.yaml',
+                '-e', 'OPENAI_API_KEY=' + api_key(),
+                '-e', 'INFERENCE_ROS_PARAMETERS=/repo/deployment/airsim/demos/citynav_blocks/inference.yaml',
+                '-e', 'VEHICLE_NAMESPACE=drone0'],
+           mounts=['-v', CLOUD_ENV + ':/cloud-env:ro',
+                   '-v', INFERENCE_CONFIG + ':/run/inference/models.yaml:ro'],
+           entrypoint='bash')
 
 
 def start(output, observe=False):
@@ -284,8 +301,10 @@ def start(output, observe=False):
         ['git', '-C', ROOT / 'src/tool/navigation/planner/citynav/upstream',
          'rev-parse', 'HEAD']).strip()}
     for folder in [APP, ROOT / 'src/tool/navigation/planner/citynav/ros2_adapter',
-                   ROOT / 'src/tool/navigation/planner/citynav/llm_proxy',
-                   ROOT / 'src/tool/navigation/interfaces', ROOT / 'src/behavior/follow_path']:
+                   ROOT / 'src/tool/navigation/interfaces', ROOT / 'src/behavior/follow_path',
+                   ROOT / 'src/basic_function/inference/interfaces',
+                   ROOT / 'src/basic_function/inference/ros2_adapter/uav_inference',
+                   ROOT / 'deployment/inference']:
         for path in folder.rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts \
                     and '.pytest_cache' not in path.parts:
@@ -328,7 +347,7 @@ def start(output, observe=False):
            mounts=['-v', str(output / 'settings.json') + ':/config/settings.json:ro'],
            entrypoint='bash')
     launch_compute(output)
-    launch_proxy(output)
+    launch_inference(output)
 
 
 def health(output):
@@ -376,11 +395,13 @@ def mission(output, args):
                '-e', 'PYTHONPATH=/repo/simulator/airsim/sensors:/repo/deployment/robopi/vendor',
                '--entrypoint', 'bash', GROUND, '-lc',
                'source /opt/ros/humble/setup.bash && '
+               'source ' + ROS_WS + '/install/setup.bash && '
                'source ' + WORKSTATION_WS + '/install/setup.bash && '
                'exec python3 /repo/deployment/airsim/demos/citynav_blocks/mission.py '
                '--output /evidence/' + args.case +
                ' --instruction "' + args.instruction + '"'
                ' --max-steps ' + str(args.max_steps) +
+               ' --timeout-budget ' + str(args.timeout_budget) +
                ' --use-memory ' + str(int(args.use_memory)) +
                ' --cancel-after ' + str(args.cancel_after) +
                (' --expect-fault' if args.expect_fault else '') +
@@ -438,7 +459,7 @@ def stop(output):
     observer = prefix(output) + 'observer'
     if capture(['docker', 'ps', '-aq', '--filter', 'name=' + observer]).strip():
         run(['docker', 'rm', '-f', observer])
-    for role in ['proxy', 'compute', 'sensor', 'clock', 'vehicle']:
+    for role in ['inference', 'compute', 'sensor', 'clock', 'vehicle']:
         name = prefix(output) + role
         if not capture(['docker', 'ps', '-aq', '--filter', 'name=' + name]).strip():
             continue  # start died before this role was created
@@ -461,11 +482,14 @@ def stop(output):
 
 
 def restart_compute(output):
-    """Re-create compute + proxy after an overlay rebuild (both source it)."""
-    for role in ('proxy', 'compute'):
-        run(['docker', 'rm', '-f', check_owner(output, role)])
+    """Re-create compute + inference after an overlay rebuild (both source it).
+    Tolerates roles already removed (e.g. a crashed inference pruned by hand)."""
+    for role in ('inference', 'compute'):
+        name = prefix(output) + role
+        if capture(['docker', 'ps', '-aq', '--filter', 'name=' + name]).strip():
+            run(['docker', 'rm', '-f', check_owner(output, role)])
     launch_compute(output)
-    launch_proxy(output)
+    launch_inference(output)
 
 
 def prepare(output):
@@ -482,12 +506,35 @@ def prepare(output):
          'cd ' + work + ' && colcon build --base-paths '
          '/repo/src/tool/navigation/interfaces '
          '/repo/src/tool/navigation/planner/citynav/ros2_adapter '
-         '/repo/src/tool/navigation/planner/citynav/llm_proxy '
+         '/repo/src/basic_function/inference/interfaces '
+         '/repo/src/basic_function/inference/ros2_adapter '
          '/repo/src/behavior/follow_path '
-         '--packages-select uav_planner_interfaces uav_citynav_planner uav_citynav_llm_proxy '
+         '--packages-select uav_planner_interfaces uav_citynav_planner '
+         'uav_inference_interfaces uav_inference '
          'uav_follow_path_execution '
          '--event-handlers console_direct+'])
+    prepare_cloud_worker()
     prepare_ground()
+
+
+def prepare_cloud_worker():
+    """uv-locked isolated worker env for the shared vision-language model
+    (serves /infer and /infer_frames), built inside the target image so the
+    Python ABI matches the runtime container (SPF same method)."""
+    import shutil
+    uv = shutil.which('uv')
+    if not uv:
+        raise RuntimeError('Install uv to prepare the isolated Cloud worker environment')
+    (ROOT / 'log/citynav/pc-e2e').mkdir(parents=True, exist_ok=True)
+    run(['docker', 'run', '--rm', '-v', str(ROOT) + ':/repo:ro',
+         '-v', CLOUD_ENV + ':/cloud-env',
+         '-v', uv + ':/usr/local/bin/uv:ro', '--entrypoint', 'bash', ONBOARD, '-lc',
+         'mkdir -p /tmp/cloud-build/models/vision_language /tmp/cloud-build/runtime && '
+         'cp -a /repo/src/basic_function/inference/runtime/. /tmp/cloud-build/runtime/ && '
+         'cp /repo/src/basic_function/inference/models/vision_language/pyproject.toml '
+         '/repo/src/basic_function/inference/models/vision_language/uv.lock /tmp/cloud-build/models/vision_language/ && '
+         'UV_PROJECT_ENVIRONMENT=/cloud-env uv sync --locked --reinstall-package aerohub-inference-runtime '
+         '--python /usr/bin/python3 --project /tmp/cloud-build/models/vision_language'])
 
 
 def prepare_ground():
@@ -542,6 +589,9 @@ def main():
     parser.add_argument('--instruction',
                         default='fly toward the orange ball and stop near it')
     parser.add_argument('--max-steps', type=int, default=60)
+    parser.add_argument('--timeout-budget', type=float, default=400.0,
+                        help='mission action only: to_semantic_goal budget '
+                             '(inference + motion), enforced by the Tool')
     parser.add_argument('--use-memory', type=int, choices=[0, 1], default=1)
     parser.add_argument('--cancel-after', type=float, default=0.0,
                         help='mission action only: inject citynav/cancel N s '

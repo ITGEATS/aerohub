@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: planner.citynav-single
-version: "0.1.0"
+version: "0.2.0"
 type: tool
 name: CityNavAgent language-navigation single-vehicle tool
 description: |
@@ -18,16 +18,31 @@ description: |
   view_freshness_s=2.0; results are bound to request-time image stamps with
   max_result_age_s=90 (LLM ~10 s + 5x8 s serial grounding cycle envelope, D21).
   Start/stop constraint: the planner process is orchestrated by the demo; it
-  requires the workstation LLM proxy (cloud glm-4v-flash via citynav/llm
-  topics), the host grounded_sam (:8100) and clip (:8101) HTTP inference
-  services, and the flight_board sensor/clock bridge; cancel enters STOPPING,
-  stops the Behavior and confirms speed<0.2 m/s for 1 s before STOPPED.
+  requires the shared Inference Function vision-language frames service
+  (InferVisionLanguageFrames action; cloud glm-4v-flash behind it, provider
+  binding and credentials outside this Tool - Tool-ified 2026-11-18, the
+  private workstation llm_proxy package and citynav/llm topics were removed
+  and upstream prompts moved verbatim into the planner package), the host
+  grounded_sam (:8100) and clip (:8101) HTTP inference services (declared
+  deviation D27: still direct host HTTP, not the ROS 2 Inference surface),
+  and the flight_board sensor/clock bridge; cancel enters STOPPING, stops the
+  Behavior and confirms speed<0.2 m/s for 1 s before STOPPED.
   Shared runtime: the planner node is co-located with the AS2 state
   estimator/controller and the FollowTimedPath Behavior in one compute-role
-  container; the LLM proxy runs in a separate workstation container.
+  container; the Inference Function runs in its own inference-role container.
   Validation status (claim level partial-verification-passed, NOT
   reproduction-success): formal1, cancel1, fault1 and stuck2 minimal
-  end-to-end acceptance PASSED 2026-11-18 on AirSim Blocks + PX4 SITL;
+  end-to-end acceptance PASSED 2026-11-18 on AirSim Blocks + PX4 SITL
+  under the PRE-Tool-ification contract; after the 2026-11-18 addendum-3
+  Tool-ification (to_semantic_goal entry + shared InferVisionLanguageFrames
+  cloud-LLM path) formal1 was RE-VERIFIED PASSED under the new contract
+  (run-20261118tool12, 12/12 gates, D25 SUCCEEDED reason verified live in
+  the action result; unit 53 passed + new-contract DDS lifecycle 6/6);
+  cancel1/fault1 new-contract re-runs remain open and the recorded residual
+  is that the pass is attempt-dependent (the known wall-crossing decision
+  family - provider VLM randomness + Blocks corridor geometry, not a
+  toolification regression - failed 3 of 4 flying attempts); see
+  validation.json toolification_20261118 for the full attempt history;
   M-1 proxy/SDK same-frame agreement PASSED under the revised criterion
   (user ruling 2026-11-18 addendum-2; original >=90% gate result 70% vs
   SDK self-control 80% retained on record). CROSS-TASK MEMORY REUSE IS
@@ -59,24 +74,43 @@ inputs:
     capability_type: sensor/camera/depth/axial-image
   - id: five_view_camera_info
     capability_type: sensor/camera/rgb/camera-info
-  - id: llm_result
-    capability_type: task/citynav/llm-result
+  - id: vision_language_inference
+    capability_type: inference/vision-language/text
+    note: depends on inference.vision-language; the planner holds the upstream
+      prompts verbatim (prompts.py) and sends frames+prompt explicitly; empty
+      images = text-only request; semantic parsing (landmark/viewpoint JSON,
+      is_found) stays in the planner (D26)
 
 outputs:
-  - id: llm_query
-    capability_type: task/citynav/llm-query
   - id: task_status
     capability_type: task/citynav/status
   - id: planning_events
     capability_type: task/citynav/events
 
 interfaces:
-  - id: navigate_by_language
+  - id: to_semantic_goal
     role: functional_operation
     interaction: managed_task
-    protocol: ros2_topic
-    schema: std_msgs/msg/String
-    parameter_schema: null
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/NavigateToSemanticGoal
+    parameter_schema: src/tool/navigation/interfaces/action/NavigateToSemanticGoal.action
+    note: "/<vehicle>/navigate_to_semantic_goal accepts description and required
+      finite positive timeout (Tool-ified entry; the private citynav/goal
+      String topic is removed; max_steps/use_memory became planner deployment
+      parameters). SUCCEEDED semantics per D25 - landmark sequence complete
+      under VLM visibility confirmation, reason
+      landmark_sequence_complete_semantic_only_no_positional_verification;
+      positional arrival is scored offline by the workstation, never claimed.
+      Budget expiry returns TIMEOUT, never SUCCEEDED."
+  - id: infer_vision_language_frames
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_inference_interfaces/action/InferVisionLanguageFrames
+    parameter_schema: src/basic_function/inference/interfaces/action/InferVisionLanguageFrames.action
+    note: consumed dependency (client side), served by the shared Inference
+      Function; declared here because the prompt/frames contract is this
+      Tool's responsibility boundary (D26)
   - id: cancel_task
     role: lifecycle_operation
     interaction: request_response
@@ -93,9 +127,10 @@ interfaces:
 lifecycle:
   management: agent_managed
   operations:
-    start: navigate_by_language
-    status: null
-    stop: cancel_task
+    start: send NavigateToSemanticGoal to /<vehicle>/navigate_to_semantic_goal
+    status: citynav/status snapshot (state, task_id, revision, step_size,
+      next_landmark_idx, landmarks, memory_nodes, failures, ready)
+    stop: cancel_task (citynav/cancel) -> STOPPING -> speed-gated STOPPED
 
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
@@ -109,7 +144,7 @@ resource_access:
     - sensor/rgb-camera
     - sensor/depth-camera
     - vehicle/self-state
-    - external/cloud-llm-api
+    - inference/vision-language/text
     - service/grounded-sam-inference
     - service/clip-inference
   shared_writes: []

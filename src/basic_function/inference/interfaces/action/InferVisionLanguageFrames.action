@@ -1,0 +1,30 @@
+# Caller-supplied ordered frames (multi-eye rigs or a cached batch): the Function
+# does not acquire images itself; the calling Tool owns frame selection and the
+# prompt text. An empty images list is a text-only request.
+# Model identity is public; provider, credentials, endpoint and engine are private
+# deployment bindings (same policy as InferVisionLanguage).
+string model_name
+string prompt
+# Optional system-role message (upstream landmark extraction uses system+user);
+# empty means a single user message.
+string system_prompt
+# Same length as images. A non-empty label prefixes its image with the
+# "{label} image: " text block, in request order, before the prompt block.
+string[] image_labels
+sensor_msgs/Image[] images   # rgb8/bgr8, bounded size
+# Finite positive monotonic seconds, including preprocessing and network wait.
+float64 timeout
+# Maximum ROS-clock age of every captured frame, checked before inference.
+float64 max_result_age
+---
+bool success
+string error_code
+string message
+string model_name
+string text
+# Actual acquisition header of each input frame, in request order (empty for
+# text-only requests); never request/receipt time.
+std_msgs/Header[] observation_headers
+float64 latency_ms
+---
+string phase
