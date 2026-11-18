@@ -91,6 +91,28 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
   代理按 view_stamps 自取帧），planner 侧已改对齐、代理包未动。结果字段
   `text`/`latency_s` 与 error_code 六元集同步；自建 prompt 文本全部删除，
   仅保留 `parse_viewpoint_response_v2` 逐字复制（字段消费在 planner）。
+- **rclpy logger 参数风格修复（阶段 6 首飞，2026-11-17，run-20261117b 发现）**：
+  `node.py`/`hspm.py` 共 5 处使用 stdlib logging 风格的
+  `logger.info("...%s", x)` 调用；rclpy `RcutilsLogger` 只接受单个 msg 参数，
+  真实运行中 grounding 成功命中 `hspm.py` L154 即抛 `TypeError` 杀死 worker
+  线程（失败路径 `_count_failure`、memory 读/写异常分支同病）。单测漏检原因：
+  测试注入的是 stdlib 风格 mock logger。已改为 `%` 预格式化（语义不变，最小
+  修改）；修复后单测 45 passed / 1 skipped 与基线一致。
+- **depth 通道轴修复（阶段 6 首飞，2026-11-17，run-20261117c 发现）**：
+  `node._on_image` 将 32FC1 深度经 `image_to_array(..., channels=1)` 存为
+  `(H, W, 1)`，而 `perception.backproject_view` 按契约 §1 期望 `(H, W)`，
+  真实运行 `h, w = depth.shape` 抛 `ValueError` 再次杀死 worker。回调处压掉
+  通道轴（`[:, :, 0]`）；单测直接构造 2D 深度故漏检。
+- **exploit 命中面修复（阶段 6 审计发现，2026-11-17；修复方向修正
+  2026-11-18）**：在线建图（D4）在任务执行中 `add_or_merge` 本任务轨迹
+  节点，exploit 检查若命中自身刚访问位置（≤20 m）会产生多余 goal/提前
+  `task_complete`，违背上游"exploit 只命中既往任务记忆（episode 内图
+  静态）"语义并破坏跨任务复用验收。首版修复（`min_index=_memory_floor`）
+  方向写反：无既往记忆（floor=0）时不过滤、有既往记忆时反而排除既往只搜
+  本任务节点（run-20261118d 实测 exploit_events=2 自命中 + 第 3 goal
+  rejected）。最终修复：`_init_memory` 记录 `_memory_floor`（加载时的既往
+  节点数），exploit 仅在 `floor > 0` 时检查，`MemoryGraph.closest_node`
+  新增 `until`（默认 None 全搜）限定只搜既往节点 `[0, floor)`。
 
 ## 运行（阶段 6 Demo 前为开发入口）
 

@@ -204,9 +204,23 @@ class MemoryGraph:
         self.last_node = inx
         return "new", inx
 
-    def closest_node(self, pos, thresh=None):
+    def closest_node(self, pos, thresh=None, until=None):
+        """最近节点（阈值内），仅考虑 index < until 的节点。
+
+        until 用于阶段 6 修复：exploit 只应命中既往任务记忆（上游 episode
+        内图静态），本任务在线 add_or_merge 的自身轨迹节点必须排除，否则
+        第二循环即命中刚访问位置 → 自命中 exploit → 多余 goal/提前收口
+        （run-20261118d 实测：无既往记忆时旧 min_index 写法完全失效）。
+        默认 None=全部节点，保持既有行为。"""
         thresh = self.merge_radius if thresh is None else thresh
-        return find_closest_node(self._graph, np.asarray(pos)[:3], thresh=thresh)
+        point = np.asarray(pos)[:3]
+        best, best_d = None, float("inf")
+        end = self.vert_count if until is None else min(int(until), self.vert_count)
+        for i in range(0, end):
+            d = float(np.linalg.norm(self._pos[i] - point))
+            if d < best_d:
+                best, best_d = i, d
+        return best if best is not None and best_d < thresh else None
 
     def node_position(self, node) -> np.ndarray:
         return np.asarray(self._pos[int(node)], dtype=np.float64)

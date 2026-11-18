@@ -1,0 +1,49 @@
+# CityNavBlocks planner + LLM proxy parameters (four-part topology, workstation/compute roles).
+# Camera names are unified here: both the planner (view_cameras) and the proxy
+# (cameras) use the City* five-eye array from settings.json. The two packages'
+# built-in defaults differ (LeftCamera* vs CityLeft*) - this file is the single
+# place where the Demo pins them together.
+#
+# NOTE: run.py rewrites the __HOST__ token below to the measured host address
+# (host.docker.internal or the NAT gateway IPv4) when it generates
+# <output>/planner.yaml; the compute container loads the generated copy.
+
+/drone0/citynav_planner:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    view_cameras: ["CityLeft", "CitySlightlyLeft", "CityFront",
+                   "CitySlightlyRight", "CityRight"]
+    # view_yaws_deg keeps the package default [90,45,0,-45,-90] (ROS ENU
+    # counter-clockwise), which matches the AirSim Yaw -90..+90 array order.
+    base_velocity: 1.0
+    base_yaw_rate: 30.0
+    min_altitude_m: 1.2
+    max_result_age_s: 90.0
+    view_freshness_s: 2.0
+    grounding_url: http://__HOST__:8100/models/grounded_sam/greedy_mask_predict
+    clip_url: http://__HOST__:8101/models/clip/score
+    # GS_EMPTY_CACHE service mode: the first inference after each idle period
+    # re-expands the torch caching allocator (measured 78.6 s cold, 3-5 s
+    # warm, run-20261118b probe log/citynav/pc-e2e/gs_probe.py), far above
+    # the 30 s default -> timeout then busy-429 x3 -> FAULT. Budget widened
+    # at the config layer (package defaults untouched).
+    service_timeout_s: 120.0
+    retry_backoff_s: 20.0
+    # Cross-task memory graph (D4); /evidence is the run output directory.
+    memory_graph_path: /evidence/citynav_memory.json
+
+/drone0/citynav_llm_proxy:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    cameras: ["left=CityLeft", "slightly_left=CitySlightlyLeft",
+              "front=CityFront", "slightly_right=CitySlightlyRight",
+              "right=CityRight"]
+    model: glm-4v-flash
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: OPENAI_API_KEY
+    # Empty cache_dir = disk cache disabled (formal1 M-1 control requirement:
+    # every frame must be a real call, no prompt-keyed cache hits).
+    cache_dir: ""
+    request_timeout_s: 30.0

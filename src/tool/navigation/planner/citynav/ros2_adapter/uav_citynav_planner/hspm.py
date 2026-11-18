@@ -145,13 +145,13 @@ def plan_next_waypoint(llm_request: Callable[..., Dict],
         view = views.get(vp)
         if view is None:
             if logger:
-                logger.warning("unknown viewpoint %s from LLM", vp)
+                logger.warning("unknown viewpoint %s from LLM" % vp)
             continue
         mask, seg_succ = grounding_predict(view["rgb"], str(obj))
         seg_succ_all = seg_succ_all or seg_succ
         if seg_succ:
             if logger:
-                logger.info("Selected viewpoint, object: %s, %s", vp, obj)
+                logger.info("Selected viewpoint, object: %s, %s" % (vp, obj))
             selected.append({"view": vp, "object": obj})
             part_pc = backproject_view(view["depth"], view["K"], mask,
                                         view["R"], view["pose"])

@@ -131,6 +131,7 @@ class CityNavPlannerNode(Node):
         self._step_size = 0
         self._hist_step_size = collections.deque(maxlen=8)
         self._graph = None
+        self._memory_floor = 0
         self._goal_result_event = threading.Event()
         self._goal_handle_accepted = threading.Event()
         self._goal_rejected = False
@@ -181,7 +182,10 @@ class CityNavPlannerNode(Node):
             if kind == "rgb":
                 arr = image_to_array(msg, np.uint8, 3)
             else:
-                arr = image_to_array(msg, np.float32, 1)
+                # 契约 §1/perception 输入为 HxW；桥的 32FC1 单通道经
+                # image_to_array 得 (H, W, 1)，此处压掉通道轴（阶段 6 首飞
+                # 发现 backproject_view "too many values to unpack"）。
+                arr = image_to_array(msg, np.float32, 1)[:, :, 0]
         except ValueError:
             return
         stamp_ns = msg.header.stamp.sec * 10**9 + msg.header.stamp.nanosec
@@ -264,7 +268,10 @@ class CityNavPlannerNode(Node):
                 self._publish_event("memory_loaded", path=path,
                                     nodes=self._graph.vert_count)
             except (ValueError, OSError) as exc:
-                self.get_logger().warn("memory load failed: %s", exc)
+                self.get_logger().warn("memory load failed: %s" % exc)
+        # exploit 命中面 = 既往任务记忆（上游 episode 内图静态）；本任务在线
+        # add_or_merge 的自身轨迹节点排除在外（阶段 6 修复，见 README 偏离）。
+        self._memory_floor = self._graph.vert_count
 
     # ---------- 批次与定位 ----------
     def _collect_batch(self):
@@ -352,9 +359,11 @@ class CityNavPlannerNode(Node):
             self._finish("STOPPED", "not_ready")
             return
 
-        # exploit 优先（SimRun.py L452-492 顺序：先命中检查）
-        if job["use_memory"] and self._graph and self._graph.vert_count > 0:
-            cls_node = self._graph.closest_node(cur[:3])
+        # exploit 优先（SimRun.py L452-492 顺序：先命中检查）；只命中既往
+        # 任务记忆节点 [0, _memory_floor)，本任务在线节点一律排除
+        # （run-20261118d 教训：旧 min_index 写法在无既往记忆时自命中）
+        if job["use_memory"] and self._graph and self._memory_floor > 0:
+            cls_node = self._graph.closest_node(cur[:3], until=self._memory_floor)
             if cls_node is not None:
                 self._run_exploit(job, cls_node, cur)
                 return
@@ -467,7 +476,7 @@ class CityNavPlannerNode(Node):
 
     def _count_failure(self, stage, code):
         self._failures += 1
-        self.get_logger().warn("%s failure %d: %s", stage, self._failures, code)
+        self.get_logger().warn("%s failure %d: %s" % (stage, self._failures, code))
         self._publish_status(f"{stage}_failure", code=str(code),
                              failures=self._failures)
         if self._failures >= int(self.get_parameter("max_consecutive_failures").value):
@@ -633,7 +642,7 @@ class CityNavPlannerNode(Node):
                 self._publish_event("memory_saved", path=path,
                                    nodes=self._graph.vert_count)
             except OSError as exc:
-                self.get_logger().warn("memory save failed: %s", exc)
+                self.get_logger().warn("memory save failed: %s" % exc)
 
     # ---------- 状态/事件 ----------
     def _status_snapshot(self, state):
