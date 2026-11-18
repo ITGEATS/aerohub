@@ -43,22 +43,22 @@
 本轮模型身份为 `09ec31094ed83e09702efc1facf18076564ebbe1afc164960c41036e16ba229f`，
 `ros-reference-u8-inpaint-v1;velocity=2.0`。
 
-初轮 `log/yopo-single/navigation-sitl-01` 地面与短程成功；最终代码重新启动全新
-`log/yopo-single/navigation-sitl-final`，森林目标 `[0,15,2]` 返回
+初轮 `dev/yopo-single/evidence/navigation-sitl-01` 地面与短程成功；最终代码重新启动全新
+`dev/yopo-single/evidence/navigation-sitl-final`，森林目标 `[0,15,2]` 返回
 `SUCCEEDED / ARRIVED_5M / stop_confirmed=true`，降落、解除武装通过，无碰撞；
 真实深度中心带15m内障碍像素204。该指标只说明场景中有障碍观测，不证明动态避障能力。
 
 结果中的 `offboard_release_error` 是已解除武装后显式释放 offboard 被平台拒绝，
 如实保留；飞行、停稳、Land 与 disarmed 均已通过。它不应被隐藏成“所有后处理无错误”。
 
-实际取消用例 `log/yopo-single/navigation-cancel/cancel/result.json`：至少3个滚动
+实际取消用例 `dev/yopo-single/evidence/navigation-cancel/cancel/result.json`：至少3个滚动
 revision 后取消，公共结果 `CANCELED / CANCELED / stop_confirmed=true`；
 停稳、Land、disarmed通过，无碰撞，未误报到达。
 
-实际输入中断用例 `log/yopo-single/navigation-stale/stale/result.json`：仅暂停本轮
+实际输入中断用例 `dev/yopo-single/evidence/navigation-stale/stale/result.json`：仅暂停本轮
 sensor容器，公共结果 `EXECUTION_FAILED / STALE_OR_INVALID_INPUT / stop_confirmed=true`；
 停稳、Land、disarmed通过，无碰撞，未误报到达。故障注入与恢复记录在同轮证据中。
-三个最终飞行用例汇总于 `log/yopo-single/navigation-validation-summary.json`。
+三个最终飞行用例汇总于 `dev/yopo-single/evidence/summary/navigation-validation-summary.json`。
 本轮专属容器、场景和 CUDA worker 已回收，未停止其他既有容器。
 
 ## 行为边界
@@ -76,7 +76,7 @@ FAULT 返回 STOP_UNCONFIRMED，不将 stop ACK 等同于停稳；取消和其�
 用户随后要求长程验证。本次先固定目标 `[-37.57,231.76,6]`（约235m）、
 原部署速度2m/s、300s任务预算、原始5m到达与stop gate，先通过地面就绪检查，
 再执行一次全新有屏forest实例。未修改算法、控制器、模型、接口或门槛。
-预声明检查保存在 `log/yopo-single/navigation-forest-long-01/long-test-contract.json`。
+预声明检查保存在 `dev/yopo-single/evidence/navigation-forest-long-01/long-test-contract.json`。
 
 实际 CUDA YOPO 经公共 NavigateToPose、滚动 FollowTimedPath 和 PX4 SITL 完成：
 
@@ -101,7 +101,7 @@ FAULT 返回 STOP_UNCONFIRMED，不将 stop ACK 等同于停稳；取消和其�
 
 该轮仍记录已解除武装后的 offboard释放拒绝，未隐去该后处理问题。
 这是一次长程通过，不是三次重复长程验收，也不是物理无人机实飞。
-证据目录 `log/yopo-single/navigation-forest-long-01/` 含源码摘要、镜像、模型身份、
+证据目录 `dev/yopo-single/evidence/navigation-forest-long-01/` 含源码摘要、镜像、模型身份、
 场景/传感器/计算/PX4日志、原始轨迹、状态、碰撞评分和结果；
 `forest-long/summary.json` 为汇总，`forest-long/result.json` 为任务原始结果。
 本轮专属场景、容器和CUDA worker已回收，其他原有容器保持运行。
@@ -120,11 +120,11 @@ DroneInterface 自带执行器处理 Action 回调，Demo 继续独立处理观�
 补生成 AlertEvent/BehaviorStatus；复用已锁定SHA的CPython3.10依赖清单，运行时设置
 Python依赖路径和AS2_MODULES_PATH。不重建镜像。
 `log/yopo-single/module-ground-build.log` 记录4包工作站构建通过。
-`log/yopo-single/module-demo-01` 的地面与实际CUDA森林短程任务通过，
+`dev/yopo-single/evidence/module-demo-01` 的地面与实际CUDA森林短程任务通过，
 日志确认从工作站安装目录加载 navigation Module；导航结果成功且确认停稳，
 无碰撞，Land和disarmed通过。该轮仍如实记录已解除武装后的offboard释放拒绝。
 此前长程记录使用直接Action调用；本次应用入口更改不重标为Module长程验收。
 
-`log/yopo-single/module-demo-cancel` 的独立地面检查和实际CUDA森林取消用例通过：
+`dev/yopo-single/evidence/module-demo-cancel` 的独立地面检查和实际CUDA森林取消用例通过：
 至少3个revision后由Demo调用Module的cancel_async，结果CANCELED且stop_confirmed=true，
 无碰撞，Land和disarmed通过。两轮均生成原始result和summary，环境与worker已回收。

@@ -65,7 +65,7 @@ python3 deployment/object_detection/airsim/run.py \
 
 ## 历史接入记录（08/09，早于近距与TF修正）
 
-证据目录：`log/object-detection-tool/airsim-rgb-08/` 与 `airsim-rgb-09/`。
+证据目录：`dev/object-detection-tool/evidence/airsim-rgb-08/` 与 `airsim-rgb-09/`。
 原始日志不纳入Git。09的结果如下：
 
 | 项目 | 结果 |
