@@ -26,5 +26,4 @@ ament_target_dependencies(fast_livo2_plugin as2_state_estimator as2_core pluginl
 pluginlib_export_plugin_description_file(as2_state_estimator plugins.xml)
 install(TARGETS fast_livo2_plugin LIBRARY DESTINATION lib)
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
-install(PROGRAMS scripts/bridge.py DESTINATION lib/${PROJECT_NAME})
 ament_package()

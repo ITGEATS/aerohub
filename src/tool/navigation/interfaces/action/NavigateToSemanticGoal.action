@@ -1,0 +1,17 @@
+# A spatial navigation goal, not a multi-task mission or an unrestricted agent prompt.
+string description
+# Required finite positive wall/monotonic-time budget, including inference and motion.
+# Stop confirmation has a separate bounded grace period after this budget expires.
+float64 timeout
+---
+# SUCCEEDED is reserved for verified goal attainment. SPF currently never emits it.
+bool success
+string code
+string reason
+geometry_msgs/PoseStamped final_pose
+bool stop_confirmed
+---
+string phase
+geometry_msgs/PoseStamped current_pose
+uint64 steps_completed
+uint64 revision

@@ -7,7 +7,7 @@ ROS depth/CameraInfo and historical TF for measured 3D positions; target KF and
 motion execution remain outside Inference. Select only `yolo26n-seg` with
 `config/inference.yolo26n-seg.example.yaml`; existing model selections are retained.
 
-Inference 是与 Perception、State Estimator 并列的基础能力：目标对外使用 ROS 2，对内通过 FastAPI 隔离每模型运行环境；CUDA 使用独立 uv 环境，RoboPi HMM 使用板端 Python 与应用私有运行包。
+Inference 是与 Perception、State Estimator 并列的基础能力：对外使用 ROS 2，内部通过 FastAPI 隔离模型服务。CUDA、Houmo、Cloud 是可选执行插件；模型适配内部可使用张量或供应商协议，调用者不选择设备/协议。CUDA/Cloud 使用独立 uv 环境，RoboPi HMM 使用板端 Python 与应用私有运行包。
 
 当前提供公共 FastAPI runtime、ROS HTTP 客户端、模型 manifest、用户 YAML 准备入口、原生 AS2 双容器通信基准，以及 [YOPO](models/yopo/README.md) 和 [DiffPhys](models/diffphys/README.md) typed ROS 推理服务。YOPO Planner 的轨迹重建和执行在 `src/tool/navigation/planner/yopo/`，模型服务只返回候选 PVA/cost；DiffPhys返回原始策略输出和显式GRU隐状态，尚无运动执行接入。
 
@@ -67,7 +67,7 @@ ROS builder 的准备入口见 [OHOS 构建说明](../../../deployment/oh-ros-bu
 
 - `runtime/`：公共 FastAPI 应用工厂，每进程加载并预热一个模型，提供 `/health/live`、`/health/ready`、`/infer`。模型提供 factory、请求与响应 Pydantic 类型。
 - `ros2_adapter/`：`uav_inference` ROS Python 包，提供内部 HTTP 客户端及 YOPO ROS Service Adapter。
-- `manifest.json`：已支持模型 ID、仓库相对目录和描述。已登记 `yopo`、`diffphys`。
+- `manifest.json`：已支持模型 ID、仓库相对目录和描述；以实际 manifest 为准。
 - `models/`：各模型各自提供 README/setup、依赖声明和锁文件、schema 与推理 adapter。算法源码按功能归属保留原目录。
 
 ## 模型选择与准备
@@ -87,7 +87,7 @@ python3 deployment/inference/setup_models.py --config config/inference.example.y
 
 有已登记模型后，在 `inference.models` 中填写其 ID，脚本先验证全部选择，拒绝未知或重复 ID，再按顺序调用各模型 `setup.sh`；失败停止。`--check-cuda` 将同名标志转交模型准备脚本。空列表不操作，不卸载未选模型、不启动服务。现有本地配置如选择尚未登记的模型，会明确报错，不自动改写用户配置。
 
-manifest 不重复保存模型版本、权重或依赖。新增模型必须有 README、setup.sh、pyproject.toml 和 uv.lock，过程使用 [model-migration-cuda](../../../skill/model-migration-cuda/SKILL.md)。每模型环境与 ROS overlay 分离，不重建稳定 AS2 镜像。
+manifest 不重复保存模型版本、权重或依赖。新增模型必须有 README、setup.sh、pyproject.toml 和 uv.lock，CUDA 过程使用 [model-migration-cuda](../../../skill/model-migration-cuda/SKILL.md)，云端模型不要求本地权重或 CUDA 检查。每模型环境与 ROS overlay 分离，不重建稳定 AS2 镜像。
 
 ## 公共运行约定
 
@@ -143,3 +143,38 @@ Torch 与 HMM 后端均使用命名 NumPy 输入输出、固定张量契约及�
 分项计时，详见[后端契约](runtime/aerohub_inference/backends/README.md)。
 Torch 后端是模型环境内的可选导入，公共 HTTP runtime 和 RoboPi worker 不依赖 Torch。
 ROS service、HTTP schema、busy/取消语义继续由现有公共设施提供。
+
+
+## Cloud alternative 与 model_name
+
+新增 [Vision-language Function](models/vision_language/README.md) 使用
+`InferVisionLanguage` Action，对外选择 `model_name`，输入通用 prompt，返回文本与实际
+RGB 图像采集 header；不解释导航点、语义深度或运动。SPF 是其一个消费者。
+既有 YOPO、DiffPhys、YOLO 的 typed 服务保持兼容，不伪装为已经统一成一种万能消息。
+
+```bash
+cp config/inference.cloud.example.yaml config/inference.cloud.local.yaml
+```
+
+配置使用 `models.<model_name>.<engine>`，例如 `models.spf.cloud` 中填写
+`base_url/model/api_key`。对外调用 `model_name="spf"`，内部 `model` 可为 GLM 等供应商
+模型；更换供应商不改变逻辑身份。缺省的引擎不支持，环境变量也不会自动创建声明。
+一个引擎直接选用；多个引擎必须配置 `active_engines.spf: cloud`，选择失败不回退。
+当前 SPF 只有 Cloud 实现，不能只加 CUDA/Houmo 配置就声称本地已支持。
+
+每个条目可用 `api_key_env`、`base_url_env`、`model_env` 引用环境变量，被引用的值
+覆盖该条目的文件值，不使用全局 OPENAI_* 覆盖所有模型。保留单个被忽略的配置文件，
+无需向导或 XDG 密钥目录；请勿提交/打印密钥，修改后重启 worker。旧配置不自动改写。
+
+`runtime/aerohub_inference/engines.py` 惰性注册 `cuda`（既有 TorchBackend）、
+`houmo`（既有 HmmBackend）、`cloud`（CloudBackend）。三者不是一种张量 ABI；模型
+适配决定内部输入输出。现有模型无需为新增 Cloud 改动，VLM 目前只提供 Cloud 实现，
+无相应本地产物时明确拒绝 CUDA/Houmo，不隐式换模型或回退。
+
+Cloud worker 复用公共 runtime 的 busy/health/关闭规则。取消 ROS 请求不代表远端计算
+停止；执行槽保留到实际 HTTP 调用结束，HTTP runtime 也独立防止计算未结束时重入。
+不自动重试旧观测，真实图像年龄在推理前后检查。云端配置不必有本地权重，但仍需
+锁定客户端依赖、供应商模型标识与验证证据；可变模型别名不等于可复现的权重版本。
+
+本地协议、ROS 与真实云端/平台/飞行验证分开报告：见
+[Cloud 验证](../../../deployment/airsim/demos/spf_language_nav/cloud_inference_validation.md)。

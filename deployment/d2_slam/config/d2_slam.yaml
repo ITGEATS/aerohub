@@ -1,12 +1,12 @@
 %YAML:1.0
 ---
 imu: 1
-imu_topic: "/d2slam/input/imu"
-image0_topic: "/d2slam/input/rgb"
-depth_topic: "/d2slam/input/depth"
+imu_topic: "d2slam/input/imu"
+image0_topic: "d2slam/input/rgb"
+depth_topic: "d2slam/input/depth"
 is_compressed_images: 0
 imu_freq: 50
-image_freq: 10
+image_freq: 20
 frame_step: 1
 lcm_thread_freq: 50.0
 loop_detection_freq: 5.0
@@ -115,7 +115,7 @@ cnn_enable_tensorrt_int8: 0
 netvlad_int8_calib_table_name: ""
 superpoint_int8_calib_table_name: ""
 superpoint_config:
-   onnx_path: "/repo/src/basic_function/state_estimator/d2_slam/upstream/models/superpoint_series/superpoint_v1_dyn_size.onnx"
+   onnx_path: ""
    trt_engine_path: ""
    input_width: 320
    input_height: 240

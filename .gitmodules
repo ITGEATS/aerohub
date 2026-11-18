@@ -65,11 +65,11 @@
 [submodule "src/basic_function/state_estimator/d2_slam/upstream"]
 	path = src/basic_function/state_estimator/d2_slam/upstream
 	url = https://github.com/Air-Suck/D2SLAM.git
-	branch = aerohub
+	branch = feat/ros2-humble
 [submodule "src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs"]
 	path = src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs
-	url = https://github.com/HKUST-Swarm/swarm_msgs.git
-	branch = D2SLAM
+	url = https://github.com/Air-Suck/swarm_msgs.git
+	branch = feat/ros2-humble
 [submodule "src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver"]
 	path = src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver
 	url = https://github.com/HKUST-Swarm/ceres-solver.git

@@ -2,9 +2,11 @@ import math
 import struct
 
 import pytest
+from geometry_msgs.msg import Point32
+from sensor_msgs.msg import ChannelFloat32, PointCloud
 
 from uav_d2_slam_ros2.conversion import depth_meters_to_millimeters
-from uav_d2_slam_ros2.protocol import receive_packet, send_packet
+from uav_d2_slam_ros2.node import point_cloud_to_point_cloud2
 
 
 def test_depth_conversion_preserves_rows_and_invalid_values():
@@ -18,12 +20,24 @@ def test_depth_conversion_rejects_bad_stride():
         depth_meters_to_millimeters(b"\0" * 8, 2, 1, 4)
 
 
-def test_protocol_round_trip():
-    import socket
-    left, right = socket.socketpair()
-    try:
-        send_packet(left, {"kind": "rgb", "stamp_ns": 1}, b"abc")
-        assert receive_packet(right) == ({"kind": "rgb", "stamp_ns": 1}, b"abc")
-    finally:
-        left.close()
-        right.close()
+def test_point_cloud_conversion_preserves_points_and_rgb():
+    source = PointCloud()
+    source.header.frame_id = "native-world"
+    source.points = [Point32(x=1.0, y=2.0, z=3.0), Point32(x=4.0, y=5.0, z=6.0)]
+    source.channels = [ChannelFloat32(name="rgb", values=[1.25, 2.5])]
+
+    result = point_cloud_to_point_cloud2(source, "drone0/d2_slam_world")
+
+    assert result.header.frame_id == "drone0/d2_slam_world"
+    assert result.width == 2
+    assert result.point_step == 16
+    assert struct.unpack("<8f", bytes(result.data)) == (
+        1.0, 2.0, 3.0, 1.25, 4.0, 5.0, 6.0, 2.5)
+
+
+def test_point_cloud_conversion_rejects_mismatched_channel():
+    source = PointCloud()
+    source.points = [Point32()]
+    source.channels = [ChannelFloat32(name="rgb", values=[])]
+    with pytest.raises(ValueError):
+        point_cloud_to_point_cloud2(source, "world")

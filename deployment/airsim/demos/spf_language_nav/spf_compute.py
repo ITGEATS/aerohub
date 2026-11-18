@@ -1,7 +1,7 @@
 """Compute-role supervisor for the SPF demo (AS2 + FollowTimedPath + spf planner).
 
-VLM proxy runs in the workstation container (needs OpenCV); this supervisor
-owns only the compute-role children. Task orchestration lives in mission.py.
+The generic Inference Function runs in a separate compute-role container.
+This supervisor owns the execution/planner children; mission.py stays on the workstation.
 """
 import os
 from pathlib import Path
@@ -17,7 +17,8 @@ def main():
     commands = [
         ['python3', str(ROOT / 'deployment/airsim/as2/run.py')],
         ['ros2', 'run', 'uav_spf_planner', 'spf_planner', '--ros-args',
-         '-r', '__ns:=/drone0', '--params-file', str(APP / 'planner.yaml')],
+         '-r', '__ns:=/drone0', '--params-file', str(APP / 'planner.yaml'),
+         '-p', 'model_name:=' + os.environ.get('SPF_MODEL_NAME', 'spf')],
     ]
     children = []
     stopping = False
@@ -31,7 +32,7 @@ def main():
         for command in commands:
             children.append(subprocess.Popen(command, start_new_session=True))
         while not stopping:
-            if children[0].poll() is not None:
+            if any(child.poll() is not None for child in children):
                 raise RuntimeError('AS2 execution process exited')
             time.sleep(.1)
     finally:

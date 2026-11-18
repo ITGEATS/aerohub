@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-workspace=${FAST_LIVO2_WORKSPACE_CONTAINER:-/workspace}
-config=${FAST_LIVO2_CONFIG:-/config/airsim.yaml}
-camera=${FAST_LIVO2_CAMERA_CONFIG:-/config/camera.yaml}
+workspace=${FAST_LIVO2_WORKSPACE_CONTAINER:-/opt/fast_livo2_ws}
+config=${FAST_LIVO2_CONFIG:-/opt/fast_livo2/config/airsim.yaml}
+camera=${FAST_LIVO2_CAMERA_CONFIG:-/opt/fast_livo2/config/camera.yaml}
 
 source /opt/ros/humble/setup.bash
 source /root/aerostack2_ws/install/setup.bash

@@ -1,0 +1,14 @@
+# Copy to inference.cloud.local.yaml (gitignored).
+# Only declared engines are supported. Add local engines only after implementing them.
+models:
+  spf:
+    cloud:
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      model: glm-4v-flash
+      api_key: ""
+      # Optional: read this model's key from an environment variable instead.
+      api_key_env: OPENAI_API_KEY
+
+# Required only if a model declares multiple engines:
+# active_engines:
+#   spf: cloud

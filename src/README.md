@@ -22,8 +22,8 @@ src/
 
 ## 职责边界
 
-- Navigation Tool 包含算法与任务执行协调，运动执行仍由 Behavior 承担。目录归类不表示通用 Tool 生命周期、资源互斥或 Mission/Agent 已实现。
-- Inference 是基础能力。`models/` 保存各工作中模型计算部分的适配、前后处理、依赖与验证；公共 runtime、ROS Adapter 和设备后端提供在线推理服务。YOPO 轨迹重建等导航逻辑仍位于 `tool/navigation/planner/`。
+- Navigation Tool 包含算法与任务执行协调，运动执行仍由 Behavior 承担。操作函数包含 `to_pose` 和 `to_semantic_goal`，各 alternative 声明其支持的子集；SPF 仅支持后者，目前无到达判定，超时返回 TIMEOUT 而非成功。目录归类不表示通用 Tool 生命周期、资源互斥或 Mission/Agent 已实现。
+- Inference 是基础能力。`models/` 保存各工作中模型计算部分的适配、前后处理、依赖与验证；公共 runtime、ROS Adapter 和 CUDA/Houmo/Cloud alternative 提供在线推理服务。新增视觉语言接口按 `model_name` 调用；SPF 的 prompt 与导航解释仍归 Tool。YOPO 轨迹重建等导航逻辑仍位于 `tool/navigation/planner/`。
 - `navigation/interfaces/` 保留现有 `uav_planner_interfaces` 包。它历史上同时包含规划与 FollowTimedPath 执行协议；本次不拆包或更改类型，避免破坏现有消费者。
 - AS2、PX4 和仿真器依赖保留原位置。Demo Mission 脚本和部署编排仍在 `deployment/`，卡片仍在 `cards/`。
 - RGB-D Object Detection Tool 位于 `tool/object_detection/`，对应用提供单次观测接口和 AS2 Module；YOLO 模型适配保留在 `basic_function/inference/models/yolo26n_seg/`，不承担任务编排。

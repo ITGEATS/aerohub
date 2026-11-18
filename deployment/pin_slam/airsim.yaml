@@ -43,7 +43,10 @@ tracker:
   # Preserve enough AirSim geometry for stable motion tracking while bounding
   # registration work to the live platform's output-gap requirement.
   source_vox_down_m: 0.45
-  iter_n: 20
+  # Use the upstream standard tracker convergence budget. The reduced
+  # 20-iteration profile showed a repeatable yaw transient during the first
+  # horizontal leg in AirSim even though translation stayed accurate.
+  iter_n: 50
   valid_nn_k: 5
   GM_grad: 0.1
   GM_dist: 0.25

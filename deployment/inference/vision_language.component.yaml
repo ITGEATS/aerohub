@@ -1,0 +1,31 @@
+schema_version: '0.1'
+id: aerohub.inference.vision-language
+version: '0.2.0'
+source:
+  integration: [src/basic_function/inference/runtime, src/basic_function/inference/models/vision_language, src/basic_function/inference/ros2_adapter]
+  model: models.spf.cloud; active_engines selects explicitly when multiple alternatives exist
+provides: [inference.vision-language]
+cards: [cards/inference/vision-language.yaml]
+roles:
+  compute: [vision-language-worker, vision-language-ROS-adapter]
+  workstation: [ROS-client-only]
+runtime:
+  configuration: src/basic_function/inference/models/vision_language/worker.yaml
+  private_configuration: config/inference.cloud.local.yaml
+  credentials: per-model-engine api_key or explicit api_key_env in ignored YAML
+  configure: copy config/inference.cloud.example.yaml to config/inference.cloud.local.yaml and configure models.spf.cloud
+  prepare: bash src/basic_function/inference/models/vision_language/setup.sh
+  lock: src/basic_function/inference/models/vision_language/uv.lock
+  launch: python3 deployment/inference/vision_language_run.py
+  ros_adapter: python3 -m uav_inference.vision_language_node
+  endpoint: http://127.0.0.1:8013
+  readiness: HTTP /health/ready plus a valid camera image and successful public ROS request
+  shutdown: SIGINT supervisor; join owned processes; remote-provider cancellation is not guaranteed
+  rollback: stop clients and supervisor; restore binding/source/lock; rebuild matching ROS overlay and worker environment
+resources:
+  motion: none
+  concurrency: single-inflight-per-ROS-adapter-and-HTTP-worker; cancel does not release running computation
+  network: outbound-cloud-HTTPS; explicit data-egress permission required
+validation:
+  stage: real-cloud-and-platform-input-verified
+  evidence: deployment/airsim/demos/spf_language_nav/live_cloud_validation.md

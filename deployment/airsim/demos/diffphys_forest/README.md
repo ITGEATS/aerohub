@@ -1,7 +1,7 @@
 # DiffPhys 单机森林 Demo
 
 2026-11-11：保留当前单相机配置，以**目标速度8 m/s的正常森林任务**作为本阶段已通过的验收基线。
-证据为`log/diffphys/forest-long-40-takeoff4-repeat/`；单轮通过，实际速度中位6.359、
+证据为`dev/diffphys/evidence/forest-long-40-takeoff4-repeat/`；单轮通过，实际速度中位6.359、
 峰值8.917 m/s，不等于全程8 m/s或稳定重复通过。故障停车与更高速能力仍有未完成项，
 不声明整体复现成功。问题、失败与上游差异统一见[已知问题](KNOWN_ISSUES.md)。
 

@@ -2,41 +2,43 @@
 
 依赖闭包 = rclpy + stdlib（阶段 6 板端审计约束；禁止 numpy/cv2/pydantic/requests）。
 
-每循环：pose/camera_info 就绪校验 → VLM query（经代理，图像不落板端）→
+每循环：pose/camera_info 就绪校验 → Inference Function（采图与模型调用）→
 projector 真针孔反投影（D3）→ trajectory 修订（上游 rotate→forward 语义）→
-首段 send_goal / 后续 modify FollowTimedPath → 等待段执行完毕 → 下一循环。
-收口（D7）：max_cycles / max_duration_s 耗尽 → is_final 修订 → STOPPED；
-连续 3 次 VLM 失败或状态过期 → stop 并 STOPPED；cancel → 速度门控 → STOPPED。
+每轮独立 FollowTimedPath goal → 等待段执行完毕 → 下一循环。
+Navigation to_semantic_goal 无到达判定：超时 → stop → TIMEOUT，绝不报告到达成功。
+旧 spf/goal 仅保留为调试入口；轮数耗尽返回 EXECUTION_FAILED。
 """
+import copy
 import json
 import math
 import threading
 import time
+import uuid
 
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from uav_planner_interfaces.action import FollowTimedPath
-from uav_planner_interfaces.action._follow_timed_path import FollowTimedPath_SendGoal
 from uav_planner_interfaces.msg import TimedPath, TimedTrajectoryPoint
 
 from .projector import project
 from .trajectory import build_revision
 from .vlm_client import VlmQueryClient
-
-STATES = ("IDLE", "RUNNING", "STOPPING", "STOPPED", "FAULT")
+from .semantic_navigation import SemanticNavigationServer, validate_semantic_goal
 
 # D13: final status carries the shared navigation result vocabulary
 # (uav_planner_interfaces/action/NavigateToPose Result.code) so a future
 # Mission/Tool layer consumes SPF tasks uniformly with YOPO/SUPER; the
 # internal sub-reason stays in `detail`.
-SHARED_CODES = {"task_complete": "SUCCEEDED", "cancelled": "CANCELED",
+SHARED_CODES = {"task_timeout": "TIMEOUT", "step_limit": "EXECUTION_FAILED",
+                "cancelled": "CANCELED",
                 "not_ready": "NOT_READY", "goal_timeout": "TIMEOUT",
                 "vlm_failures": "EXECUTION_FAILED",
                 "goal_rejected": "EXECUTION_FAILED",
@@ -44,7 +46,7 @@ SHARED_CODES = {"task_complete": "SUCCEEDED", "cancelled": "CANCELED",
 
 
 def quat_to_yaw(q) -> float:
-    """纯 stdlib：ENU 逆时针 yaw（与 AirSim NED yaw 数值一致）。"""
+    """纯 stdlib：从 ROS 姿态提取 ENU 逆时针 yaw。"""
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                       1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
@@ -59,7 +61,7 @@ class SpfPlannerNode(Node):
         self.declare_parameter("base_yaw_rate", 30.0)
         self.declare_parameter("min_command_duration", 2.0)
         self.declare_parameter("adaptive_mode", False)
-        self.declare_parameter("max_result_age_s", 6.0)
+        self.declare_parameter("model_name", "spf")
         self.declare_parameter("vlm_timeout_s", 30.0)
         self.declare_parameter("max_observation_age_s", 1.0)
         self.declare_parameter("max_consecutive_vlm_failures", 3)
@@ -75,21 +77,20 @@ class SpfPlannerNode(Node):
             "min_altitude_m")}
 
         self._lock = threading.Lock()
+        self._pose_msg = PoseStamped()
+        self._motion_pending = False
         self._pose = None       # (wall, x, y, z, yaw)
-        self._twist_speed = None  # (wall, m/s horizontal)
+        self._twist_speed = None  # (wall, 3D speed m/s)
         self._intrinsics = None   # (wall, fx, fy, cx, cy, w, h, stamp_sec)
         self._state = "IDLE"
         self._job = None          # goal payload dict
         self._stop_requested = False
         self._revision = 0
         self._task_id = ""
-        self._feedback_elapsed = 0.0
-        self._feedback_revision = 0
         self._goal_handle_accepted = threading.Event()
         self._goal_result_event = threading.Event()
         self._goal_rejected = False
         self._goal_success = None
-        self._result_done = threading.Event()
         self._vlm_attempts = 0
 
         # Topic/service/action names are RELATIVE to the node namespace; the node
@@ -106,11 +107,10 @@ class SpfPlannerNode(Node):
         self._status_pub = self.create_publisher(String, "spf/status", 10)
 
         self._action = ActionClient(self, FollowTimedPath, "follow_timed_path")
-        self._modify = self.create_client(FollowTimedPath_SendGoal,
-                                          "follow_timed_path/_behavior/modify")
         self._stopper = self.create_client(Trigger, "follow_timed_path/_behavior/stop")
-        self._vlm = VlmQueryClient(self,
-                                   self.get_parameter("max_result_age_s").value)
+        self._vlm = VlmQueryClient(self, self.get_parameter("model_name").value)
+
+        self._semantic = SemanticNavigationServer(self)
 
         self._worker = threading.Thread(target=self._work_loop, daemon=True)
         self._worker.start()
@@ -121,12 +121,13 @@ class SpfPlannerNode(Node):
     def _on_pose(self, msg: PoseStamped):
         p, q = msg.pose.position, msg.pose.orientation
         with self._lock:
+            self._pose_msg = copy.deepcopy(msg)
             self._pose = (time.monotonic(), p.x, p.y, p.z, quat_to_yaw(q))
 
     def _on_twist(self, msg: TwistStamped):
         v = msg.twist.linear
         with self._lock:
-            self._twist_speed = (time.monotonic(), math.hypot(v.x, v.y))
+            self._twist_speed = (time.monotonic(), math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z))
 
     def _on_camera_info(self, msg: CameraInfo):
         k = msg.k
@@ -137,38 +138,78 @@ class SpfPlannerNode(Node):
                                 msg.width, msg.height,
                                 msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
 
-    def _on_goal(self, msg: String):
-        try:
-            payload = json.loads(msg.data)
-            instruction = str(payload["instruction"])
-        except (ValueError, KeyError):
-            self._publish_status("rejected", reason="bad_goal")
-            return
+    def _current_pose(self):
         with self._lock:
-            if self._state == "RUNNING":
-                self._publish_status("rejected", reason="busy")
-                return
-            self._job = {"instruction": instruction,
-                         "max_cycles": int(payload.get("max_cycles", 8)),
-                         "max_duration_s": float(payload.get("max_duration_s", 120.0))}
+            return copy.deepcopy(self._pose_msg)
+
+    def _start_job(self, instruction, timeout, max_cycles=None):
+        with self._lock:
+            self._job = {"instruction": instruction, "max_duration_s": timeout,
+                         "max_cycles": max_cycles,
+                         "deadline": time.monotonic() + timeout}
             self._state = "RUNNING"
-            self._task_id = f"spf-{int(time.time())}"
+            self._task_id = "spf-" + uuid.uuid4().hex
             self._revision = 0
             self._stop_requested = False
+            self._motion_pending = False
             self._vlm_attempts = 0
         self._publish_status("started", instruction=instruction)
 
-    def _on_cancel(self, request, response):
+    def _on_goal(self, msg: String):
+        """Legacy debugging entry; never claims semantic goal attainment."""
+        try:
+            payload = json.loads(msg.data)
+            instruction = payload["instruction"]
+            timeout = float(payload.get("max_duration_s", 120.0))
+            cycles = int(payload.get("max_cycles", 8))
+            validate_semantic_goal(instruction, timeout)
+            if cycles <= 0:
+                raise ValueError("max_cycles must be positive")
+        except (ValueError, KeyError, TypeError, OverflowError):
+            self._publish_status("rejected", reason="bad_goal")
+            return
         with self._lock:
-            if self._state in ("IDLE", "STOPPED"):
-                response.success = True
-                response.message = f"already {self._state}"
-                return response
-            self._stop_requested = True
-            self._state = "STOPPING"
+            busy = (self._semantic._reserved or self._state not in ("IDLE", "STOPPED"))
+            if not busy:
+                # Reserve before dropping the lock; the Action must not race us.
+                self._state = "STARTING"
+        if busy:
+            self._publish_status("rejected", reason="busy")
+            return
+        self._start_job(instruction, timeout, max_cycles=cycles)
+
+    def _request_stop(self):
+        with self._lock:
+            if self._state not in ("IDLE", "STOPPED", "FAULT"):
+                self._stop_requested = True
+                self._state = "STOPPING"
+
+    def _on_cancel(self, request, response):
+        self._request_stop()
         response.success = True
-        response.message = "cancel initiated"
+        response.message = "cancel requested; await terminal result for stop confirmation"
         return response
+
+    def _interrupt_reason(self):
+        with self._lock:
+            if self._stop_requested:
+                return "cancelled"
+            if self._job and time.monotonic() >= self._job["deadline"]:
+                return "task_timeout"
+        return None
+
+    def _check_interrupt(self):
+        reason = self._interrupt_reason()
+        if reason:
+            self._do_stop(final=False, reason=reason)
+        return reason is not None
+
+    def _backoff(self):
+        deadline = time.monotonic() + self._cfg["vlm_retry_backoff_s"]
+        while time.monotonic() < deadline:
+            if self._interrupt_reason():
+                return
+            time.sleep(0.05)
 
     # ---------- 主循环 ----------
     def _work_loop(self):
@@ -178,64 +219,67 @@ class SpfPlannerNode(Node):
                 job, state = self._job, self._state
             if state not in ("RUNNING", "STOPPING"):
                 continue
-            if self._stop_requested:
-                self._do_stop(final=False)
+            if self._check_interrupt():
                 continue
-            if self._cycles_exhausted(job):
-                self._finalize()
+            if (job.get("max_cycles") is not None
+                    and job.get("cycles_done", 0) >= job["max_cycles"]):
+                self._do_stop(final=False, reason="step_limit")
                 continue
-            revision = self._run_one_cycle(job)
+            try:
+                revision = self._run_one_cycle(job)
+            except Exception as exc:
+                # A malformed model response must not kill the only worker and
+                # leave an accepted semantic Action running without a deadline.
+                self.get_logger().error(f"SPF cycle failed: {exc}")
+                self._do_stop(final=False, reason="segment_failed")
+                continue
             if revision is None:
                 continue  # 状态已在 _run_one_cycle 内收口
-            with self._lock:
-                self._job["cycles_done"] = self._job.get("cycles_done", 0) + 1
-            self._wait_segment(revision)
-
-    def _cycles_exhausted(self, job) -> bool:
-        if job.get("cycles_done", 0) >= job["max_cycles"]:
-            return True
-        started = job.get("started_wall")
-        if started is None:
-            job["started_wall"] = time.monotonic()
-            return False
-        return time.monotonic() - started > job["max_duration_s"]
+            if self._wait_segment(revision):
+                with self._lock:
+                    self._job["cycles_done"] = self._job.get("cycles_done", 0) + 1
 
     def _ready(self):
         age = self.get_parameter("max_observation_age_s").value
         with self._lock:
             ok = (self._pose and time.monotonic() - self._pose[0] < age
                   and self._intrinsics and time.monotonic() - self._intrinsics[0] < 5.0)
-        return ok and self._action.server_is_ready() and self._modify.service_is_ready() \
-            and self._stopper.service_is_ready()
+        return ok and self._action.server_is_ready() and self._stopper.service_is_ready()
 
     def _run_one_cycle(self, job):
         """执行一个 SPF 循环；返回修订号，或 None（失败已收口）。"""
         if not self._ready():
-            self._finish("STOPPED", "not_ready")
+            self._do_stop(final=False, reason="not_ready")
             return None
         failures = 0
         while failures < self.get_parameter("max_consecutive_vlm_failures").value:
-            with self._lock:
-                stamp = self._intrinsics[7]
+            if self._check_interrupt():
+                return None
             self._vlm_attempts += 1
-            result = self._vlm.request(job["instruction"], stamp,
-                                       self._cfg["vlm_timeout_s"])
+            result = self._vlm.request(job["instruction"],
+                                       self._cfg["vlm_timeout_s"],
+                                       interrupted=self._interrupt_reason)
+            if self._check_interrupt():
+                return None
             if not result.get("ok"):
                 failures += 1
                 self.get_logger().warn(
                     'vlm failure %d: %s' % (failures, result.get("error_code")))
                 self._publish_status("vlm_failure", code=result.get("error_code"))
-                # The substitute model (D11) free tier rate-limits and returns
-                # empty/invalid JSON; immediate retries amplify it.
-                time.sleep(self._cfg["vlm_retry_backoff_s"])
+                # Back off on provider failures or invalid output instead of
+                # immediately repeating a request.
+                self._backoff()
                 continue
-            # 代理已回发结构化 point/depth（解析在 PC 侧 prompt.py，失败即 ok=False）
+            # Generic Function returns text; this Tool parses SPF point/depth semantics.
             if "point" not in result:
                 failures += 1
                 self.get_logger().warn('vlm failure %d: missing_point' % failures)
                 self._publish_status("vlm_failure", code="missing_point")
-                time.sleep(self._cfg["vlm_retry_backoff_s"])
+                self._backoff()
                 continue
+            if not self._ready():
+                self._do_stop(final=False, reason="not_ready")
+                return None
             with self._lock:
                 pose, intr = self._pose, self._intrinsics
             action = project(result["point"], result.get("depth", 4),
@@ -259,6 +303,8 @@ class SpfPlannerNode(Node):
         step-and-observe cycle cannot guarantee, so each cycle is its own goal
         with is_final set (deviation from the plan's "后续 modify" noted in
         skill/temp)."""
+        if self._check_interrupt():
+            return None
         if action is None:
             return None
         _, x0, y0, z0, yaw0 = pose
@@ -278,11 +324,16 @@ class SpfPlannerNode(Node):
         self._goal_result_event.clear()
         self._goal_rejected = False
         self._goal_success = None
-        future = self._action.send_goal_async(goal, feedback_callback=self._on_feedback)
+        self._motion_pending = True
+        future = self._action.send_goal_async(goal)
         future.add_done_callback(self._on_goal_response)
-        if not self._goal_handle_accepted.wait(15.0):
-            self._finish("STOPPED", "goal_timeout")
-            return None
+        deadline = time.monotonic() + 15.0
+        while not self._goal_handle_accepted.wait(0.05):
+            if self._check_interrupt():
+                return None
+            if time.monotonic() >= deadline:
+                self._do_stop(final=False, reason="goal_timeout")
+                return None
         if self._goal_rejected:
             self._finish("STOPPED", "goal_rejected")
             return None
@@ -296,64 +347,71 @@ class SpfPlannerNode(Node):
             rf.add_done_callback(self._on_goal_result)
             self._goal_rejected = False
         else:
+            self._motion_pending = False
             self._goal_rejected = True
         self._goal_handle_accepted.set()
 
     def _on_goal_result(self, future):
         # GoalResult status: 4 == SUCCEEDED (rclpy action goal status).
+        self._motion_pending = False
         self._goal_success = future.result().status == 4
         self._goal_result_event.set()
-
-    def _on_feedback(self, msg):
-        fb = msg.feedback
-        self._feedback_revision = fb.revision
-        self._feedback_elapsed = fb.elapsed
 
     def _wait_segment(self, revision):
         duration = getattr(self, "_plan_duration", 2.0)
         deadline = time.monotonic() + duration + 30.0
         while time.monotonic() < deadline:
-            with self._lock:
-                if self._stop_requested or self._state != "RUNNING":
-                    return
+            if self._check_interrupt():
+                return
             if self._goal_result_event.wait(0.2):
                 if self._goal_success:
-                    return
+                    return True
                 self._publish_status("segment_failed", revision=revision)
-                self._finish("STOPPED", "segment_failed")
+                self._do_stop(final=False, reason="segment_failed")
                 return
             time.sleep(0.05)
         self._publish_status("segment_timeout", revision=revision)
-
-    def _finalize(self):
-        # Each SPF cycle is a standalone is_final goal executed to completion,
-        # so when cycles/duration are exhausted the drone already holds at the
-        # last segment end; no extra trajectory is sent (D7 collapse).
-        self._finish("STOPPED", "task_complete")
+        self._do_stop(final=False, reason="segment_failed")
 
     def _do_stop(self, final: bool, reason: str = "cancelled"):
-        try:
-            self._stopper.call_async(Trigger.Request())
-        except Exception as exc:
-            self._publish_status("stop_call_failed", detail=str(exc))
+        with self._lock:
+            self._state = "STOPPING"
         gate_deadline = time.monotonic() + 10.0
-        stable = 0.0
+        stable_since = None
+        stop_future = None
+        stop_acked = False
         while time.monotonic() < gate_deadline:
+            # Reissue until acknowledged: a goal acceptance may arrive after the
+            # first stop request. Never release ownership while it is pending.
+            if stop_future is not None and stop_future.done():
+                try:
+                    stop_acked = bool(stop_future.result().success)
+                except Exception:
+                    stop_acked = False
+                stop_future = None
+            if stop_future is None and not stop_acked:
+                try:
+                    stop_future = self._stopper.call_async(Trigger.Request())
+                except Exception as exc:
+                    self._publish_status("stop_call_failed", detail=str(exc))
             with self._lock:
                 speed = self._twist_speed
-            if speed and speed[1] < 0.2:
-                stable += 0.1
-                if stable >= 1.0:
+            now = time.monotonic()
+            fresh = speed and 0 <= now - speed[0] < 0.5
+            if stop_acked and not self._motion_pending and fresh and speed[1] < 0.2:
+                if stable_since is None:
+                    stable_since = now
+                if now - stable_since >= 1.0:
                     self._finish("STOPPED", reason)
                     return
             else:
-                stable = 0.0
-            time.sleep(0.1)
-        with self._lock:
-            self._state = "FAULT"
-        self._publish_status("fault", reason="STOP_UNCONFIRMED",
-                             detail=f"{reason}_stop_gate_timeout",
-                             stop_confirmed=False)
+                stable_since = None
+            # If acceptance was still in flight, don't let an earlier stop ACK
+            # stand in for stopping the subsequently accepted trajectory.
+            if self._motion_pending and self._goal_handle_accepted.is_set():
+                stop_acked = False
+            time.sleep(0.05)
+        self._finish("FAULT", reason)
 
     def _finish(self, state: str, reason: str):
         with self._lock:
@@ -364,9 +422,14 @@ class SpfPlannerNode(Node):
             self._state = state
             self._job = None
             self._stop_requested = False
-        self._publish_status(state, reason=SHARED_CODES.get(reason, "EXECUTION_FAILED"),
-                             detail=reason, cycles_done=cycles,
-                             stop_confirmed=(state == "STOPPED"))
+        terminal = dict(reason=(SHARED_CODES.get(reason, "EXECUTION_FAILED")
+                                if state == "STOPPED" else "STOP_UNCONFIRMED"),
+                        detail=reason, cycles_done=cycles,
+                        stop_confirmed=(state == "STOPPED"))
+        # Persist terminal fields for late subscribers and Action result delivery.
+        self._terminal_status = terminal
+        self._semantic.complete(terminal)
+        self._publish_status(state, **terminal)
 
     def _make_timed_path(self, plan, revision, is_final) -> TimedPath:
         now = self.get_clock().now().to_msg()
@@ -426,16 +489,21 @@ class SpfPlannerNode(Node):
     def _publish_heartbeat(self):
         # Periodic snapshot so a late-joining monitor (mission.py) always has a
         # fresh status even between discrete events; mirrors the state machine.
-        self._publish_status(self._state)
+        extra = getattr(self, "_terminal_status", {}) if self._state in ("STOPPED", "FAULT") else {}
+        self._publish_status(self._state, **extra)
 
 
 def main():
     rclpy.init()
     node = SpfPlannerNode()
+    executor = MultiThreadedExecutor(num_threads=3)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        node._semantic.destroy()
+        executor.shutdown()
         node.destroy_node()
         rclpy.try_shutdown()

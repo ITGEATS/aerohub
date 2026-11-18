@@ -1,36 +1,28 @@
-# DPV-SLAM shared-environment acceptance, 2026-11-14
+# DPV-SLAM 原生 ROS 2 Humble 复现记录
 
-## Scope and Skills
+## 范围
 
-Used `uav-ros-adaptation` for timestamp, deterministic runtime and Adapter
-coverage contracts, and `uav-sim-e2e-validation` for shadow, authority,
-failure recovery and evidence rules. The platform remained visible AirSim
-1.8.1 (`DISPLAY=:3`) + locked flight-board PX4 SITL + shared
-`onboard_computer:v0.1.0`; no algorithm-specific image was built.
+- 源码：`src/basic_function/state_estimator/dpv_slam/upstream@0ac95b656d1fda91c271d2a106460d19ad966fc7`
+- 镜像：`aerohub/dpv-slam:ros2-humble@sha256:5341db3f2f08f7d5376bddcf7288d7b843900dcdbf0cfbc9e1d4cae1b618c783`
+- 环境：`onboard_computer:v0.1.1` + `flight_board:v0.1.0` + 有屏 AirSim 1.8.1，`DISPLAY=:1`
+- 使用 Skill：`uav-ros-adaptation`、`uav-reproducible-build`、`as2-extension-integration`、`uav-sim-e2e-validation`、`uav-capability-cards`
 
-## Changes and diagnosis
+DPVO 算法、CUDA 扩展、原生 Humble Adapter 和 AS2 插件均编入自包含镜像。运行时不挂载源码、workspace 或 overlay，不运行 ROS 1、Proxy 或 bridge。
 
-- Preserved DPVO observation timestamps through removed-frame delta chains.
-- Fixed the runtime seed to upstream's official evaluation seed, `1234`.
-- Used an AirSim profile based on upstream `fast.yaml` and official
-  `BACKEND_THRESH=18`; loop closure remains enabled.
-- Separated loop-closing correction and high-rate canonical freshness. Schema
-  0.2 uses 2.5 seconds globally and retains 0.1 seconds for control state.
-- Matched candidate output to source stamps reported by the Adapter.
-- Fault tests fly an observable square, stop the owned container, verify
-  canonical continuity, then Land and disarm.
+## 关键处理
 
-Historical failures remain under `log/dpv_slam/`, including old 1.5-second
-gate failures and the initial missing fault-ready implementation.
+- 保留被移除帧的原始观测时间，并按 Adapter 报告的 source stamp 配对真值。
+- 固定上游评测随机种子 `1234`，保留官方 `BACKEND_THRESH=18` 和回环能力。
+- 区分低频视觉全局校正与高频 canonical 状态：视觉输出允许不均匀关键帧间隔，控制状态仍按 0.1 s freshness 验证。
+- 单目尺度只在满足运动基线和拟合门后冻结；稀疏点是视觉地标，不是占据地图。
+- 故障用例先完成可观测运动，再停止传感器或算法容器，验证 canonical 状态保持、Land、disarm 与资源清理。
 
-## Final matrix
+## 最终矩阵
 
-| Scenario | Evidence | Result |
-| --- | --- | --- |
-| Shadow | `log/dpv_slam/shadow-schema-0.2-current-frame-20261114-01` | Pass: 0.178 m RMSE, 2.274 s global gap, full coverage |
-| Authority | `log/dpv_slam/authority-schema-0.2-current-frame-20261114-01` | Pass: 0.162 m RMSE; canonical gaps 0.024/0.033 s |
-| RGB loss | `log/dpv_slam/sensor-fault-schema-0.2-final-20261114-01` | Pass: 2.03 s detection, 50 hold samples, Land/disarm |
-| Algorithm exit | `log/dpv_slam/algorithm-fault-schema-0.2-final-20261114-01` | Pass: 2.05 s detection, 50 hold samples, Land/disarm |
+- `log/dpv_slam/airsim-shadow-24patch-20261118/gate-report.json`：通过，position RMSE 0.162 m，候选 10.35 Hz，完整覆盖。
+- `log/dpv_slam/airsim-authority-24patch-20261118/gate-report.json`：通过，position RMSE 0.246 m，canonical arrival gap 0.032 s。
+- `log/dpv_slam/airsim-sensor-fault-24patch-20261118/result.json`：RGB 失效约 1.90 s 检出，Land/disarm 通过。
+- `log/dpv_slam/airsim-algorithm-fault-24patch-20261118/result.json`：算法退出约 1.89 s 检出，Land/disarm 通过。
+- 对应 `cleanup.json` 均确认容器清理和端口释放。
 
-The result is reproduced for locked AirSim + PX4 SITL. Real flight, PX4 local
-estimator failure and sparse-landmark conversion remain outside this claim.
+历史门槛失败与补丁诊断镜像保留在 `log/dpv_slam/`，不作为成功证据。物理板、真机和 PX4 local estimator 失效尚未验证。

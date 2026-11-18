@@ -1,12 +1,12 @@
 """SPF language-navigation workstation mission.
 
 Readiness -> teleport initial pose (official RPC, Blocks ignores settings X/Y)
--> native Takeoff -> spf/goal (language instruction) -> monitor spf/status and
+-> native Takeoff -> to_semantic_goal (language instruction) -> monitor spf/status and
 ground-truth pose -> gates -> native Land -> disarmed. Ground truth is used
 for scoring only (per validation skill); the planner never consumes it.
 
 Fault cases (orchestrated by run.py): stale (sensor container paused),
-vlm-down (proxy container stopped), cancel (mid-task spf/cancel).
+vlm-down (proxy container stopped), cancel (mid-task Action cancellation).
 """
 import argparse
 import json
@@ -19,12 +19,12 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from as2_msgs.action import Takeoff, Land
+from uav_planner_interfaces.action import NavigateToSemanticGoal
 from as2_msgs.msg import PlatformInfo
 from geometry_msgs.msg import PoseStamped
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import String
-from std_srvs.srv import Trigger
 from std_srvs.srv import SetBool
 from uav_as2_sensor_adapter.rpc import Rpc
 
@@ -55,8 +55,8 @@ class Mission(Node):
         # node name (TakeoffBehavior/LandBehavior), matching the yopo demo.
         self.takeoff = ActionClient(self, Takeoff, '/drone0/TakeoffBehavior')
         self.land = ActionClient(self, Land, '/drone0/LandBehavior')
-        self.goal_pub = self.create_publisher(String, '/drone0/spf/goal', 10)
-        self.cancel_cli = self.create_client(Trigger, '/drone0/spf/cancel')
+        self.navigation = ActionClient(
+            self, NavigateToSemanticGoal, '/drone0/navigate_to_semantic_goal')
         self.create_subscription(PlatformInfo, '/drone0/platform/info',
                                  lambda m: setattr(self, 'platform', m), qos_profile_sensor_data)
         self.arm_cli = self.create_client(SetBool, '/drone0/set_arming_state')
@@ -111,7 +111,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--instruction', required=True)
-    parser.add_argument('--max-cycles', type=int, default=8)
     parser.add_argument('--max-duration-s', type=float, default=180.0)
     parser.add_argument('--target', type=float, nargs=3, required=True,
                         help='ground-truth target x y z (odom frame, scoring only)')
@@ -131,7 +130,7 @@ def main():
     rclpy.init()
     mission = Mission(args)
     result = {'instruction': args.instruction, 'fault': args.fault,
-              'max_cycles': args.max_cycles, 'gates': {}, 'samples': []}
+              'navigation_timeout_s': args.max_duration_s, 'gates': {}, 'samples': []}
     stage = 'readiness'
     try:
         mission.spin_until(lambda: mission.clock is not None, 60, 'no /clock')
@@ -216,10 +215,21 @@ def main():
         tx, ty, tz = args.target
         start = mission.pose.pose.position
         d0 = math.dist((start.x, start.y, start.z), (tx, ty, tz))
-        goal_msg = String(data=json.dumps({
-            'instruction': args.instruction, 'max_cycles': args.max_cycles,
-            'max_duration_s': args.max_duration_s}))
-        mission.goal_pub.publish(goal_msg)
+        if not mission.navigation.wait_for_server(timeout_sec=15.0):
+            raise TimeoutError('to_semantic_goal unavailable')
+        goal = NavigateToSemanticGoal.Goal()
+        goal.description = args.instruction
+        goal.timeout = args.max_duration_s
+        accepted = mission.navigation.send_goal_async(goal)
+        rclpy.spin_until_future_complete(mission, accepted, timeout_sec=15.0)
+        if not accepted.done():
+            accepted.add_done_callback(
+                lambda f: f.result().cancel_goal_async() if f.result().accepted else None)
+            raise TimeoutError('to_semantic_goal acceptance timeout')
+        navigation_handle = accepted.result()
+        if not navigation_handle.accepted:
+            raise RuntimeError('to_semantic_goal rejected')
+        navigation_result = navigation_handle.get_result_async()
 
         injected = False
         deadline = time.time() + args.timeout
@@ -228,10 +238,13 @@ def main():
             rclpy.spin_once(mission, timeout_sec=0.1)
             if mission.args.fault == 'cancel' and not injected and len(mission.samples) >= 3:
                 injected = True
-                mission.cancel_cli.wait_for_service(10)
-                mission.cancel_cli.call_async(Trigger.Request())
+                navigation_handle.cancel_goal_async()
                 (args.output / 'fault-injection.json').write_text(json.dumps(
                     {'fault': 'cancel', 'wall': time.time(), 'cycles_seen': len(mission.samples)}))
+            elif args.fault in ('stale', 'vlm-down') and not injected and len(mission.samples) >= 3:
+                injected = True
+                (args.output / 'fault-request.json').write_text(json.dumps(
+                    {'fault': args.fault, 'wall': time.time()}))
             if mission.pose and time.time() - last_sample > 1.0:
                 last_sample = time.time()
                 p = mission.pose.pose.position
@@ -251,9 +264,18 @@ def main():
                              'time_stamp': info.get('time_stamp')})
                         collision_baseline['time_stamp'] = info.get('time_stamp')
             status = mission.status or {}
-            if status.get('state') in ('STOPPED', 'FAULT'):
+            if navigation_result.done():
                 break
 
+        if not navigation_result.done():
+            navigation_handle.cancel_goal_async()
+            rclpy.spin_until_future_complete(mission, navigation_result, timeout_sec=15.0)
+        if not navigation_result.done():
+            raise TimeoutError('navigation stop unconfirmed')
+        terminal = navigation_result.result().result
+        result['navigation_result'] = dict(
+            success=terminal.success, code=terminal.code, reason=terminal.reason,
+            stop_confirmed=terminal.stop_confirmed)
         end = mission.pose.pose.position
         d1 = math.dist((end.x, end.y, end.z), (tx, ty, tz))
         status = mission.status or {}
@@ -264,22 +286,20 @@ def main():
         cycles = status.get('cycles_done', 0)
         attempts = status.get('vlm_attempts', 0)
         result['metrics'] = {'cycles_done': cycles, 'vlm_attempts': attempts,
-                             'parse_ratio': round(cycles / attempts, 4) if attempts else None}
+                             'cycle_completion_ratio': round(cycles / attempts, 4) if attempts else None}
         if args.fault == 'none':
-            result['gates']['cycles'] = 'PASS' if cycles >= args.max_cycles else 'FAIL'
-            # Per the 2026-11-16 minimal acceptance scope (locked in the plan
-            # BEFORE these runs), the parse ratio is a recorded metric only,
-            # not a gate: it belongs to the legacy-stage M1 matrix, and the
-            # substitute model (D11) is known to return ~20% parseable
-            # responses. The minimal M5 gate is cycle completion + no
-            # collision + convergence, which the cycles gate enforces.
-            result['parse_ratio_recorded'] = result['metrics']['parse_ratio']
-        else:
-            # Fault cases judge the stop handoff, not task completion: the task is
-            # expected to terminate before max_cycles, so cycles is not a gate.
-            result['gates']['cycles'] = 'NOT-EXECUTED'
-        result['gates']['stop_state'] = ('PASS' if status.get('state') in
-                                         ('STOPPED', 'FAULT') else 'FAIL')
+            result['gates']['trajectory_execution'] = 'PASS' if cycles > 0 else 'FAIL'
+        # This gate verifies the timeout-only contract, NOT goal attainment.
+        expected_codes = {'none': ('TIMEOUT',), 'cancel': ('CANCELED',),
+                          'stale': ('NOT_READY',),
+                          'vlm-down': ('EXECUTION_FAILED', 'TIMEOUT')}[args.fault]
+        result['gates']['navigation_contract'] = (
+            'PASS' if terminal.code in expected_codes and not terminal.success else 'FAIL')
+        if args.fault != 'none':
+            result['gates']['fault_injected'] = 'PASS' if injected else 'FAIL'
+        result['gates']['stop_state'] = 'PASS' if terminal.stop_confirmed else 'FAIL'
+        if not terminal.stop_confirmed:
+            raise RuntimeError('navigation stop unconfirmed; recovery required')
 
         stage = 'land'
         land_goal = Land.Goal()

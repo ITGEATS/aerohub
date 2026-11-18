@@ -3,7 +3,7 @@
   "scope": "Current-camera 8m/s target-speed normal forest task; single-run evidence",
   "normal_task": "passed",
   "overall_reproduction": "incomplete",
-  "evidence": "log/diffphys/forest-long-40-takeoff4-repeat",
+  "evidence": "dev/diffphys/evidence/forest-long-40-takeoff4-repeat",
   "configuration": {
     "profile": "high_speed",
     "camera": "640x480 HFOV91 Pitch20 DepthPlanar [0.5,0,-0.1]",
