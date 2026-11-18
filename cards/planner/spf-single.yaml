@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: planner.spf-single
-version: "0.2.0"
+version: "0.4.0"
 type: tool
 name: SPF language-navigation single-vehicle tool
 description: Accepts a natural-language goal and executes closed-loop See-Point-Fly navigation (FPV image -> cloud VLM point + semantic depth -> pinhole back-projection -> rotate/forward timed segments) through the existing FollowTimedPath execution chain.
@@ -18,24 +18,25 @@ inputs:
     capability_type: sensor/camera/rgb/camera-info
   - id: fpv_image
     capability_type: sensor/camera/rgb/image
-    note: consumed by the workstation-side VLM proxy; the compute role exchanges request/result JSON only
+    note: consumed by the Inference Function; SPF exchanges model_name/prompt/text and the actual acquisition header
+  - id: vision_language_inference
+    capability_type: inference/vision-language/text
+    note: depends on inference.vision-language; credentials and provider binding are outside this Tool
   - id: sim_clock
     capability_type: state/sim/clock
 
 outputs:
   - id: task_status
     capability_type: task/spf/status
-  - id: planning_events
-    capability_type: task/spf/events
 
 interfaces:
-  - id: navigate_by_language
+  - id: to_semantic_goal
     role: functional_operation
     interaction: managed_task
-    protocol: ros2_topic
-    schema: std_msgs/msg/String
-    parameter_schema: null
-    note: goal JSON {instruction, max_cycles, max_duration_s}; status stream carries the shared NavigateToPose result vocabulary (SUCCEEDED/CANCELED/TIMEOUT/NOT_READY/EXECUTION_FAILED/STOP_UNCONFIRMED), detail sub-reason and stop_confirmed (deviation D13). No NavigateToPose ActionServer: a language goal cannot be expressed as a pose.
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/NavigateToSemanticGoal
+    parameter_schema: src/tool/navigation/interfaces/action/NavigateToSemanticGoal.action
+    note: /<vehicle>/navigate_to_semantic_goal accepts description and required finite positive timeout (monotonic seconds). No arrival detector; budget expiry aborts with TIMEOUT, never SUCCEEDED. Cancellation returns CANCELED only after stop confirmation; an unconfirmed stop returns STOP_UNCONFIRMED. Feedback reports phase, current_pose, steps_completed and revision.
   - id: cancel_task
     role: lifecycle_operation
     interaction: request_response
@@ -52,9 +53,11 @@ interfaces:
 lifecycle:
   management: agent_managed
   operations:
-    start: publish goal JSON to spf/goal
+    start: send NavigateToSemanticGoal to /<vehicle>/navigate_to_semantic_goal
     status: spf/status snapshot (state, task_id, revision, cycles_done, vlm_attempts, ready)
-    stop: Trigger spf/cancel -> stop request -> speed<0.2 m/s held 1 s -> STOPPED; 10 s gate timeout -> FAULT/STOP_UNCONFIRMED recovered only by native Land
+    stop: Action cancel -> stop acknowledgement + execution result + fresh 3D speed<0.2 m/s held 1 s -> STOPPED; 10 s grace expiry -> FAULT/STOP_UNCONFIRMED requiring operator recovery
+  preconditions: fresh pose (<1 s) and CameraInfo (<5 s), execution endpoints ready, live clock, available Inference Function and authorized model binding
+  timeout: required finite positive monotonic seconds including VLM waits, retries and motion; stopping has a separate 10 s grace period
 
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
@@ -66,24 +69,35 @@ resource_access:
   reads:
     - sensor/rgb-camera
     - vehicle/self-state
-    - external/vlm-cloud-api
+    - inference/vision-language/text
   shared_writes: []
   exclusive_writes:
     - vehicle/motion
 
 type_specific:
+  navigation_functions:
+    supported: [to_semantic_goal]
+    unsupported: [to_pose]
+  completion: no semantic arrival detector; SPF never reports successful goal attainment
+  legacy_debug: spf/goal is not a Navigation function; max_cycles exhaustion returns EXECUTION_FAILED/step_limit, not success
   depth: VLM semantic level 1-10 mapped to metres (depth/10*2, default 4) exactly as upstream (D9); no LiDAR ranging
   step: upstream min_command_duration 2.0 s retained (D5); demo runs base_velocity 1.0 -> 2 m steps for the Blocks corridor
   altitude_floor: min_altitude_m 1.2 clamps commanded t>0 points (D12); upstream-faithful branches keep the unbounded mapping
   synchronization: single vehicle; multi-vehicle spillover declared in src/tool/navigation/planner/spf/README.md but not implemented
 
 validation:
-  stage: pc-sim-e2e-minimal
+  stage: single-live-navigation-cycle-verified
+  current_contract_validation: deployment/airsim/demos/spf_language_nav/live_cloud_validation.md
   evidence:
+    - deployment/airsim/demos/spf_language_nav/live_cloud_validation.md
     - deployment/airsim/demos/spf_language_nav/validation.json
     - log/spf/pc-e2e/run-20261116z6/formal1
     - log/spf/pc-e2e/run-20261116z7/cancel1
   limitations:
+    - single-live-cycle-only-not-stable-navigation
+    - model-empty-responses
+    - constant-refactor-ROS-tested-flight-evidence-uses-same-value-config
+    - live-stale-and-provider-down-faults-not-tested
     - minimal-acceptance-scope-per-2026-11-16-ruling
     - substitute-VLM-D11-not-comparable-to-paper-numbers
     - single-vehicle-only

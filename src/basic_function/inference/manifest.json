@@ -12,6 +12,10 @@
     "yolo26n-seg": {
       "directory": "src/basic_function/inference/models/yolo26n_seg",
       "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"
+    },
+    "spf": {
+      "directory": "src/basic_function/inference/models/vision_language",
+      "description": "SPF logical inference model; currently implemented by the Cloud alternative, remote model privately configured"
     }
   }
 }

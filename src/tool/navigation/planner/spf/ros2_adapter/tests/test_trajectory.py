@@ -49,8 +49,10 @@ def test_rotation_then_forward():
     assert h["t"] == 0.0 and h["yaw"] == 0.0
     assert rot["t"] == pytest.approx(45.0 / 30.0)  # θ=45°, yaw_rate 30°/s
     assert (rot["x"], rot["y"], rot["z"]) == (5.0, 5.0, 2.0)  # 原地
-    assert rot["yaw"] == pytest.approx(math.radians(45))
-    assert fwd["yaw"] == pytest.approx(math.radians(45))
+    assert rot["yaw"] == pytest.approx(-math.radians(45))  # right turn in ENU
+    assert fwd["yaw"] == pytest.approx(-math.radians(45))
+    assert r["theta_deg"] == pytest.approx(45.0)  # preserve upstream clockwise angle
+    assert fwd["y"] < 5.0  # right of heading +X is world -Y
     d_xy = math.hypot(1.0, 1.0)
     T = max(d_xy / 2.0, 2.0)
     assert fwd["t"] == pytest.approx(1.5 + T)
