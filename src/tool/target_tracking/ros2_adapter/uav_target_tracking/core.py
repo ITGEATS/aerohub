@@ -41,7 +41,7 @@ class SoftInnovationAssociation:
         residual = points-self.x[:3]
         innovation = self.Sigma[:3,:3]+self.Rt
         scores = np.einsum('ij,ij->i', residual, np.linalg.solve(innovation,residual.T).T)
-        reach = self.gate_max+self.target_max_speed*self.max_blind_time
+        reach = self.gate_max+self.target_max_speed*getattr(self,"association_blind_time",self.max_blind_time)
         ids = np.flatnonzero(np.linalg.norm(residual,axis=1)<reach)
         best = int(ids[np.argmin(scores[ids])]) if ids.size else int(np.argmin(scores))
         # Multiple equally plausible candidates are not evidence of identity.
@@ -65,7 +65,7 @@ class SoftInnovationAssociation:
         correction=gain@residual
         # Bound a single measurement's effect without throwing it away.
         pos_limit=self.target_max_speed*self.dt
-        vel_limit=self.target_max_speed/self.max_blind_time*self.dt
+        vel_limit=self.target_max_speed/getattr(self,"association_blind_time",self.max_blind_time)*self.dt
         scale=min(1.,pos_limit/max(np.linalg.norm(correction[:3]),1e-9),
                      vel_limit/max(np.linalg.norm(correction[3:]),1e-9))
         gain*=scale;correction*=scale
@@ -78,7 +78,7 @@ class SoftInnovationAssociation:
 
 
 class Tracker:
-    def __init__(self, ekf_class=None, dt=0.1, *, measurement_stddev_m=None, association_policy="upstream", position_filter="none"):
+    def __init__(self, ekf_class=None, dt=0.1, *, measurement_stddev_m=None, association_policy="upstream", position_filter="none", max_prediction_time=None):
         if association_policy not in ('upstream', 'innovation_covariance_v1', 'soft_innovation_v1'):
             raise ValueError('unknown association_policy')
         base = ekf_class or load_ekf()
@@ -90,6 +90,11 @@ class Tracker:
                 pass
             base = SourceAwareEKF
         self.ekf = base(dt=dt)
+        self.ekf.association_blind_time=self.ekf.max_blind_time
+        if max_prediction_time is not None:
+            if not math.isfinite(max_prediction_time) or not .5<=max_prediction_time<=2.:
+                raise ValueError('max_prediction_time must be within .5..2 seconds')
+            self.ekf.max_blind_time=max_prediction_time
         if measurement_stddev_m is not None:
             if not math.isfinite(measurement_stddev_m) or measurement_stddev_m <= 0:
                 raise ValueError('measurement_stddev_m must be finite and positive')

@@ -57,6 +57,9 @@ class TrackingNode(Node):
         noise = float(self.declare_parameter('measurement_stddev_m', 0.0).value)
         if not math.isfinite(noise) or noise < 0:
             raise ValueError('measurement_stddev_m must be finite and nonnegative (0 preserves upstream)')
+        self._max_prediction_time=float(self.declare_parameter('max_prediction_time',.5).value)
+        if not math.isfinite(self._max_prediction_time) or not .5<=self._max_prediction_time<=2.:
+            raise ValueError('max_prediction_time must be within .5..2 seconds')
         self._position_filter=self.declare_parameter('position_filter','none').value
         if self._position_filter not in ('none','robust_linear_v1'):
             raise ValueError('unknown position_filter')
@@ -158,7 +161,7 @@ class TrackingNode(Node):
         generation = self._generation
         epoch = self._clock_epoch
         session = str(uuid.uuid4())
-        tracker = Tracker(self._ekf_class, measurement_stddev_m=self._measurement_stddev, association_policy=self._association_policy, position_filter=self._position_filter)
+        tracker = Tracker(self._ekf_class, measurement_stddev_m=self._measurement_stddev, association_policy=self._association_policy, position_filter=self._position_filter,max_prediction_time=self._max_prediction_time)
         state = TargetState(session_id=session, generation=generation, status='unavailable')
         capture = 0
         attempt = 0
