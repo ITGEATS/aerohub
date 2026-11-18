@@ -99,3 +99,30 @@ WestStreet部署入口`run_tool_demo.py --target-yaw`统一开启两侧部署配
 但不自动更改Demo任务调用：当前任务仍to_point、不下达yaw，不能将开关
 开启当成已完成机头追人。安装后的Adapter23项回归通过，已进行真实转弯闭环，任务失败：目标yaw44.9度时执行参考仅3.4度，
 实际1.81度；接口贯通不等于及时视线跟踪。详见WestStreet VALIDATION。
+
+### 连续目标朝向（实验，默认关闭）
+
+`continuous_yaw_enabled:=true`允许Navigation的`CONTINUOUS_YAW=4`。
+调用`to_pose(..., orientation_mode=NavigateToPose.Goal.CONTINUOUS_YAW,
+wait=False, arrival_behavior='hold', target_timeout=1.0)`，使用归一化纯yaw
+四元数；必须显式设置目标更新超时。旧TARGET_YAW仍为SUPER末端约束，
+默认UNCONSTRAINED/KEEP_YAW和原FollowPath不变。
+
+该模式忽略SUPER的yaw多项式，仅保留位置/PVA；Framework把本地ENU
+yaw初态策略随TimedPath提交，并通过`follow_timed_path/update_yaw`刷新
+同一执行任务的目标。服务不启动动作，不发布运动参考。
+任务UUID、递增版本及绝对有效期约束更新；等待服务确认时只保留最新目标。
+位置轨迹滚动更新不重置yaw状态，旧服务回调不能跨取消/交接生效。
+
+扩展FollowPath在原50Hz循环内统一合成位置/PVA与yaw，一次输出；
+朝向与原轨迹yaw互斥。当前实验限制为1.5rad/s、4rad/s²，误差比例4/s；
+有效期由Navigation目标更新时间续期，最多1秒，不绕过原任务失跟门。
+过期/时钟异常/取消停止执行；新执行从实际机头重新接管。
+
+接口新增TimedPath字段和UpdateTimedYaw服务，需要重编译接口及Behavior、
+Framework、Adapter和客户端，禁止混用旧overlay。固定镜像不重建。
+连续yaw仅验证了单机，不能据此声明多机同步朝向支持。
+
+真实35秒预算首轮已运行，但约23.17秒失跟，正常降落。目标48.11度时
+参考27.17度、机头7.26度，相比末端yaw参考更及时但仍不足以维持可见性。
+该功能已接入，不代表任务验收成功；见WestStreet验证记录。

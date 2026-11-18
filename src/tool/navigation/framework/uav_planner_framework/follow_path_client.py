@@ -13,10 +13,11 @@ from as2_msgs.msg import ControllerInfo, ControlMode
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.action import ActionClient
 from std_srvs.srv import Trigger
+from uav_planner_interfaces.srv import UpdateTimedYaw
 from uav_planner_interfaces.action import FollowTimedPath
 from uav_planner_interfaces.action._follow_timed_path import FollowTimedPath_SendGoal
 
-from .ros_conversions import time_to_seconds
+from .ros_conversions import time_to_seconds, seconds_to_time
 
 
 def make_goal(segment, item, deployment, revision, speed):
@@ -53,6 +54,8 @@ class FleetFollowPathClient:
         self.config = resolved
         self.on_failure = on_failure
         self.actions, self.modifiers, self.stoppers = {}, {}, {}
+        self.yaw_clients, self.yaw_targets, self.yaw_pending = {}, {}, {}
+        self.execution_tasks = {}
         self.handles = {}
         self.results = set()
         self.plans = {}
@@ -78,6 +81,7 @@ class FleetFollowPathClient:
             self.modifiers[vehicle] = node.create_client(
                 FollowTimedPath_SendGoal, name + "/_behavior/modify")
             self.stoppers[vehicle] = node.create_client(Trigger, name + "/_behavior/stop")
+            self.yaw_clients[vehicle] = node.create_client(UpdateTimedYaw,name+"/update_yaw")
 
     @property
     def ready(self):
@@ -116,6 +120,16 @@ class FleetFollowPathClient:
             vehicle = item.vehicle_id
             goal = make_goal(segment, item, self.config["deployment"][vehicle],
                              self.revision, self.config["planner"]["parameters"].get("max_velocity", 1.0))
+            policy=getattr(self,'yaw_targets',{}).get(vehicle)
+            if policy is not None:
+                goal.path.continuous_yaw=True
+                goal.path.target_yaw=policy['yaw']
+                goal.path.max_yaw_rate=policy['rate']
+                goal.path.yaw_revision=policy['revision']
+                seconds_to_time(policy['until'],goal.path.yaw_valid_until)
+                self.execution_tasks[vehicle]=goal.path.task_id
+                if self.revision==1:
+                    self.yaw_initial_revision=policy['revision']
             self.plans[(vehicle, self.revision)] = (
                 bool(goal.path.is_final),
                 time_to_seconds(goal.path.points[-1].time_from_start))
@@ -128,6 +142,46 @@ class FleetFollowPathClient:
                 request.goal = goal
                 future = self.modifiers[vehicle].call_async(request)
                 future.add_done_callback(lambda f, v=vehicle, g=generation: self._modified(v, g, f))
+
+    def set_target_yaw(self, vehicle, yaw, valid_until, revision, rate=1.5):
+        """Local ENU yaw for the same execution owner; no motion publication."""
+        if self.closed or self.failed or self.cancel_started:
+            return
+        previous=self.yaw_targets.get(vehicle)
+        if previous is not None and revision<=previous['revision']:
+            return
+        self.yaw_targets[vehicle]=dict(yaw=yaw,until=valid_until,revision=revision,rate=rate)
+        self._send_yaw(vehicle)
+
+    def _send_yaw(self, vehicle):
+        if (self.closed or self.failed or self.cancel_started or
+            vehicle not in getattr(self,'yaw_targets',{}) or vehicle not in self.handles or
+            vehicle in self.results or vehicle in self.yaw_pending):
+            return
+        policy=self.yaw_targets[vehicle]
+        client=self.yaw_clients[vehicle]
+        if not client.service_is_ready():
+            self._fail('CONTINUOUS_YAW_UNAVAILABLE:'+vehicle);return
+        request=UpdateTimedYaw.Request(task_id=self.execution_tasks[vehicle],
+            revision=policy['revision'],target_yaw=policy['yaw'])
+        seconds_to_time(policy['until'],request.valid_until)
+        generation=self.generation
+        future=client.call_async(request)
+        self.yaw_pending[vehicle]=(self.node.get_clock().now().nanoseconds/1e9+1.,future)
+        def done(f):
+            if self.closed or self.failed or generation!=self.generation:
+                return
+            self.yaw_pending.pop(vehicle,None)
+            try:
+                response=f.result()
+                # Initial path already carried this revision; do not send twice.
+                if not response.accepted:
+                    self._fail('CONTINUOUS_YAW_REJECTED:'+vehicle+':'+response.reason);return
+                if self.yaw_targets[vehicle]['revision']>request.revision:
+                    self._send_yaw(vehicle)
+            except Exception as error:
+                self._fail('CONTINUOUS_YAW_ERROR:'+str(error))
+        future.add_done_callback(done)
 
     def _feedback(self, vehicle, generation, message):
         if self.closed or self.failed or generation != self.generation:
@@ -163,6 +217,9 @@ class FleetFollowPathClient:
                 return
             self.handles[vehicle] = handle
             self.pending.discard(vehicle)
+            if (vehicle in getattr(self,'yaw_targets',{}) and
+                self.yaw_targets[vehicle]['revision']>getattr(self,'yaw_initial_revision',0)):
+                self._send_yaw(vehicle)
             handle.get_result_async().add_done_callback(
                 lambda f, v=vehicle, g=generation: self._result(v, g, f))
         except Exception as exc:
@@ -194,6 +251,8 @@ class FleetFollowPathClient:
             self._fail(f"FOLLOW_PATH_RESULT_ERROR:{vehicle}:{exc}")
 
     def tick(self, now):
+        if not self.closed and not self.failed and any(now>=value[0] for value in getattr(self,'yaw_pending',{}).values()):
+            self._fail("CONTINUOUS_YAW_ACK_TIMEOUT")
         if not self.closed and not self.failed and self.pending and now >= self.deadline:
             self._fail("FLEET_ACK_TIMEOUT")
 
@@ -215,6 +274,7 @@ class FleetFollowPathClient:
         for client in self.stoppers.values():
             if client.service_is_ready():
                 self.stop_futures.append(client.call_async(Trigger.Request()))
+        getattr(self,'yaw_pending',{}).clear()
         self.handles.clear()
         self.pending.clear()
         self.results.clear()

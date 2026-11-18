@@ -26,7 +26,7 @@ class SuperAdapter(Node):
     def __init__(self):
         super().__init__('super_timed_path_adapter')
         for key,value in [('vehicle_id','drone0'),('frame_id','drone0/odom'),
-                          ('goal',[0.,0.,2.]),('navigation_action',False),('target_yaw_enabled',False),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
+                          ('goal',[0.,0.,2.]),('navigation_action',False),('target_yaw_enabled',False),('continuous_yaw_enabled',False),('goal_tolerance',1.5),('max_speed',8.),('lead_time',.1)]:
             self.declare_parameter(key,value)
         self.vehicle = self.get_parameter('vehicle_id').value
         self.frame = self.get_parameter('frame_id').value

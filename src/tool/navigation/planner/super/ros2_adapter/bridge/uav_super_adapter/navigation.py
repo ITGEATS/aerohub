@@ -73,9 +73,10 @@ class SuperNavigation:
             return 'INVALID_GOAL', 'Target frame must be ' + self.node.frame
         if not all(math.isfinite(v) for v in (p.x, p.y, p.z)):
             return 'INVALID_GOAL', 'Target position must be finite'
-        if request.orientation_mode == request.TARGET_YAW:
-            if not self.node.get_parameter('target_yaw_enabled').value:
-                return 'UNSUPPORTED', 'target_yaw_enabled is false'
+        if request.orientation_mode in (request.TARGET_YAW, request.CONTINUOUS_YAW):
+            parameter='continuous_yaw_enabled' if request.orientation_mode==request.CONTINUOUS_YAW else 'target_yaw_enabled'
+            if not self.node.get_parameter(parameter).value:
+                return 'UNSUPPORTED', parameter+' is false'
             q = request.target.pose.orientation
             norm = sum(v*v for v in (q.x,q.y,q.z,q.w))
             if not math.isfinite(norm) or abs(norm-1.) > 1e-3:
@@ -84,6 +85,8 @@ class SuperNavigation:
                 return 'UNSUPPORTED', 'TARGET_YAW requires a yaw-only quaternion'
         elif request.orientation_mode not in (request.UNCONSTRAINED, request.KEEP_YAW):
             return 'UNSUPPORTED', 'Only target yaw, not full attitude, is supported'
+        if request.orientation_mode==request.CONTINUOUS_YAW and not request.use_target_timeout:
+            return 'INVALID_GOAL','Continuous yaw requires a target stream timeout'
         if request.arrival_behavior not in (request.COMPLETE, request.HOLD):
             return 'INVALID_GOAL', 'Unknown arrival behavior'
         if request.arrival_behavior == request.HOLD and not request.use_target_timeout:
@@ -126,6 +129,7 @@ class SuperNavigation:
             response = self.node.enable(SetBool.Request(data=True), SetBool.Response(), internal=True)
             if not response.success:
                 return self.finish(False, 'NOT_READY', response.message, stopped=True)
+            self.update_execution_yaw()
             self.publish_target()
             self.phase = 'planning'
             return await self.finished
@@ -138,6 +142,15 @@ class SuperNavigation:
             self.handle = None
             self.reserved = False
             self.phase = 'idle'
+
+    def update_execution_yaw(self):
+        if (self.handle.request.orientation_mode!=self.handle.request.CONTINUOUS_YAW or
+            self.stop_started is not None or self.outcome is not None or not self.node.enabled):
+            return
+        q=self.target.pose.orientation
+        yaw=math.atan2(2*q.w*q.z,1-2*q.z*q.z)
+        self.node.client.set_target_yaw(self.node.vehicle,yaw,
+            self.last_target+min(1.,self.handle.request.target_timeout),self.target_revision)
 
     def publish_target(self):
         target = copy.deepcopy(self.target)
@@ -168,6 +181,7 @@ class SuperNavigation:
             return
         self.holding = self.resume_after_stop = False
         self.stable_since = None
+        self.update_execution_yaw()
         self.publish_target()
         self.phase = 'planning'
 
@@ -199,7 +213,7 @@ class SuperNavigation:
             return response
         p = request.target.pose.position
         changed = list(self.node.goal) != [p.x, p.y, p.z]
-        if h.request.orientation_mode == h.request.TARGET_YAW:
+        if h.request.orientation_mode in (h.request.TARGET_YAW,h.request.CONTINUOUS_YAW):
             a,b = self.target.pose.orientation,request.target.pose.orientation
             # q and -q represent the same rotation.
             changed = changed or abs(a.z*b.z+a.w*b.w) < 1.-1e-10
@@ -207,6 +221,7 @@ class SuperNavigation:
         self.node.goal = [p.x, p.y, p.z]
         self.target_revision = response.target_revision = request.target_revision
         self.last_target = self.node.now_seconds()
+        self.update_execution_yaw()
         if changed:
             self.stable_since = None
             if self.holding and self.stop_started is None:

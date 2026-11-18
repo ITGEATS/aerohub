@@ -22,6 +22,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VehicleTrajectory.msg"
   "srv/ControlPlanner.srv"
   "srv/UpdateNavigationTarget.srv"
+  "srv/UpdateTimedYaw.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs action_msgs unique_identifier_msgs
 )
 

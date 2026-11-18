@@ -11,3 +11,10 @@ bool is_final
 uint8 valid_fields
 uav_planner_interfaces/TimedTrajectoryPoint[] points
 float64 max_speed
+
+# Optional executor-local target yaw (local ENU); mutually exclusive with YAW fields.
+bool continuous_yaw
+float64 target_yaw
+float64 max_yaw_rate
+uint64 yaw_revision
+builtin_interfaces/Time yaw_valid_until
