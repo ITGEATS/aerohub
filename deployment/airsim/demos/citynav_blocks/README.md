@@ -134,6 +134,59 @@ BLOCKED 而非通过**。
 （run-20261118z）：4 goal 全接受、3 SUCCEEDED、33 步执行、无碰撞。
 根治需 flight_board 镜像 PX4 参数专项（团队级，超 Demo 权限）。
 
+**fault1 通过（M6 LLM 失效路径，2026-11-18，`run-20261118gap/fault1`）**：
+持久故障注入——会话 `planner.yaml` 代理节 `base_url` 指向容器内丢弃端口
+`http://127.0.0.1:9/v4` + `restart-compute`（任务前生效、全程不可恢复）→
+起飞 2.5 m 悬停 → goal → landmark 抽取连续 3 次 `error_code=http`
+（代理日志 3×`Connection refused`，间隔 = retry_backoff_s=20）→ planner
+FAULT reason=EXECUTION_FAILED detail=llm_failures，**revision=0、
+FollowTimedPath goal 从未发出**（无执行段可坠机）→ 悬停保持
+（airborne_at_fault z>1 m PASS）→ 原生 Land + disarm + 碰撞 0 全 PASS，
+总 149.2 s。fault1 门为 `--expect-fault` 专用口径（waypoints/revision_match/
+final_reason 记 NOT-EXECUTED，不静默通过）。证据注记见
+`run-20261118gap/fault1/NOTES.md`（fault-injection.json 计数器缺陷已修
+mission.py，原始证据不改写）。
+
+**缺口补齐轮（2026-11-18，用户指示"先补全 3 个小验证"）**：
+- 容器内 pytest：planner **45 passed + 1 skip**（设计内 node 占位）于
+  onboard-computer v0.1.1 容器（networkx 对照库经宿主 wheel 只读挂载，
+  镜像未动）；proxy **34 passed** 于工作站镜像——与宿主基线一致
+  （`log/citynav/ros/container-pytest-20261118/`）。
+- 真实 DDS 生命周期：planner 独立容器 + 工作站检查器 **6/6 PASS**
+  （节点发现、3 publish + 21 subscribe + 6 service 契约、IDLE 心跳、
+  cancel 幂等、goal→not_ready 收口×2 可重入）+ SIGINT 优雅退出 exit=0
+  （`log/citynav/ros/dds-lifecycle-20261118/`，脚本
+  `src/tool/navigation/planner/citynav/validation/dds_lifecycle_check.py`）。
+- **M-1 代理 vs SDK 同帧对照已执行**：20 组 Blocks 抓帧，strict（is_found+逐
+  视角 object）一致率 70%，未达**原**预锁定 90% 门槛；SDK 同路径自对照仅
+  80%，证明原门槛与模型随机性混淆。**用户裁决（方案追加裁决二，
+  2026-11-18）修订判据**（与自对照差 ≤15pp + is_found ≥90% + 差异全归类），
+  按修订判据归档证据判**通过**（Δ=10pp、is_found 100%、差异均为视角重叠区
+  抖动与占位符回显两类）；原门槛与 70% 实测结果保留于 validation.json，
+  不追溯改判。证据 `log/citynav/llm/m1-20261118/REPORT.md`。
+
+**stuck2 通过（M6 卡死检测注入，2026-11-18，`run-20261118stk/stuck2`）**：
+注入尝试先暴露真缺陷——**上游 L534 卡死判据是死代码**
+（`calculate_movement_steps` 对 A==B 仍返回 ≥1 的 yaw 占位项，
+`sum(steps)==0` 永不可达；单测已锁定该发现）。按迁移方案"保留并升级
+FAULT 收口"授权，本移植改喂位移进展位（`build_timed_path` 返回 None 记
+零进展），`is_stuck` 函数体不变。注入 = grounding 指向恒
+`seg_success=false` 的 host-network 桩容器 + 6-landmark 指令：4 个零进展
+循环 → FAULT detail=stuck，goal 从未发出，悬停保持 → Land/disarm/碰撞 0
+全 PASS（首轮 stuck1 因 Windows 防火墙拦宿主端口未达注入目标，但顺带
+实证了 grounding 不可达 → service FAULT 收口路径，证据保留）。
+容器内单测升至 **46 passed + 1 skip**；overlay 已重建。
+
+**exploit 重试轮（2026-11-18，用户批准，B2 口径不改判别逻辑）= 仍阻塞 → 降级为后续项**：
+"先扩节点再复用"投入 3 个会话——expand2（Blocks 31 s 死亡）、expand3
+（(20,20) 直线走廊穿楼碰撞）、expand4（(10,10) 安全走廊 9 循环 24 步真飞，
+但"绕球"语义漂移到 85.9 m 后 segment_failed，未完成即不落盘记忆图）。
+**用户裁决（方案追加裁决二，2026-11-18）**：决策 6 的 executed-walk 由
+验收必演项**降级为后续项**；executed-walk 证据状态如实保持"未完成"，
+本 Demo 与能力卡片持续显式声明"**跨任务记忆复用未获飞行验收**"（建图/
+落盘/加载/命中/LM-Nav 搜索各环节均有飞行实证，唯执行末环没有）；判别
+信号增强仍列后续项不删除（validation.json exploit_retry_20261118）。
+
 ## 已知限制
 
 - 路线 B：不复现 AirVLN 基准，Blocks 场景语义（orange ball 等）替代城市

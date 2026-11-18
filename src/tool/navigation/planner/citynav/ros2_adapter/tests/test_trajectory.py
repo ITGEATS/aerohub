@@ -11,6 +11,17 @@ from uav_citynav_planner.trajectory import build_timed_path, calculate_movement_
 D15 = math.radians(15.0)
 
 
+def test_zero_displacement_decomposition_is_placeholder():
+    """stuck1 注入轮发现锁定：A==B 时分解仍返回 1（yaw 占位项），故上游
+    SimRun.py L534 `sum(hist_step_size[-4:-1])==0` 喂分解步数时不可达
+    （死判据）；本移植卡死检测改喂位移进展位（build_timed_path 零位移
+    零旋转返回 None），见 hspm.is_stuck 与包 README 偏离节。"""
+    n, path = calculate_movement_steps([1.0, 2.0, 3.0, 0.0, 0.0, 0.5],
+                                       [1.0, 2.0, 3.0, 0.5])
+    assert n == 1 and len(path) == 1
+    assert build_timed_path([[1.0, 2.0, 3.0, 0.5]], (1.0, 2.0, 3.0, 0.5)) is None
+
+
 def test_decomposition_order_and_counts():
     # A=(0,0,1.5,yaw0) → B=(10,5,3.5,yaw=30°)
     # 偏航：rot_angle=30° → 子步 [0,15,30] 共 3 项（位置不变）

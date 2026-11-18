@@ -131,6 +131,9 @@ class CityNavPlannerNode(Node):
         self._next_landmark_idx = 0
         self._step_size = 0
         self._hist_step_size = collections.deque(maxlen=8)
+        # 卡死判据的位移语义历史（升级项，见 hspm.is_stuck 注释）：
+        # 1 = 本循环产生了可执行时间化路径；0 = timed 为 None（零位移零旋转）。
+        self._hist_progress = collections.deque(maxlen=8)
         self._graph = None
         self._memory_floor = 0
         self._goal_result_event = threading.Event()
@@ -243,6 +246,7 @@ class CityNavPlannerNode(Node):
             self._next_landmark_idx = 0
             self._step_size = 0
             self._hist_step_size.clear()
+            self._hist_progress.clear()
         self._init_memory()
         self._publish_event("goal_accepted", instruction=instruction)
         self._publish_status("started", instruction=instruction)
@@ -419,15 +423,21 @@ class CityNavPlannerNode(Node):
                                  min_altitude_m=self._cfg["min_altitude_m"])
         self._step_size += n
         self._hist_step_size.append(n)
+        self._hist_progress.append(0 if timed is None else 1)
         self._publish_event("cycle", steps=n, step_size=self._step_size,
                             waypoint=wp, seg_success=plan["seg_success"],
-                            is_found=plan["is_found"], selected=plan["selected"])
+                            is_found=plan["is_found"], selected=plan["selected"],
+                            progress=0 if timed is None else 1)
 
         if self._next_landmark_idx >= len(self._landmarks):
             self._save_memory()
             self._finish("STOPPED", "task_complete")
             return
-        if is_stuck(list(self._hist_step_size)):  # 上游 L534 判据 → FAULT 收口
+        # 上游 L534 判据 → FAULT 收口。升级语义（stuck1 注入轮发现并落实，
+        # 见包 README 偏离节）：分解步数恒 ≥1（A==B 仍有 yaw 占位项），上游
+        # 原式 sum(steps)==0 实际不可达；本移植以位移等价式落实其意图——
+        # timed 为 None（零位移零旋转）记零进展，连续 3 个零进展循环触发。
+        if is_stuck(list(self._hist_progress)):
             self._save_memory()
             self._do_fault("stuck")
             return

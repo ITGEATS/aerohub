@@ -35,7 +35,7 @@ runtime:
   clock: AirSim-clock-bridge (SteppableClock, best-effort /clock)
   domain: selected-unused-180-to-199-recorded-in-each-domain.json
   readiness: fresh-clock-pose-CityFront-camera-info-plus-citynav-status-ready
-  stop: ROS-citynav/cancel-then-STOPPED-speed-gate-before-native-Land (reserved --cancel-after; not exercised in formal1)
+  stop: ROS-citynav/cancel-then-STOPPED-speed-gate-before-native-Land (exercised by cancel1 run-20261118n)
   persistence: 'log/citynav/pc-e2e (memory graph per run: <run>/citynav_memory.json)'
 resources:
   motion: exclusive-drone0-FollowTimedPath-session
@@ -43,7 +43,7 @@ resources:
   tf_authority: AS2-self-localization-and-sensor-static-bridge
 validation:
   evidence: deployment/airsim/demos/citynav_blocks/validation.json
-  status: formal1 (run-20261118g) and cancel1 (run-20261118n) minimal end-to-end acceptance PASSED 2026-11-18; exploit1 BLOCKED (CLIP margin + hover z limit cycle + host startup deaths, see validation.json); claim level partial-verification-passed, not reproduced
-  limitations: [exploit-reuse-blocked-executed-walk, full-matrix-open, single-vehicle-only, no-AirVLN-benchmark-route-B,
+  status: formal1 (run-20261118g), cancel1 (run-20261118n), fault1 (run-20261118gap) and stuck2 (run-20261118stk) acceptance PASSED 2026-11-18; M2 closed (container pytest 46+1 / proxy 34, real DDS lifecycle 6/6); M-1 PASSED under the revised criterion per user ruling 2026-11-18 addendum-2 (original >=90% gate result 70% retained on record); decision-6 executed-walk downgraded from mandatory-demo to follow-up item by the same ruling - cross-task memory reuse NOT flight-validated, evidence state 未完成 retained (validation.json exploit_retry_20261118); M0-M8 matrix green under revised scope; claim level partial-verification-passed, not reproduced
+  limitations: [cross-task-memory-reuse-not-flight-validated-executed-walk-open, full-matrix-open, single-vehicle-only, no-AirVLN-benchmark-route-B,
                 substitute-VLM-model, board-deployment-open, blocks-scene-not-urban-city,
                 host-precondition-grounded-sam-GS_EMPTY_CACHE, hover-z-limit-cycle-post-takeoff]

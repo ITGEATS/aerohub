@@ -52,6 +52,7 @@ class Mission(Node):
         self.status = None
         self.platform = None
         self.events = []
+        self.failure_statuses = []
         self.goal_statuses = {}  # goal_id hex -> max status code seen
         self.samples = []
         # The 0.5 s heartbeat re-publishes the bare snapshot (no reason/detail
@@ -99,8 +100,16 @@ class Mission(Node):
             self.status = json.loads(msg.data)
         except ValueError:
             return
-        if self.status.get('state') in ('STOPPED', 'FAULT') and \
+        if str(self.status.get('state', '')).endswith('_failure'):
+            # instantaneous *_failure statuses are overwritten by the 0.5 s
+            # heartbeat before the 1 s sampler can catch them (fault1 run:
+            # counter recorded 0 despite 3 failures) - latch them here.
+            self.failure_statuses.append(self.status)
+        if self.status.get('state') in ('STOPPED', 'FAULT', 'fault') and \
                 ('detail' in self.status or 'reason' in self.status):
+            # 'fault' (lowercase) is the instantaneous _do_fault status state;
+            # the heartbeat snapshot carries the uppercase FAULT without
+            # detail/reason, so the terminal detail must latch from it too.
             self.terminal_detail = self.status.get('detail',
                                                    self.status.get('reason'))
             self.terminal_stop_confirmed = self.status.get('stop_confirmed')
@@ -190,6 +199,24 @@ def main():
     parser.add_argument('--cancel-after', type=float, default=0.0,
                         help='inject citynav/cancel this many seconds after '
                              'the goal (0 = disabled; formal1 keeps it off)')
+    parser.add_argument('--expect-fault', action='store_true',
+                        help='M6 fault1 case: the LLM path is persistently '
+                             'broken (proxy points at a dead endpoint, set in '
+                             '<output>/planner.yaml before restart-compute). '
+                             'Gates switch to FAULT convergence: state FAULT '
+                             'with detail llm_failures/service_failures, no '
+                             'FollowTimedPath goal ever sent, airborne at '
+                             'FAULT, then clean land/disarm without collision.')
+    parser.add_argument('--expect-stuck', action='store_true',
+                        help='M6 stuck1 case: the grounding service was made '
+                             'to always answer seg_success=false (stub on the '
+                             'host, grounding_url repointed in <output>/ '
+                             'planner.yaml + restart-compute) with a 5-'
+                             'landmark instruction, so every cycle plans zero '
+                             'displacement. Gates: FAULT with detail=stuck '
+                             'from the upgraded progress criterion, >=4 zero-'
+                             'progress cycles, no goal ever sent, airborne, '
+                             'clean land/disarm.')
     parser.add_argument('--target', type=float, nargs=3, required=True,
                         help='ground-truth target x y z (odom ENU frame, scoring only)')
     parser.add_argument('--spawn', type=float, nargs=3, default=[10.0, 10.0, 45.0],
@@ -407,20 +434,63 @@ def main():
             'step_size': status.get('step_size'),
             'exploit_events': sum(1 for e in mission.events
                                   if e.get('event') in ('exploit_hit', 'exploit_executed'))}
-        if args.cancel_after > 0:
+        if args.expect_fault or args.expect_stuck:
+            # M6 fault-path gates (locked): a persistent service outage /
+            # zero-progress loop must drive the planner to FAULT BEFORE any
+            # trajectory execution, with the drone still airborne; the
+            # waypoint/revision/final-reason formal gates are structurally
+            # inapplicable (NOT-EXECUTED, never silently passed).
             result['gates']['waypoints'] = 'NOT-EXECUTED'
-        else:
-            result['gates']['waypoints'] = ('PASS' if steps_executed >= 3 and revision >= 1
-                                            else 'FAIL')
-        # revision match: every planner-sent goal must appear on the action
-        # status stream and reach SUCCEEDED for a clean task_complete.
-        if args.cancel_after > 0:
             result['gates']['revision_match'] = 'NOT-EXECUTED'
-        else:
-            result['gates']['revision_match'] = (
-                'PASS' if revision >= 1 and succeeded_goals >= revision
-                else 'FAIL')
-        if args.cancel_after > 0:
+            result['gates']['final_reason'] = 'NOT-EXECUTED'
+            if args.expect_stuck:
+                result['gates']['stop_state'] = (
+                    'PASS' if status.get('state') == 'FAULT'
+                    and mission.terminal_detail == 'stuck' else 'FAIL')
+                cyc = [e for e in mission.events if e.get('event') == 'cycle']
+                result['gates']['stuck_zero_progress'] = (
+                    'PASS' if len(cyc) >= 4 and all(
+                        int(e.get('progress', 1)) == 0 for e in cyc)
+                    else 'FAIL')
+                result['gates']['stuck_before_execution'] = (
+                    'PASS' if revision == 0 and accepted_goals == 0 else 'FAIL')
+                (args.output / 'fault-injection.json').write_text(json.dumps(
+                    {'fault': 'grounding_always_empty_persistent',
+                     'injection': 'grounding_url repointed to the host stub '
+                                  '(validation/grounding_stub.py, always '
+                                  'seg_success=false) in <output>/planner.yaml '
+                                  '+ restart-compute; 5-landmark instruction '
+                                  'so task completion cannot precede the '
+                                  '4-cycle window',
+                     'wall': time.time(),
+                     'cycles': len(cyc),
+                     'progress_bits': [int(e.get('progress', 1)) for e in cyc],
+                     'failure_statuses': mission.failure_statuses},
+                    indent=2) + '\n')
+            else:
+                result['gates']['stop_state'] = (
+                    'PASS' if status.get('state') == 'FAULT'
+                    and mission.terminal_detail in ('llm_failures', 'service_failures')
+                    else 'FAIL')
+                (args.output / 'fault-injection.json').write_text(json.dumps(
+                    {'fault': 'llm_unreachable_persistent',
+                     'injection': 'proxy base_url set to a dead endpoint in '
+                                  '<output>/planner.yaml before restart-compute; '
+                                  'every citynav/llm query returns error_code=http',
+                     'wall': time.time(),
+                     'landmark_extract_failures': len(mission.failure_statuses),
+                     'failure_statuses': mission.failure_statuses},
+                    indent=2) + '\n')
+            result['gates']['fault_no_execution'] = (
+                'PASS' if revision == 0 and accepted_goals == 0 else 'FAIL')
+            zs = [s['pos'][2] for s in mission.samples]
+            result['gates']['airborne_at_fault'] = (
+                'PASS' if zs and zs[-1] > 1.0 else 'FAIL')
+            result['fault_detail'] = mission.terminal_detail
+        elif args.cancel_after > 0:
+            result['gates']['waypoints'] = 'NOT-EXECUTED'
+            result['gates']['revision_match'] = 'NOT-EXECUTED'
+            result['gates']['final_reason'] = 'NOT-EXECUTED'
             # M6 gate (locked): the cancel handoff must converge through the
             # speed-gated STOPPED path with detail=cancelled; reaching FAULT
             # (the 10 s stop-gate timeout) is a FAIL, not a pass.
@@ -429,11 +499,17 @@ def main():
                 and mission.terminal_detail == 'cancelled'
                 and mission.terminal_stop_confirmed is True else 'FAIL')
         else:
+            result['gates']['waypoints'] = ('PASS' if steps_executed >= 3 and revision >= 1
+                                            else 'FAIL')
+            # revision match: every planner-sent goal must appear on the action
+            # status stream and reach SUCCEEDED for a clean task_complete.
+            result['gates']['revision_match'] = (
+                'PASS' if revision >= 1 and succeeded_goals >= revision
+                else 'FAIL')
             result['gates']['stop_state'] = ('PASS' if status.get('state') in
                                              ('STOPPED', 'FAULT') else 'FAIL')
-        result['gates']['final_reason'] = (
-            'NOT-EXECUTED' if args.cancel_after > 0 else
-            ('PASS' if mission.terminal_detail == 'task_complete' else 'FAIL'))
+            result['gates']['final_reason'] = (
+                'PASS' if mission.terminal_detail == 'task_complete' else 'FAIL')
         result['terminal_detail'] = mission.terminal_detail
         # Decision-6 exploit evidence summary (events stream is the primary
         # record; these are the load/hit/walk markers the reuse round needs).

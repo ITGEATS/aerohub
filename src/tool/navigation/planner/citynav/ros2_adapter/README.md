@@ -121,8 +121,26 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
   （run q/s/u/y 实测）。修复：`_send_path` 前 `_wait_quiet()`（|3D twist|
   <0.08 m/s 持续 1.5 s，超时 40 s 后仍发送由 Behavior 仲裁）并用
   `_current_pose()` 新鲜位姿重锚路径起点（waypoint 目标保持世界系不变）；
-  explore 与 exploit 两路同修。`_on_twist` 增存 vz。单测 45 passed；
-  静止门参数无独立单测（node 级 ROS 测试仍为占位，M2 缺口不变）。
+  explore 与 exploit 两路同修。`_on_twist` 增存 vz。
+- **卡死判据位移语义升级（stuck2 注入轮，2026-11-18）**：上游
+  `SimRun.py` L534 `sum(hist_step_size[-4:-1]) == 0` 喂的是分解步数，但
+  `calculate_movement_steps` 对 A==B 仍返回 ≥1（yaw 占位项，单测
+  `test_zero_displacement_decomposition_is_placeholder` 锁定）——原式在
+  上游即不可达（死判据）。本移植按迁移方案"保留并升级 FAULT 收口"授权
+  落实其意图：`node` 另记位移进展位（`build_timed_path` 返回 None 即零
+  位移零旋转记 0），`is_stuck` 函数体不变、改喂进展位历史；`cycle` 事件
+  增 `progress` 字段供验收。stuck2 实测（`run-20261118stk`，grounding
+  恒空桩注入）：4 个零进展循环 → FAULT detail=stuck，goal 从未发出，
+  悬停保持 → Land/disarm/碰撞 0 全 PASS。
+
+## M2 容器内验证与 DDS 生命周期（2026-11-18 缺口补齐轮闭环）
+
+容器内 pytest：46 passed + 1 skip（本 README 早期"node 级测试占位、M2
+缺口"表述已闭环——占位 skip 保留为历史标记，实质由真实 DDS 生命周期测试
+替代：`src/tool/navigation/planner/citynav/validation/dds_lifecycle_check.py`
+6/6 PASS + SIGINT 优雅退出 exit=0，证据 `log/citynav/ros/`）。networkx
+对照库经宿主 wheel 只读挂载注入（镜像未动）；注意 onboard 镜像 pytest
+6.2.5 遇模块级 skip 会中断同批收集，须带 networkx 跑全量。
 
 ## 运行（阶段 6 Demo 前为开发入口）
 

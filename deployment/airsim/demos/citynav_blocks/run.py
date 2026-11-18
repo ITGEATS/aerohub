@@ -383,6 +383,8 @@ def mission(output, args):
                ' --max-steps ' + str(args.max_steps) +
                ' --use-memory ' + str(int(args.use_memory)) +
                ' --cancel-after ' + str(args.cancel_after) +
+               (' --expect-fault' if args.expect_fault else '') +
+               (' --expect-stuck' if args.expect_stuck else '') +
                ' --timeout ' + str(args.timeout) +
                ' --rpc-host ' + host + ' --rpc-port %d' % RPC_PORT +
                ' --target ' + ' '.join(str(v) for v in args.target) +
@@ -544,6 +546,16 @@ def main():
     parser.add_argument('--cancel-after', type=float, default=0.0,
                         help='mission action only: inject citynav/cancel N s '
                              'after the goal (0 disables; formal1 keeps it off)')
+    parser.add_argument('--expect-fault', action='store_true',
+                        help='mission action only: M6 fault1 gates (the LLM '
+                             'path was made persistently unreachable via a '
+                             'dead proxy base_url in <output>/planner.yaml '
+                             '+ restart-compute before running the case)')
+    parser.add_argument('--expect-stuck', action='store_true',
+                        help='mission action only: M6 stuck1 gates (grounding '
+                             'repointed to the always-empty host stub in '
+                             '<output>/planner.yaml + restart-compute; run '
+                             'with a >=4-landmark instruction)')
     parser.add_argument('--timeout', type=float, default=900.)
     parser.add_argument('--target', type=float, nargs=3, default=[34.25, 33.10, 3.68],
                         help='ground-truth OrangeBall in odom ENU (NED z=-3.68)')

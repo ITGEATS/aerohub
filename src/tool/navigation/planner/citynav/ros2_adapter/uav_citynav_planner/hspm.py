@@ -180,6 +180,13 @@ def plan_next_waypoint(llm_request: Callable[..., Dict],
             "steps_estimate": steps_estimate}
 
 
-def is_stuck(hist_step_size: List[int]) -> bool:
-    """SimRun.py L534 逐字：len>=4 且 sum(hist[-4:-1]) == 0。"""
-    return len(hist_step_size) >= 4 and sum(hist_step_size[-4:-1]) == 0
+def is_stuck(hist: List[int]) -> bool:
+    """SimRun.py L534 判据结构逐字：len>=4 且 sum(hist[-4:-1]) == 0。
+
+    输入语义（本移植升级，stuck1 注入轮实证）：上游喂的是分解步数，但
+    calculate_movement_steps 对 A==B 仍返回 ≥1（yaw 占位项），原式在上游
+    即不可达（死判据）。本包改喂位移进展位（1=产生可执行 timed 路径，
+    0=零位移零旋转），保留"连续 4 窗口前 3 循环零进展 → 卡死"的意图语义。
+    函数体不变，单测 test_is_stuck_verbatim_criterion 仍约束其纯逻辑。
+    """
+    return len(hist) >= 4 and sum(hist[-4:-1]) == 0

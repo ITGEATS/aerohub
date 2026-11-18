@@ -44,7 +44,8 @@
       {"layer": "simulator host", "detail": "Blocks startup-phase deaths became frequent this session (i/r/t: died 1-2 min after first heartbeat, D3D/GPU-contention family); long teleports (63 m to (46,44)) never converged the EKF within 60 s (p x2, GPS Horizontal Pos Drift too high).", "evidence": "run p expand1/2 result.json readiness errors; tasklist checks; Blocks.log"}
     ],
     "expansion_attempts": "6 Blocks sessions spent on the sanctioned expand-then-reuse path (p: EKF teleport; q: goal_rejected, same-session re-run artifacts, takeoff timeout after session degradation; r/t: startup deaths; s/u: goal_rejected). The chain was never faked: no exploit_executed event exists without a real prior hit + real CLIP + real walk.",
-    "not_relaxed": "the pre-locked gate (hit + execute + converge) stands; partial chain evidence is recorded, the round is NOT marked passed"
+    "not_relaxed": "the pre-locked gate (hit + execute + converge) stands; partial chain evidence is recorded, the round is NOT marked passed",
+    "resolution": "user ruling 2026-11-18 addendum-2: downgraded from acceptance mandatory-demo item to follow-up item (CLIP margin is a scene-degradation consequence per B2; three further expansion sessions in the gap-closure round - host death / corridor collision / 85.9 m semantic wander - confirmed the current acceptance environment cannot reliably stage it). The executed-walk evidence state remains 未完成 and MUST stay declared on the capability card and READMEs as 'cross-task memory reuse not flight-validated'; discriminative-signal enhancement remains an open follow-up item, not deleted."
   },
   "z_limcycle": {
     "status": "ATTRIBUTED + MITIGATED (2026-11-18, user ruling option A)",
@@ -119,13 +120,63 @@
       "IPv6 host.docker.internal vs PX4 C++ TCP (IPv4-first probe); Blocks RT ping-pong (1024x1024 window); stop() partial-role tolerance; simulator-gone cleanup rule"
     ]
   },
+  "fault1": {
+    "status": "PASSED (run-20261118gap, 2026-11-18)",
+    "evidence_path": "log/citynav/pc-e2e/run-20261118gap/fault1/ (+ NOTES.md counter-defect annotation, proxy-http-failures.log)",
+    "result": {
+      "success": true,
+      "injection": "persistent (locked before the run): session planner.yaml proxy base_url -> http://127.0.0.1:9/v4 (discard port inside the host-network container) + restart-compute BEFORE the mission; every citynav/llm query returns error_code=http (proxy log: 3x Connection refused at t=1795003276.9/303.5/329.7, spacing = retry_backoff_s=20)",
+      "fault_path": "landmark extraction failed 3 consecutive times (max_consecutive_failures=3) -> _do_fault(llm_failures): status FAULT reason=EXECUTION_FAILED detail=llm_failures failures=3; finite retry verified end-to-end (D10 replacement of the upstream infinite recursion)",
+      "no_crash_evidence": "revision=0 and goals_observed_on_action_status=0 -> no FollowTimedPath goal was EVER sent (fault_no_execution PASS); airborne_at_fault PASS (z>1 m at FAULT, hover held); native Land success + platform disarmed + collision 0 events; duration 149.2 s",
+      "gates": "readiness/teleport/takeoff/hover_settle/stop_state/fault_no_execution/airborne_at_fault/land/disarm/collision all PASS; waypoints/revision_match/final_reason NOT-EXECUTED by design (structurally inapplicable to a fault round, never silently passed)"
+    }
+  },
+  "m1_proxy_vs_sdk": {
+    "status": "PASSED under the REVISED criterion (user ruling 2026-11-18 addendum-2: proxy-vs-SDK strict within 15pp of the SDK self-control baseline + is_found >=90% + all diffs classified with no proxy-attributable systematic deviation -> 70% vs 80%, is_found 100%, classified: PASS). The original pre-locked strict >=90% gate was EXECUTED and NOT MET (70%) - retained below and in comparison.json, not retro-erased.",
+    "evidence_path": "log/citynav/llm/m1-20261118/ (frames/manifest.json 20 Blocks pose sets, proxy_results.json 20/20 ok, sdk_results.json 20/20 ok, sdk_results_control.json, comparison.json, comparison_sdk_selfcontrol.json, REPORT.md)",
+    "design": "same-frame A/B: capture_frames.py teleports via official RPC and grabs the City* five-eye 256x256 JPEG batch; proxy side = production uav_citynav_llm_proxy container (isolated DDS domain 232, cache disabled, verbatim cameras/model) driven over the authoritative citynav/llm/query contract; SDK side = host legacy venv, PatchedLLM.query_viewpoint_api logic replicated verbatim with the UPSTREAM-ORIGINAL route_planning_prompt_builder; scoring = upstream-original parse_viewpoint_response_v2, strict = is_found + per-view normalized object mapping",
+    "results": {
+      "proxy_vs_sdk": {"is_found_agreement": "20/20 = 100%", "strict": "14/20 = 70%", "relaxed_object_vocabulary": "17/20 = 85%"},
+      "sdk_vs_sdk_self_control": {"is_found_agreement": "20/20 = 100%", "strict": "16/20 = 80%", "relaxed_object_vocabulary": "19/20 = 95%"}
+    },
+    "attribution": "the pre-locked >=90% strict gate is confounded with model stochasticity: the SAME path on the SAME inputs agrees with itself only 80% (glm-4v-flash default temperature=1.0, upstream create call sets no temperature/seed and the proxy preserves that shape verbatim). All 6 proxy-vs-sdk diffs are the same two categories seen in the self-control (view attribution wobble inside the 45deg-spaced/90deg-FOV overlap zone; prompt-example placeholder echo 'object 1/2/3' on is_found=false). No proxy-induced systematic deviation detected; the 70% vs 80% gap is within n=20 sampling noise (binomial SE ~9pp). Known PNG-vs-JPEG transport deviation showed no detectable effect.",
+    "not_relaxed": "the original gate was NOT retro-erased: its 70% result stands on record. The user ruling (addendum-2, 2026-11-18) revised the metric prospectively on documented grounds (self-control 80% proves the old gate infeasible under model stochasticity) and re-scored the archived evidence under the revised criterion (PASS)."
+  },
+  "container_pytest_dds": {
+    "status": "PASSED (2026-11-18)",
+    "evidence_path": "log/citynav/ros/{container-pytest-20261118,dds-lifecycle-20261118}/",
+    "container_pytest": "uav_citynav_planner: 45 passed + 1 designed skip (node placeholder, now superseded by the real DDS lifecycle test) INSIDE onboard-computer v0.1.1 (py3.10/numpy1.21.5/scipy1.8.0, networkx comparison lib mounted read-only from a host-downloaded wheel - image untouched, no new base-env dependency); uav_citynav_llm_proxy: 34 passed INSIDE osrf/ros:humble-desktop-full-jammy. Matches the host baseline 45/1.",
+    "dds_lifecycle": "standalone planner container (production City* five-eye params) + workstation checker over real DDS: 6/6 PASS - node discovery; endpoint contract 3 publish + 21 subscribe + 6 services (action send_goal/get_result/cancel_goal are service endpoints, feedback/status are topics - graph-probed); IDLE heartbeat (state IDLE, ready=false); cancel idempotent in IDLE ('already IDLE'); goal -> goal_accepted + started -> STOPPED detail=not_ready convergence, twice (reentrant). SIGINT graceful shutdown exit=0, no traceback (planner-container.log). Script: src/tool/navigation/planner/citynav/validation/dds_lifecycle_check.py",
+    "collection_quirk_recorded": "pytest 6.2.5 (container) aborts sibling module collection when a module-level skip is hit mid-run - worked around by running the suite with networkx present (the only designed skip left is the node placeholder); documented here so future container runs are not misread as regressions."
+  },
+  "stuck2": {
+    "status": "PASSED (run-20261118stk/stuck2, 2026-11-18) - closes the last M6 sub-item (stuck detection injection)",
+    "evidence_path": "log/citynav/pc-e2e/run-20261118stk/stuck2/ (+ stuck1/ attempt record)",
+    "finding_first": "stuck1 attempt exposed that the upstream L534 criterion is DEAD CODE: calculate_movement_steps returns >=1 even for A==B (yaw placeholder), so sum(hist_steps[-4:-1])==0 can never fire - proven and locked by unit test test_zero_displacement_decomposition_is_placeholder. Per the migration plan's 'preserve and UPGRADE to FAULT convergence' authorization, the port now feeds a displacement-progress history (timed==None -> 0); is_stuck body unchanged.",
+    "injection": "grounding repointed to an always-seg_success=false host stub; first attempt (stuck1) failed on the Windows firewall (host-port inbound refused -> service_failures FAULT - itself a valid M6 data point), retried with the stub in a host-network container (127.0.0.1:18100) + 6-landmark instruction so completion cannot precede the 4-cycle window",
+    "result": {
+      "success": true,
+      "fault_path": "4 cycles, progress bits all 0 (fault-injection.json), no FollowTimedPath goal ever sent (revision=0) -> FAULT reason=EXECUTION_FAILED detail=stuck",
+      "gates": "readiness/teleport/takeoff/hover_settle/stop_state/stuck_zero_progress/stuck_before_execution/fault_no_execution/airborne_at_fault/land/disarm/collision all PASS; waypoints/revision_match/final_reason NOT-EXECUTED by design"
+    }
+  },
+  "exploit_retry_20261118": {
+    "status": "STILL BLOCKED (2026-11-18 gap-closure round, user-approved retry in the same session family; NO discriminative-logic change per the B2 ruling)",
+    "attempts": [
+      "expand2 (run-20261118exp): Blocks died 31 s into navigation (known host instability family)",
+      "expand3 (run-20261118exp2): spawn (20,20) corridor crosses a building - 5-step goal executed then collision with TemplateCube_Rounded_26 + segment_failed, no memory saved (planner saves only on completing paths)",
+      "expand4 (run-20261118exp2): two-mention instruction from the proven (10,10) corridor - 9 cycles / 7 goals / 6 SUCCEEDED / 24 steps but the 'fly around' semantics wandered to 85.9 m from target and ended segment_failed at 1/2 landmarks: no task_complete, no memory graph; Land read timed out, disarm confirmed via land_once probe (disarmed-confirmed.json)"
+    ],
+    "conclusion": "the expansion prerequisite (a completed flight saving a closer-to-target node whose CLIP score beats the start node) remains unmet on this host; the CLIP margin blocker from exploit1 stands unchanged. Per user ruling 2026-11-18 addendum-2 the mandatory-demo status is downgraded to a follow-up item; the executed-walk gap stays recorded as 未完成 and stays declared on the capability card."
+  },
   "not_executed_honest_gaps": [
-    "cross-task memory exploit reuse with an EXECUTED walk segment (decision-6 mandatory item) - BLOCKED: CLIP small/inverted margin on existing nodes + z limit cycle preventing expansion missions from flying (see exploit1.blockers)",
+    "cross-task memory exploit reuse with an EXECUTED walk segment - follow-up item (downgraded from mandatory-demo by user ruling 2026-11-18 addendum-2); evidence state remains 未完成: CLIP small/inverted margin, expansion retries blocked (see exploit_retry_20261118); must stay declared on the capability card",
+    "M-1 original strict >=90% gate result (70%) stays on record; PASSED under the revised criterion per user ruling 2026-11-18 addendum-2 (see m1_proxy_vs_sdk)",
     "full matrix (multiple instructions x instances, per-step error statistics)",
     "RoboPi board deployment",
     "real-hardware acceptance",
     "AirVLN benchmark metrics (route B: out of scope by ruling)"
   ],
   "deviations_exercised": ["Blocks window -ResX=1024 -ResY=1024 -ExecCmds=r.Streaming.PoolSize 128 (task spec said 1280x720; 720-height window triggers UE4 BitArray RT ping-pong with the 1024x1024 overhead observer capture)", "spawn realized as ground teleport + native takeoff instead of airborne NED z=-8 drop; default spawn (10,10,yaw45) instead of task-spec (-10,-10) because the ball at 62 m exceeds the contract 50 m depth gate (run-20261118f collision FAIL evidence; instruction/target/thresholds unchanged)", "OrangeBall target scored in odom ENU (+3.68)", "camera_rate_hz 5.0 per contract 10-stream budget", "planner service_timeout_s 120 / retry_backoff_s 20 for GS_EMPTY_CACHE cold-start (run-20261118b)", "cancel injection event-driven (revision>=1 + 20 s) with two-landmark instruction instead of wall-clock-after-goal, so the handoff provably interrupts an executing trajectory (run k lesson)", "mission hover-stability gate (8 s sliding window, 0.15 m range) after takeoff (post-takeoff z limit cycle, runs h/j)", "Behavior rejection log extended with actual/front/distance numbers (diagnostic improvement, rebuilt overlay; run m)", "exploit_executed event publishes walk/waypoints for acceptance evidence (observability addition, no semantic change)", "memory_loaded/exploit_hit/exploit_executed counted as executed segments in the waypoint gate (decision-6 reuse round semantics)"],
-  "claim_level": "partial-verification-passed: formal1 (run g) and cancel1 (run n) minimal end-to-end acceptance PASSED with pre-locked gates and complete evidence; exploit1 BLOCKED with per-layer attribution (perception model margin, flight-controller z limit cycle, simulator host startup deaths) - chain levels M0/M3/M4/M6/M7/M8 substantiated. NOT reproduction-success: exploit executed-walk reuse, full matrix and board deployment remain open; AirVLN benchmark out of scope by route-B ruling."
+  "claim_level": "partial-verification-passed (migration-integration acceptance PASSED): with user ruling 2026-11-18 addendum-2 (M-1 metric revised - archived evidence re-scored PASS; decision-6 executed-walk downgraded from mandatory-demo to follow-up item, its 未完成 evidence retained), the M0-M8 matrix is fully green under the revised scope: formal1/cancel1/fault1/stuck2 acceptance runs PASSED, M2 closed (container pytest 46+1 / proxy 34, real DDS lifecycle 6/6), M1 passes under the revised criterion (70% vs self-control 80%, is_found 100%). The claim ceiling is UNCHANGED by the ruling (plan line 123): NOT reproduction-success - AirVLN benchmark out of scope by route-B ruling, cross-task memory reuse not flight-validated (declared on the capability card), full matrix and board deployment remain open."
 }

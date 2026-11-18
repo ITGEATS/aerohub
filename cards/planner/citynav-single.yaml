@@ -26,10 +26,17 @@ description: |
   estimator/controller and the FollowTimedPath Behavior in one compute-role
   container; the LLM proxy runs in a separate workstation container.
   Validation status (claim level partial-verification-passed, NOT
-  reproduction-success): formal1 and cancel1 minimal end-to-end acceptance
-  PASSED 2026-11-18 on AirSim Blocks + PX4 SITL; exploit1 cross-task memory
-  reuse is incomplete (未完成) because the CLIP discriminative signal is
-  inherently insufficient in the Blocks scene (user ruling B2).
+  reproduction-success): formal1, cancel1, fault1 and stuck2 minimal
+  end-to-end acceptance PASSED 2026-11-18 on AirSim Blocks + PX4 SITL;
+  M-1 proxy/SDK same-frame agreement PASSED under the revised criterion
+  (user ruling 2026-11-18 addendum-2; original >=90% gate result 70% vs
+  SDK self-control 80% retained on record). CROSS-TASK MEMORY REUSE IS
+  NOT FLIGHT-VALIDATED: the executed-walk segment remains 未完成 (CLIP
+  discriminative signal inherently insufficient in the Blocks scene,
+  ruling B2) and was downgraded from acceptance mandatory-demo item to a
+  follow-up item by user ruling 2026-11-18 addendum-2; graph build/save/
+  load/hit/LM-Nav-search stages each have flight evidence, the final
+  execute stage does not.
   Boundaries: single vehicle only; per-vehicle spillover needs proxy cache
   keys, memory-graph paths and request_id namespacing isolated per vehicle
   (declared, not implemented). Out of scope by the route-B ruling: the AirVLN
