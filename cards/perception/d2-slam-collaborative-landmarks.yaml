@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: perception.d2-slam-collaborative-landmarks
-version: fork-f5ea552-aerohub-0.1.0
+version: "0.2.0"
 type: capability
 name: D2SLAM collaborative sparse landmarks
 description: Provides initialized sparse visual landmarks maintained by the shared multi-vehicle estimator; it does not provide free space or collision geometry.
@@ -32,7 +32,6 @@ lifecycle:
 
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
-  - hardware_type: compute/gpu/cuda
   - hardware_type: sensor/camera/rgb
   - hardware_type: sensor/camera/depth
   - hardware_type: sensor/imu/6dof
@@ -44,7 +43,6 @@ resource_access:
     - sensor/imu
     - swarm/peer-frames
   shared_writes:
-    - compute/gpu
     - swarm/collaboration
   exclusive_writes: []
 

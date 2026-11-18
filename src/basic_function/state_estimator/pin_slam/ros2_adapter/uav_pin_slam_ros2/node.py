@@ -37,6 +37,7 @@ class PinSlamNode(Node):
         self.declare_parameter("map_max_points", 500000)
         self.declare_parameter("map_publish_every_n_frames", 10)
         self.declare_parameter("input_queue_depth", 20)
+        self.declare_parameter("start_paused", False)
         config_path = self.get_parameter("config_path").value
         upstream_root = os.environ.get("PIN_SLAM_ROOT", "")
         if not config_path or not Path(config_path).is_file():
@@ -57,6 +58,7 @@ class PinSlamNode(Node):
         if input_queue_depth <= 0:
             raise RuntimeError("input_queue_depth must be positive")
         self._processed_input_count = 0
+        self._active = not bool(self.get_parameter("start_paused").value)
         self._previous_pose = None
         self._previous_stamp_ns = None
         self._path = PathMessage()
@@ -78,6 +80,7 @@ class PinSlamNode(Node):
             self._on_cloud, input_qos)
         self.create_service(Trigger, "pin_slam/save_results", self._save_results)
         self.create_service(Trigger, "pin_slam/save_mesh", self._save_mesh)
+        self.create_service(Trigger, "pin_slam/start", self._start)
 
     @staticmethod
     def _stamp_ns(message: PointCloud2) -> int:
@@ -92,6 +95,8 @@ class PinSlamNode(Node):
         self._status_pub.publish(array)
 
     def _on_cloud(self, message: PointCloud2) -> None:
+        if not self._active:
+            return
         stamp_ns = self._stamp_ns(message)
         point_count = int(message.width) * int(message.height)
         if not xyz_fields_valid(message.fields):
@@ -179,6 +184,24 @@ class PinSlamNode(Node):
     def _save_mesh(self, _request, response):
         return self._service_call(self._engine.save_mesh, response)
 
+    def _start(self, _request, response):
+        if self._active:
+            response.success = True
+            response.message = "already started"
+            return response
+        if not self._lock.acquire(blocking=False):
+            response.success = False
+            response.message = "algorithm busy"
+            return response
+        try:
+            self._active = True
+            response.success = True
+            response.message = "started"
+            self._status(DiagnosticStatus.OK, "started")
+            return response
+        finally:
+            self._lock.release()
+
     @staticmethod
     def _service_call(callback, response):
         try:
@@ -198,4 +221,5 @@ def main(args=None) -> None:
         rclpy.spin(node)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()

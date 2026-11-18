@@ -24,7 +24,7 @@ from rclpy.action import ActionClient
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2
-from std_srvs.srv import SetBool
+from std_srvs.srv import SetBool, Trigger
 
 OUTPUT = Path(os.environ.get("PIN_SLAM_SHADOW_RESULTS", "/results/pin-slam-shadow"))
 OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -275,8 +275,11 @@ class ShadowRun:
     def prepare_observation_window(self):
         self.wait(lambda: self.pose is not None, 40)
         self.wait(lambda: len(self.truth) >= 10, 20)
-        self.wait(lambda: len(self.candidates) >= 2, 60)
         self.spin(1)
+        self.clear_observation_samples()
+        self.spin(1)
+
+    def clear_observation_samples(self):
         self.inputs.clear()
         self.truth.clear()
         self.candidates.clear()
@@ -284,6 +287,33 @@ class ShadowRun:
         self.diagnostics.clear()
         self.canonical_count = 0
         self.last_stream_arrival.clear()
+
+    def start_pin_slam(self):
+        pre_start = {
+            "candidate_messages": len(self.candidates),
+            "lidar_messages": len(self.inputs),
+            "requested_wall_time": time.time(),
+        }
+        client = self.node.create_client(Trigger, "/drone0/pin_slam/start")
+        self.wait(client.service_is_ready, 20, "PIN-SLAM start service")
+        future = client.call_async(Trigger.Request())
+        self.wait(future.done, 15, "PIN-SLAM start response")
+        response = future.result()
+        if response is None or not response.success:
+            raise RuntimeError(
+                "PIN-SLAM start rejected: "
+                + ("no response" if response is None else response.message))
+        self.wait(lambda: len(self.candidates) >= 2, 60, "PIN-SLAM initialization")
+        self.spin(1)
+        (OUTPUT / "pin-slam-start.json").write_text(json.dumps({
+            "service_success": response.success,
+            "service_message": response.message,
+            "pre_start": pre_start,
+            "candidate_messages_before_accuracy_window": len(self.candidates),
+            "neural_point_messages_before_accuracy_window": len(self.map_stamps),
+            "ready_wall_time": time.time(),
+        }, indent=2) + "\n")
+        self.clear_observation_samples()
         self.spin(1)
 
     def execute_fault(self):
@@ -312,6 +342,7 @@ class ShadowRun:
             lambda: self.platform is not None
             and self.platform.status.state == PlatformStatus.FLYING,
             30, "platform flying state")
+        self.start_pin_slam()
         self.airborne_started = time.monotonic()
 
         # Publish the fault marker before the watched stream is stopped. One
@@ -333,11 +364,21 @@ class ShadowRun:
             lambda: len(self.candidates) >= 10 and len(self.map_stamps) >= 1,
             60, "PIN-SLAM tracking before fault injection")
 
+        pre_fault_tracking_losses = (
+            self.diagnostics.get("tracking_lost", 0)
+            + self.diagnostics.get("processing_failed", 0)
+        )
+        if pre_fault_tracking_losses:
+            raise RuntimeError(
+                "PIN-SLAM was not stably tracking before fault injection: "
+                + json.dumps(self.diagnostics, sort_keys=True))
+
         stream = "lidar" if self.scenario == "sensor_fault" else "candidate"
         baseline = {
             "lidar_messages": len(self.inputs),
             "candidate_messages": len(self.candidates),
             "canonical_pose_samples": self.canonical_count,
+            "diagnostics": dict(self.diagnostics),
         }
         (OUTPUT / "fault-ready.json").write_text(json.dumps({
             "scenario": self.scenario,
@@ -373,6 +414,7 @@ class ShadowRun:
                 "lidar_messages": len(self.inputs),
                 "candidate_messages": len(self.candidates),
                 "canonical_pose_samples": self.canonical_count,
+                "diagnostics": dict(self.diagnostics),
             },
             "detection_seconds": detection_seconds,
             "recovery_seconds": time.monotonic() - detection_started,
@@ -413,6 +455,7 @@ class ShadowRun:
         self.wait(
             lambda: self.platform is not None
             and self.platform.status.state == PlatformStatus.FLYING, 30)
+        self.start_pin_slam()
         self.airborne_started = time.monotonic()
         waypoint_count = int(os.environ.get("PIN_SLAM_WAYPOINT_COUNT", "5"))
         minimum_airborne_seconds = float(

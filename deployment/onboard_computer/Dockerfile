@@ -5,9 +5,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG DEBIAN_FRONTEND=noninteractive
 ARG IMAGE_VERSION=v0.1.1
 ARG SOURCE_REVISION=unknown
-ARG UBUNTU_APT_MIRROR=https://archive.ubuntu.com/ubuntu
-ARG UBUNTU_SECURITY_MIRROR=https://security.ubuntu.com/ubuntu
-ARG ROS_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu
+ARG UBUNTU_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
+ARG UBUNTU_SECURITY_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
+ARG ROS_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu
 LABEL org.opencontainers.image.version=$IMAGE_VERSION \
       org.opencontainers.image.revision=$SOURCE_REVISION \
       org.opencontainers.image.source="https://github.com/Air-Suck/aerohub"
@@ -21,6 +21,11 @@ RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print0 \
       -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
       -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_SECURITY_MIRROR}|g" \
       -e "s|http://packages.ros.org/ros2/ubuntu|${ROS_APT_MIRROR}|g"
+RUN printf '%s\n' \
+      'Acquire::Retries "10";' \
+      'Acquire::http::Timeout "60";' \
+      'Acquire::https::Timeout "60";' \
+      > /etc/apt/apt.conf.d/80-aerohub-network
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git patch python3-colcon-common-extensions \
     python3-rosdep python3-vcstool python3-yaml \

@@ -23,11 +23,14 @@ description: 将 ROS 1 包或算法服务迁移到 ROS 2 Humble，梳理运行�
 - 有共享可变状态的算法先使用串行回调；若代理线程等待异步 ROS 2 调用，让独立 executor 推进回调，并给等待设超时。
 - 检查所有时间字段的时钟来源，包括默认零值。`rclcpp::Time` 默认值可能是 system clock，而节点 `now()` 是 ROS clock；相减会抛异常。保留原零时间含义时显式指定 `RCL_ROS_TIME`，将消息时间与浮点秒转换为同一时钟类型。
 - 将 ROS 1 私有 topic 映射为 ROS 2 的 `~/...`，统一参数键从 `/` 到 `.` 的映射并核对实际值。对照发布者与当前模式订阅的真实路径，不能只照抄 launch 文件名或注释。
+- 状态估计算法可能同时发布低频优化/关键帧状态与高频 IMU 传播状态。迁移前追踪官方控制器、可视化和后端分别消费哪个 topic，记录频率与时间语义；Adapter 不得因消息类型相同就把低频优化输出当作控制状态。若高频流是原算法正式接口，应原样迁移并分别验证 source stamp 和到达间隔。
 - 将 latched 目标发布转为 `TRANSIENT_LOCAL`，同时检查订阅端 QoS 和启动发现时序。图像同步订阅要与实际传感器 QoS 兼容。用真实消息确认目标送达，而不只检查节点存在。
-- 更新真实部署 Dockerfile、启动脚本和注册表。旧 ROS 1 包留作对照时加 `COLCON_IGNORE`，避免同名包参与 colcon 发现。
+- 更新真实部署 Dockerfile、启动脚本和注册表。旧 ROS 1 包只可放在活动构建上下文之外作为离线对照；不得通过 `COLCON_IGNORE` 后仍复制进交付镜像，也不得由活动入口启动 ROS 1 Proxy。
 - 本仓库的 ROS 1 对照快照、旧代理和部署归档在 `src/tool/navigation/planner/<name>/upstream/`；活动 Humble 实现在 `src/tool/navigation/planner/<name>/ros2_adapter/native/`。移动归档时一并更新基线脚本、Docker COPY 和文档引用，保留原版本与许可证。
 
 完成条件：在真实 Humble 环境构建成功，生成的接口可被调用，运行路径不再依赖 roscore、roslaunch 或 ROS 1 代理。
+
+PC 复现与板端交付采用同一运行边界：以板端已有 ROS 2 Humble 和系统工具为目标，依赖、算法与 Adapter 在镜像构建阶段完成编译；运行容器不挂载宿主 workspace、源码或 overlay。ROS 1 基线容器仅用于离线输入输出对照，不属于复现运行拓扑。
 
 ## 行为验证与经验收录
 

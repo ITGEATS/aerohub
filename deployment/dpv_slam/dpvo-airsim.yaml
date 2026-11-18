@@ -1,7 +1,10 @@
 ### DPVO AirSim runtime profile ###
 
-# Use upstream's fast profile plus its official evaluation backend threshold.
-PATCHES_PER_FRAME: 48
+# Keep loop closure enabled while bounding synchronous global BA latency for
+# the live AirSim stream. The upstream fast profile's 48 patches produced a
+# measured 2.799 s correction gap once long-range factors entered the graph;
+# 32 patches still measured 2.544 s against the predeclared 2.5 s gate.
+PATCHES_PER_FRAME: 24
 REMOVAL_WINDOW: 16
 OPTIMIZATION_WINDOW: 7
 PATCH_LIFETIME: 11

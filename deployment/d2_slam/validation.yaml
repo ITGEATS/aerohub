@@ -3,7 +3,8 @@ scenario: d2-slam-three-vehicle-airsim-acceptance
 platform:
   simulator: AirSim 1.8.1, visible window
   flight_controller: PX4 SITL from flight_board:v0.1.0
-  compute: onboard_computer:v0.1.0 with an external workspace overlay
+  compute: self-contained D2SLAM image built from onboard_computer:v0.1.1
+  runtime_mounts: generated configuration and validation evidence only
   topology: three independent pc_simulation compute containers from deployment/swarm
 duration:
   minimum_airborne_seconds: 45.0
@@ -35,7 +36,7 @@ required_faults:
   - two peer D2VINS processes paused with remote-frame loss detected while the remaining local estimator stays live
 required_evidence:
   - locked source revisions, image IDs, workspace state and visible AirSim window
-  - real three-vehicle sensor, GPU algorithm, odometry and landmark streams
+  - real three-vehicle sensor, native algorithm, odometry and landmark streams
   - remote-frame events proving every estimator receives both peers
   - AirSim truth and fixed-scale ATE metrics for every vehicle
   - native AS2 plugin authority output and independent landmark consumer

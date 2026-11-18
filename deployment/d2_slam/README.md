@@ -1,69 +1,67 @@
 # D2SLAM deployment
 
-This deployment integrates the ROS 1 D2SLAM implementation into AeroHub's
-ROS 2 Humble and AS2 runtime. It reuses the repository's `deployment/swarm/`
-infrastructure and runs three independent compute containers. It does not
-build an algorithm-specific image.
+This deployment packages the AeroHub D2SLAM Fork as native ROS 2 Humble.
+Every PC-simulation vehicle runs one self-contained compute image; no ROS 1
+runtime, catkin workspace, source checkout, build overlay, or host dependency
+directory is mounted at runtime.
 
 ## Runtime architecture
 
 ```text
 AirSim RGB + DepthPerspective + IMU (ROS 2)
-  -> per-vehicle ROS 2 adapter
-  -> Unix-domain socket
-  -> ROS 1 proxy
-  -> native ROS 1 D2VINS/D2SLAM
-  -> ROS 1 proxy / Unix-domain socket
-  -> ROS 2 odometry, landmarks and collaboration evidence
-  -> native AS2 State Estimator plugin
+  -> ROS 2 sensor adapter
+  -> native ROS 2 D2VINS / D2PGO / D2Comm
+  -> ROS 2 D2SLAM adapter
+  -> high-rate odometry, sparse landmarks and collaboration status
+  -> native AS2 State Estimator plugin when authority is selected
 ```
 
-The bridge is deliberately narrower than a general `ros1_bridge`: it carries
-only the inputs and outputs needed by D2SLAM, preserves acquisition stamps and
-frames, bounds its queues, reports drops/reconnects, and does not replay stale
-state after reconnect. D2SLAM remains one shared algorithm runtime: the state
-and collaborative-landmark cards are separate external capabilities, not
-separate algorithm processes.
+D2SLAM remains one shared process group per vehicle. Its state-estimation and
+sparse-landmark cards describe two external capabilities of that group, not
+two algorithm copies. The AS2 plugin uses D2SLAM as a global correction while
+PX4 local odometry remains the high-rate body-state source.
 
-The AS2 plugin treats D2SLAM as a low-rate global correction. PX4 local
-odometry remains the high-rate `odom -> base_link` and body-twist source;
-D2SLAM updates `map -> odom`. Only one AS2 state-estimator host may own
-canonical pose, twist and TF for a vehicle.
+D2VINS exposes two state streams with different semantics. Native `odometry`
+is emitted with optimized keyframes and can have roughly 0.5 s gaps; it is
+useful as an optimization result but is not a control-rate freshness source.
+The Adapter therefore consumes the official high-rate `imu_propagation`
+stream and republishes it as `/droneN/d2_slam/odometry`. The accepted runs
+measured about 49 Hz with at most 0.045 s source-stamp gaps. Topic selection
+must follow the algorithm's official downstream use, not just a matching ROS
+message type.
 
-## Locked environment
+## Build
 
-- visible AirSim 1.8.1 (`DISPLAY=:1`, `AIRSIM_RENDER_MODE=windowed`);
-- PX4 SITL from `flight_board:v0.1.0`;
-- ROS 2/AS2 and the external ROS 1/CUDA workspace in
-  `onboard_computer:v0.1.0`;
-- three `pc_simulation` vehicles from
-  `deployment/swarm/configs/d2_slam.yaml`;
-- NVIDIA GPU execution for every D2VINS process.
-
-Prepare the ignored external workspace with:
+Build the PX4-1.18-compatible onboard base first, then the algorithm image:
 
 ```bash
-export D2_SLAM_WORKSPACE="$PWD/log/workspaces/d2_slam"
-bash deployment/d2_slam/prepare_workspace.sh
+HTTP_PROXY=<robot1-proxy> HTTPS_PROXY=<robot1-proxy> \
+  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+  bash deployment/onboard_computer/build.sh
+
+HTTP_PROXY=<robot1-proxy> HTTPS_PROXY=<robot1-proxy> \
+  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+  D2_SLAM_IMAGE=aerohub/d2-slam:ros2-humble-native \
+  bash deployment/d2_slam/prepare_workspace.sh
 ```
 
-The preparation entry locks the ROS 1 and CUDA packages, builds the native
-catkin workspace and the ROS 2 Adapter/plugin overlays using the fixed onboard
-image. The catkin artifacts contain absolute paths, so the tool container must
-mount the workspace both at `/workspace` and at its original host path. The
-runtime uses the same two read-only mounts. Do not copy build products into the
-repository or create a D2SLAM image.
+`prepare_workspace.sh` is retained as the public build entry for compatibility;
+it builds an image rather than an external workspace. The image contains the
+locked native packages, Adapter, AS2 plugin, AirSim sensor package, runtime
+configuration, and validation programs. The optional `quadcam_depth_est`
+TensorRT package is not part of the AirSim RGB-D topology and is not built.
+The accepted RGB-D profile uses `onnxruntime-cpu`; it assigns three ONNX
+intra-op threads to each vehicle so three estimators fit robot1's physical CPU
+budget without cross-instance oversubscription. A CUDA device is not an
+algorithm requirement for this profile (AirSim rendering still uses the host
+GPU).
 
 ## Run and validate
-
-Set the machine-local AirSim binary and PX4 message overlay as needed; these
-paths are local configuration and must not be committed:
 
 ```bash
 export DISPLAY=:1 AIRSIM_RENDER_MODE=windowed
 export AIRSIM_BINARY=<AirSimNH executable>
-export D2_SLAM_WORKSPACE=<prepared D2SLAM workspace>
-export PX4_MSGS_OVERLAY_WORKSPACE=<overlay matching flight_board PX4>
+export D2_SLAM_IMAGE=aerohub/d2-slam:ros2-humble-native
 
 python3 deployment/d2_slam/run_airsim.py shadow \
   --output log/d2-slam/shadow
@@ -78,42 +76,48 @@ python3 deployment/d2_slam/run_airsim.py communication_fault \
   --output log/d2-slam/communication-fault
 ```
 
-Every invocation requires a fresh output directory and owns its AirSim
-instance, three flight-board containers, three compute containers, adapters,
-mission process and evidence. The authority action accepts only a passing
-shadow directory with the same runtime source hashes, D2SLAM revision and
-image IDs. The declared matrix checks:
+The only compute-container bind mount is the per-run evidence directory at
+`/runtime/output` or `/results`. AirSim settings are generated run inputs and
+are mounted as a single read-only file into the sensor process; they are not a
+software workspace or dependency overlay.
 
-- independent real RGB, DepthPerspective and IMU input for all three vehicles;
-- three real GPU D2VINS processes, nonempty landmarks and both remote peers;
-- fixed-scale trajectory accuracy against AirSim truth;
-- visible AirSim and a moving fleet-centroid overhead view;
-- native AS2 authority output with high-rate local-state composition;
-- sensor loss, algorithm exit and peer-communication loss;
-- controlled fleet landing, disarm and owned-resource cleanup.
+The matrix checks independent sensor input, native ROS 2 graph readiness,
+three-vehicle collaboration, sparse landmarks, trajectory accuracy, visible
+AirSim, AS2 authority, fault handling, landing/disarm, and owned-resource
+cleanup. Authority requires a passing shadow run from the same source and
+image identities.
 
-The validator records both source timestamps and local arrival time. ROS
-callbacks run in an executor independent of AirSim truth RPC calls so evidence
-collection cannot manufacture stream gaps.
+## Accepted evidence
 
-## Sensor and representation boundaries
+The native Humble matrix passed with image
+`sha256:baf21bd2cc05ee01a28dabc63ccede00512a9b88f6b62a669bfaf94769f530fd`:
 
-The front camera is placed 0.4 m forward and the same body-to-camera extrinsic
-is configured in D2SLAM. This prevents the vehicle's arms and propellers from
-dominating tracking; changing the camera pose requires changing both files and
-rerunning the full matrix. Depth is AirSim `DepthPerspective`, converted to
-the native `16UC1` millimetre contract without reducing it to 8-bit data.
+- `log/d2-slam/ground-imu-propagation-final-20261118/result.json`: native graph,
+  real sensor input, landmarks and both remote peers passed.
+- `log/d2-slam/airsim-shadow-imu-propagation-final-20261118/result.json`: three
+  vehicles ran at 49.68--49.73 Hz; position RMSE was 0.085, 0.135 and 0.093 m.
+- `log/d2-slam/airsim-authority-imu-propagation-final-20261118/result.json`: AS2
+  reported `plugin_name=d2_slam`; position RMSE was 0.091, 0.144 and 0.088 m.
+- `log/d2-slam/airsim-sensor-fault-imu-propagation-final-20261118/result.json`,
+  `airsim-algorithm-fault-imu-propagation-final-20261118/result.json` and
+  `airsim-communication-fault-imu-propagation-final-20261118/result.json`:
+  sensor loss, D2VINS exit and peer loss were detected, followed by landing,
+  disarm and owned-resource cleanup.
 
-`/droneN/d2_slam/landmarks` contains initialized sparse visual landmarks from
-the collaborative estimator. It is suitable for RViz and landmark consumers.
-It is not an occupancy grid, dense reconstruction, ESDF or proof of free
-space, and must not be connected directly to collision checking.
+These paths are ignored runtime evidence on the validation host. Failed
+diagnostic runs remain alongside them and are not acceptance evidence.
 
-## Stop and recovery
+## Representation and recovery
 
-Use `run_airsim.py stop --output <run-directory>` only for resources owned by
-that run. Remove D2SLAM authority before stopping the algorithm. A stale or
-failed global correction is frozen while fresh PX4 local state remains
-available for a controlled landing; failure of PX4 local odometry is outside
-that degradation claim. Restart D2SLAM only while motion is stopped because a
-restart creates a new collaborative map epoch.
+`/droneN/d2_slam/landmarks` is a sparse visual-landmark view for RViz and
+landmark consumers. It is not an occupancy map, ESDF, dense reconstruction, or
+proof of free space and must not feed collision checking directly.
+
+Remove D2SLAM authority before stopping the algorithm. A stale global
+correction is frozen while fresh PX4 local state supports controlled landing.
+Restart only while motion is stopped because restart creates a new
+collaborative-map epoch.
+
+The accepted deployment is three PC-simulated compute containers using
+`deployment/swarm/`. Hybrid deployment with a physical compute board remains
+unvalidated.

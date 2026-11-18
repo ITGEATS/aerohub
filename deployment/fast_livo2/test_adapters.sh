@@ -2,18 +2,13 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-workspace=${FAST_LIVO2_WORKSPACE:-$root/log/workspaces/fast_livo2}
-image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.0}
+image=${FAST_LIVO2_IMAGE:-aerohub/fast-livo2:ros2-humble}
 domain=${FAST_LIVO2_TEST_DOMAIN:-219}
 run_id=${FAST_LIVO2_TEST_RUN_ID:-adapter-$(date +%Y%m%d-%H%M%S)}
 evidence=$root/log/fast_livo2/$run_id
 
-test -f "$workspace/install/setup.bash" || {
-  printf 'Prepared workspace is missing: %s\n' "$workspace" >&2
-  exit 2
-}
 mkdir -p "$evidence"
-docker image inspect "$image" > "$evidence/shared-image.json"
+docker image inspect "$image" > "$evidence/component-image.json"
 sha256sum "$root/deployment/fast_livo2/tests/adapter_integration.py" \
   > "$evidence/test.sha256"
 
@@ -27,14 +22,12 @@ docker run --rm --init --network host \
   --name "$container" \
   --label aerohub.task=fast-livo2-adapter-test \
   --env "ROS_DOMAIN_ID=$domain" \
-  --volume "$workspace:/workspace:ro" \
-  --volume "$root/deployment/fast_livo2/tests:/tests:ro" \
   --volume "$evidence:/evidence" \
   --entrypoint bash "$image" -lc '
 set -eo pipefail
 source /opt/ros/humble/setup.bash
 source /root/aerostack2_ws/install/setup.bash
-source /workspace/install/setup.bash
+source /opt/fast_livo2_ws/install/setup.bash
 pids=()
 cleanup_nodes() {
   if ((${#pids[@]} == 0)); then return; fi
@@ -54,16 +47,16 @@ cleanup_nodes() {
   wait "${pids[@]}" 2>/dev/null || true
 }
 trap cleanup_nodes EXIT INT TERM
-/workspace/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/pointcloud_to_livox \
+/opt/fast_livo2_ws/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/pointcloud_to_livox \
   >/evidence/pointcloud_to_livox.log 2>&1 &
 pids+=("$!")
-/workspace/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/sensor_qos_adapter \
+/opt/fast_livo2_ws/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/sensor_qos_adapter \
   >/evidence/sensor_qos_adapter.log 2>&1 &
 pids+=("$!")
-/workspace/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/output_adapter \
+/opt/fast_livo2_ws/install/uav_fast_livo2_ros2/lib/uav_fast_livo2_ros2/output_adapter \
   >/evidence/output_adapter.log 2>&1 &
 pids+=("$!")
-python3 /tests/adapter_integration.py | tee /evidence/result.log
+python3 /opt/fast_livo2/tests/adapter_integration.py | tee /evidence/result.log
 '
 trap - EXIT INT TERM
 
