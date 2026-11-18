@@ -1,61 +1,70 @@
-"""spf/vlm/query → spf/vlm/result 轻量客户端（板端纯 stdlib+rclpy）。
+"""SPF consumer of the generic Inference Function; no vendor HTTP or credentials.
 
-request_id 匹配、过期丢弃（max_result_age_s）、无结果超时。图像不落板端：
-query 只携带指令与请求时的图像 stamp（对齐用），result 由代理回发其实际帧 stamp。
+The navigation prompt and interpretation of point/depth belong to this Tool.
+Only model_name is selected here; the Function owns camera acquisition/encoding
+and the private CUDA/Houmo/Cloud binding.
 """
-import json
-import threading
 import time
-import uuid
 
-from std_msgs.msg import String
+from rclpy.action import ActionClient
+from uav_inference_interfaces.action import InferVisionLanguage
+
+from .prompt import VlmParseError, build_prompt, parse_point_response
+
+# SPF waits for inference between completed motion segments.
+RESULT_MAX_AGE_S = 30.0
 
 
 class VlmQueryClient:
-    def __init__(self, node, max_result_age_s: float = 6.0):
+    def __init__(self, node, model_name):
         self._node = node
-        self._max_age = max_result_age_s
-        self._lock = threading.Lock()
-        self._pending = None  # (request_id, submit_wall, result dict | None)
-        # Relative to the node namespace (__ns:=/<vehicle_namespace>).
-        self._pub = node.create_publisher(String, "spf/vlm/query", 10)
-        node.create_subscription(String, "spf/vlm/result",
-                                 self._on_result, 10)
+        self._model_name = model_name
+        self._client = ActionClient(node, InferVisionLanguage, 'inference/vision_language/infer')
 
-    def _on_result(self, msg):
+    @staticmethod
+    def _cancel_late(future):
         try:
-            result = json.loads(msg.data)
-        except ValueError:
-            return
-        result["_wall"] = time.monotonic()
-        with self._lock:
-            if self._pending and result.get("request_id") == self._pending[0]:
-                self._pending = (self._pending[0], self._pending[1], result)
+            handle = future.result()
+            if handle.accepted:
+                handle.cancel_goal_async()
+        except Exception:
+            pass
 
-    def request(self, instruction: str, image_stamp: float, timeout_s: float):
-        """阻塞式一次标注请求。返回 result dict；失败返回 {"ok": False, "error_code": ...}。"""
-        request_id = uuid.uuid4().hex
-        query = String(data=json.dumps({
-            "request_id": request_id, "instruction": instruction,
-            "image_stamp": image_stamp}))
-        with self._lock:
-            self._pending = (request_id, time.monotonic(), None)
-        self._pub.publish(query)
+    def request(self, instruction, timeout_s, interrupted=lambda: False):
+        if not self._client.server_is_ready():
+            return dict(ok=False, error_code='NOT_READY')
+        request = InferVisionLanguage.Goal(
+            model_name=self._model_name, prompt=build_prompt(instruction),
+            timeout=float(timeout_s), max_result_age=RESULT_MAX_AGE_S)
         deadline = time.monotonic() + timeout_s
-        while time.monotonic() < deadline:
-            with self._lock:
-                got = "pending" if (self._pending and self._pending[2] is None) else \
-                    (self._pending[2] if self._pending else None)
-            if got == "pending":
-                time.sleep(0.05)
-                continue
-            with self._lock:
-                self._pending = None
-            if got is None:
-                return {"ok": False, "error_code": "no_result"}
-            if time.monotonic() - got.get("_wall", time.monotonic()) > self._max_age:
-                return {"ok": False, "error_code": "stale_result"}
-            return got
-        with self._lock:
-            self._pending = None
-        return {"ok": False, "error_code": "query_timeout"}
+        acceptance = self._client.send_goal_async(request)
+        while not acceptance.done():
+            if interrupted() or time.monotonic() >= deadline:
+                acceptance.add_done_callback(self._cancel_late)
+                return dict(ok=False, error_code='interrupted')
+            time.sleep(0.025)
+        handle = acceptance.result()
+        if not handle.accepted:
+            return dict(ok=False, error_code='BUSY_OR_INVALID')
+        future = handle.get_result_async()
+        while not future.done():
+            if interrupted() or time.monotonic() >= deadline:
+                handle.cancel_goal_async()
+                return dict(ok=False, error_code='interrupted')
+            time.sleep(0.025)
+        result = future.result().result
+        if not result.success:
+            return dict(ok=False, error_code=result.error_code)
+        stamp = result.observation_header.stamp
+        age = (self._node.get_clock().now().nanoseconds / 1e9
+               - stamp.sec - stamp.nanosec * 1e-9)
+        if age < -0.05 or age > RESULT_MAX_AGE_S:
+            return dict(ok=False, error_code='STALE_RESULT')
+        try:
+            parsed = parse_point_response(result.text)
+        except VlmParseError as error:
+            return dict(ok=False, error_code=error.code)
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+            return dict(ok=False, error_code='bad_json')
+        return dict(ok=True, **parsed, image_stamp=stamp.sec + stamp.nanosec * 1e-9,
+                    model=result.model_name, latency_ms=result.latency_ms)

@@ -540,3 +540,21 @@ capability_types:
       coordinate_frame: none
       axes: none
       timestamp: publication_time
+
+  - id: inference/vision-language/text
+    name: Vision-language generated text
+    description: Generic model text bound to the actual vehicle camera image, not a navigation decision.
+    transport:
+      protocol: ros2_action
+      schema: uav_inference_interfaces/action/InferVisionLanguage
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: textual
+      units: {}
+      coordinate_frame: original_camera_optical_frame
+      axes: optical_x_right_y_down_z_forward
+      timestamp: image_acquisition_time

@@ -1,7 +1,7 @@
 # AS2 Navigation Module
 
-公共 Python 调用层只依赖 `uav_planner_interfaces/action/NavigateToPose`，不依赖具体
-Planner。实现服务端放在对应 `src/tool/navigation/planner/<planner>/` 下；目前 SUPER 提供首个实现。
+公共 Python 调用层依赖共享的 `NavigateToPose` 和 `NavigateToSemanticGoal` Action，
+不依赖具体 Planner。实现服务端放在对应 `src/tool/navigation/planner/<planner>/` 下；目前 SUPER 提供首个实现。
 
 ## 加载与调用
 
@@ -145,3 +145,24 @@ SUPER卡片复用已有里程计、导航障碍点、控制器状态类型；YOP
 对齐检查日志在 `log/navigation-card-v1/`。两张目标Card和部署绑定检查通过；
 全仓校验仍因DiffPhys、YOLO26n-seg、GCOPTER、Object Detection四张旧卡未迁移到v1而失败，
 本次检查与修改前错误集合一致，不表示全仓卡片已全部通过。
+
+## Semantic navigation operation
+
+Navigation exposes multiple operations; planner alternatives need not implement all of them.
+`to_pose` uses `NavigateToPose`; `to_semantic_goal` uses the separate shared
+`NavigateToSemanticGoal` Action at `/<UAV>/navigate_to_semantic_goal`.
+`ready` continues to mean pose-operation availability; `semantic_ready` checks
+semantic-operation availability. No automatic fallback between operations is performed.
+
+```python
+drone.navigation.to_semantic_goal("approach the orange ball", timeout=60.0, wait=False)
+# Later: navigation.feedback / done / result; navigation.cancel() confirms stopping.
+```
+
+`description` must be non-empty and `timeout` finite and positive (monotonic seconds).
+The current SPF alternative has **no arrival detector**: budget exhaustion yields
+`TIMEOUT`, `success=false`, after stopping; it never claims successful attainment.
+`wait=True` therefore returns False on a confirmed timeout; inspect `result.code`,
+`result.reason` and `result.stop_confirmed` to distinguish timeout/cancel/failure.
+An unsupported operation has no available server and fails explicitly.
+Rebuild/source `uav_planner_interfaces` and this package together when adopting the new Action.

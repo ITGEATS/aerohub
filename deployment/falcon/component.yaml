@@ -74,20 +74,20 @@ resources:
 validation:
   stage: reproduced
   scope: Native ROS 2 Humble self-contained compute and workstation images passed the visible AirSim + image-embedded PX4 SITL normal, depth-loss and planner-exit matrix without host source or build/install mounts.
-  image: sha256:57d923b4315f0d41165181b28a9977ebe61b2662d280abcd518e07a96d690e3e
-  workstation_image: sha256:3eb4ad8667859b06b78eedf9e0c50710ae316b886b89a4e5cdd73770a3604f00
+  image: sha256:d3b6c5311b9ef86c366a1cda8925ed4ff36e9e5b71a11af0c1e7ccc12712329f
+  workstation_image: sha256:02b23300a48abca65da11d347e26ee11144190629a07c35f3da57185031c74f6
   flight_image: sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843
-  source_digest: 3e9e67ed9b8676aff3a76d7c34745beed26be75acb024f38218048a6280edd6f
+  source_digest: 9fe47dbe5be53ea1c98f8061ca7874936c47329a4f9d7e6cf1e6523d6d5bd836
   evidence:
-    - log/falcon/self-contained-final-normal-r1/result.json
-    - log/falcon/self-contained-final-normal-r1/runtime-mounts.json
-    - log/falcon/self-contained-final-normal-r1/cleanup.json
-    - log/falcon/self-contained-final-depth-loss-r1/result.json
-    - log/falcon/self-contained-final-depth-loss-r1/runtime-mounts.json
-    - log/falcon/self-contained-final-depth-loss-r1/cleanup.json
-    - log/falcon/self-contained-final-planner-exit-r1/result.json
-    - log/falcon/self-contained-final-planner-exit-r1/runtime-mounts.json
-    - log/falcon/self-contained-final-planner-exit-r1/cleanup.json
+    - log/falcon/self-contained-post-merge-normal-r1/result.json
+    - log/falcon/self-contained-post-merge-normal-r1/runtime-mounts.json
+    - log/falcon/self-contained-post-merge-normal-r1/cleanup.json
+    - log/falcon/self-contained-post-merge-depth-loss-r1/result.json
+    - log/falcon/self-contained-post-merge-depth-loss-r1/runtime-mounts.json
+    - log/falcon/self-contained-post-merge-depth-loss-r1/cleanup.json
+    - log/falcon/self-contained-post-merge-planner-exit-r1/result.json
+    - log/falcon/self-contained-post-merge-planner-exit-r1/runtime-mounts.json
+    - log/falcon/self-contained-post-merge-planner-exit-r1/cleanup.json
   required_cases:
     - normal-complete-exploration
     - depth-stream-loss

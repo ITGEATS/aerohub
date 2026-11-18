@@ -51,7 +51,9 @@ def build_revision(action: ActionPoint, x0: float, y0: float, z0: float, yaw0: f
         if abs(theta) > YAW_THRESHOLD_DEG:
             rotated = True
             t_rot = abs(theta) / yaw_rate
-            yaw1 = yaw0 + math.radians(theta)
+            # Upstream target_angle is right-positive (NED clockwise).
+            # TimedPath yaw is ENU counterclockwise, so the increment is negated.
+            yaw1 = yaw0 - math.radians(theta)
             points.append({"t": t_rot, "x": x0, "y": y0, "z": z0,
                            "vx": 0.0, "vy": 0.0, "vz": 0.0, "yaw": yaw1})
             t = t_rot

@@ -1,9 +1,9 @@
 schema_version: "1.0"
 id: planner.spf-single
-version: "0.2.0"
+version: "0.4.0"
 type: tool
 name: SPF language-navigation single-vehicle tool
-description: Accepts a natural-language goal and executes single-vehicle closed-loop See-Point-Fly navigation through FPV image interpretation, semantic-depth back-projection and FollowTimedPath rotate/forward segments; the workstation VLM proxy consumes images while the compute role exchanges request/result JSON.
+description: Accepts a natural-language semantic goal and executes single-vehicle closed-loop See-Point-Fly navigation through the shared Vision-Language Inference Function, semantic-depth back-projection and FollowTimedPath rotate/forward segments. The finite timeout includes inference, retries and motion; SPF has no semantic arrival detector, so budget expiry returns TIMEOUT rather than success, and cancellation succeeds only after stop confirmation.
 
 implementation:
   component_id: aerohub.planner.spf-single
@@ -18,20 +18,20 @@ inputs:
     capability_type: sensor/camera/rgb/camera-info
   - id: fpv_image
     capability_type: sensor/camera/rgb/image
+  - id: vision_language_inference
+    capability_type: inference/vision-language/text
 
 outputs:
   - id: task_status
     capability_type: diagnostics/health/text
-  - id: planning_events
-    capability_type: diagnostics/health/text
 
 interfaces:
-  - id: navigate_by_language
+  - id: to_semantic_goal
     role: functional_operation
     interaction: managed_task
-    protocol: ros2_topic
-    schema: std_msgs/msg/String
-    parameter_schema: null
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/NavigateToSemanticGoal
+    parameter_schema: src/tool/navigation/interfaces/action/NavigateToSemanticGoal.action
   - id: cancel_task
     role: lifecycle_operation
     interaction: request_response
@@ -48,7 +48,7 @@ interfaces:
 lifecycle:
   management: agent_managed
   operations:
-    start: navigate_by_language
+    start: to_semantic_goal
     status: null
     stop: cancel_task
 
@@ -61,7 +61,7 @@ resource_access:
   reads:
     - sensor/rgb-camera
     - vehicle/self-state
-    - external/vlm-cloud-api
+    - inference/vision-language/text
   shared_writes: []
   exclusive_writes:
     - vehicle/motion

@@ -1,0 +1,37 @@
+schema_version: "1.0"
+id: inference.vision-language
+version: "0.2.0"
+type: capability
+name: Vision-language model inference
+description: Generates generic text from a configured vehicle RGB camera and caller prompt through an authorized cloud model binding; it preserves the acquisition header, enforces input/result age and timeout, rejects concurrent goals, and reports NOT_READY, unsupported model, stale data, timeout, cancellation, rate limit, authentication and payload failures without making navigation or motion decisions.
+implementation:
+  component_id: aerohub.inference.vision-language
+  manifest: deployment/inference/vision_language.component.yaml
+  shared_runtime: vision-language-worker-and-ROS-adapter
+  coupled_capabilities: []
+inputs:
+  - id: rgb_image
+    capability_type: sensor/camera/rgb/image
+outputs:
+  - id: generated_text
+    capability_type: inference/vision-language/text
+interfaces:
+  - id: infer
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_inference_interfaces/action/InferVisionLanguage
+    parameter_schema: src/basic_function/inference/interfaces/action/InferVisionLanguage.action
+lifecycle:
+  management: system_managed
+  operations:
+    start: null
+    status: null
+    stop: null
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/camera/rgb
+resource_access:
+  reads: [sensor/rgb-camera, external/vlm-cloud-api]
+  shared_writes: []
+  exclusive_writes: [inference/vision-language/worker]

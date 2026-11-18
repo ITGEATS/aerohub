@@ -80,18 +80,18 @@ the same final image pair and source digest:
 
 | Case | Matched depth/odometry | Map growth | Movement | Safe stop and land/disarm | Evidence |
 | --- | ---: | ---: | ---: | --- | --- |
-| Normal | 556 | 640,886 points | 5.363 m | Passed | `log/falcon/self-contained-final-normal-r1/` |
-| Depth loss | 93 before fault | 188,663 points | 1.579 m | Passed | `log/falcon/self-contained-final-depth-loss-r1/` |
-| Planner exit | 174 before fault | 190,470 points | 1.777 m | Passed | `log/falcon/self-contained-final-planner-exit-r1/` |
+| Normal | 170 | 242,069 points | 1.868 m | Passed | `log/falcon/self-contained-post-merge-normal-r1/` |
+| Depth loss | 73 before fault | 135,568 points | 3.070 m | Passed | `log/falcon/self-contained-post-merge-depth-loss-r1/` |
+| Planner exit | 188 before fault | 268,632 points | 1.823 m | Passed | `log/falcon/self-contained-post-merge-planner-exit-r1/` |
 
 The compute image is
-`sha256:57d923b4315f0d41165181b28a9977ebe61b2662d280abcd518e07a96d690e3e`,
+`sha256:d3b6c5311b9ef86c366a1cda8925ed4ff36e9e5b71a11af0c1e7ccc12712329f`,
 the workstation image is
-`sha256:3eb4ad8667859b06b78eedf9e0c50710ae316b886b89a4e5cdd73770a3604f00`,
+`sha256:02b23300a48abca65da11d347e26ee11144190629a07c35f3da57185031c74f6`,
 and the flight image is
 `sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843`.
 Both FALCON images embed source digest
-`3e9e67ed9b8676aff3a76d7c34745beed26be75acb024f38218048a6280edd6f`.
+`9fe47dbe5be53ea1c98f8061ca7874936c47329a4f9d7e6cf1e6523d6d5bd836`.
 Each evidence directory includes the inspected runtime mounts and cleanup
 result; all three runs ended with their owned containers absent and the scene
 stopped.

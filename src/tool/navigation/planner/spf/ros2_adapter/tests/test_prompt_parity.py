@@ -6,7 +6,7 @@ import ast
 import re
 from pathlib import Path
 
-from uav_spf_vlm_proxy.prompt import PROMPT_TEMPLATE, clean_response_text
+from uav_spf_planner.prompt import PROMPT_TEMPLATE, clean_response_text
 
 UPSTREAM = Path(__file__).resolve().parents[2] / "upstream"
 ACTION_PROJECTOR = UPSTREAM / "src" / "spf" / "airsim" / "action_projector.py"
@@ -40,7 +40,7 @@ def _upstream_clean_body() -> str:
 
 
 def _local_clean_body() -> str:
-    import uav_spf_vlm_proxy.prompt as mod
+    import uav_spf_planner.prompt as mod
     tree = ast.parse(open(mod.__file__, encoding="utf-8").read())
     for f in [n for n in tree.body if isinstance(n, ast.FunctionDef)
               and n.name == "clean_response_text"]:
