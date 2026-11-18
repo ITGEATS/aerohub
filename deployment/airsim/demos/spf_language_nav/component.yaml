@@ -1,0 +1,41 @@
+schema_version: '0.1'
+id: aerohub.planner.spf-single
+version: '0.1.0'
+source:
+  upstream: src/tool/navigation/planner/spf/upstream
+  revision: 5621bcf43e9826d60df014541dd0498e743a92bd
+  integration: [src/tool/navigation/planner/spf/ros2_adapter, src/tool/navigation/planner/spf/vlm_proxy]
+  license: 'Proprietary Software License (upstream); internal non-commercial research use only, no external distribution (permanent compliance statement in src/tool/navigation/planner/spf/README.md)'
+provides: [planner.spf-single]
+cards: [cards/planner/spf-single.yaml]
+roles:
+  compute: [spf-planner, AS2, FollowTimedPath]
+  workstation: [ROS-task-client, spf-vlm-proxy, simulation-collision-scoring]
+  simulator: [AirSim, sensor-bridge]
+  flight_controller: [PX4-SITL]
+runtime:
+  images: ['ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1',
+           'ghcr.io/popc0rn7/aerohub/flight-board:v0.1.1',
+           'osrf/ros:humble-desktop-full-jammy']
+  platform: WSL2-Ubuntu-22.04-dockerd (Windows host runs Blocks.exe; see README deviations)
+  dependencies: [uav_planner_interfaces, uav_follow_path_execution, ROS-2-Humble, AirSim-Blocks, PX4-SITL]
+  build: 'run.py prepare (colcon overlay; shared images untouched, per AGENTS overlay policy)'
+  launch: deployment/airsim/demos/spf_language_nav/run.py
+  configuration: deployment/airsim/demos/spf_language_nav/planner.yaml
+  camera_rate_hz: 10.0
+  sensors: deployment/airsim/demos/spf_language_nav/settings.json
+  vlm: 'cloud OpenAI-compatible endpoint (glm-4v-flash, deviation D11); proxy on workstation, images never leave PC network namespace except to the API'
+  overlay: log/spf/pc-e2e/ros_ws/install
+  workstation_overlay: log/spf/pc-e2e/workstation/ws/install
+  clock: AirSim-clock-bridge (SteppableClock, best-effort /clock)
+  domain: selected-unused-190-to-199-recorded-in-each-domain.json
+  readiness: fresh-clock-pose-camera-info-plus-spf-status-ready
+  stop: ROS-spf/cancel-then-STOPPED-speed-gate-before-native-Land
+  persistence: log/spf/pc-e2e
+resources:
+  motion: exclusive-drone0-FollowTimedPath-session
+  gpu: not-required (VLM runs on the cloud API; local GPU unused)
+  tf_authority: AS2-self-localization-and-sensor-static-bridge
+validation:
+  evidence: deployment/airsim/demos/spf_language_nav/validation.json
+  limitations: [minimal-acceptance-scope-per-2026-11-16-ruling, single-vehicle-only, substitute-VLM-model-D11, board-deployment-alternative-route]

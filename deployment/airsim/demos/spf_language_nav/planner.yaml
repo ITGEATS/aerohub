@@ -1,0 +1,29 @@
+/drone0/spf_planner:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    camera_info_topic: sensor_measurements/FrontCamera/rgb/camera_info
+    base_velocity: 1.0
+    base_yaw_rate: 30.0
+    min_command_duration: 2.0
+    adaptive_mode: false
+    max_result_age_s: 6.0
+    vlm_timeout_s: 45.0
+    max_observation_age_s: 1.0
+    max_consecutive_vlm_failures: 6
+    vlm_retry_backoff_s: 5.0
+    min_altitude_m: 1.2
+
+/drone0/spf_vlm_proxy:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    provider: openai
+    model: glm-4v-flash
+    api_key_env: OPENAI_API_KEY
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    temperature: 0.4
+    max_tokens: 1024
+    request_timeout_s: 40.0
+    image_scale: 1.0
+    camera_topic: sensor_measurements/FrontCamera/rgb/image

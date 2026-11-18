@@ -42,6 +42,9 @@
 [submodule "src/state_estimator/dpv_slam/upstream"]
 	path = src/basic_function/state_estimator/dpv_slam/upstream
 	url = https://github.com/princeton-vl/DPVO.git
+[submodule "src/tool/navigation/planner/spf/upstream"]
+	path = src/tool/navigation/planner/spf/upstream
+	url = https://github.com/Hu-chih-yao/see-point-fly
 [submodule "src/state_estimator/fast_livo2/ros2_upstream"]
 	path = src/basic_function/state_estimator/fast_livo2/ros2_upstream
 	url = https://github.com/SuperLDG/FASTLIVO2_ROS2.git
