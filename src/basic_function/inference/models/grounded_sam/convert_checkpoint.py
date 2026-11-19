@@ -1,8 +1,11 @@
 """Convert the local SwinT-OGC checkpoint to Hugging Face transformers format.
 
 Runs inside the model uv environment (torch + transformers). Uses the key
-mapping of the official transformers conversion script, kept unmodified under
-reference/convert_grounding_dino_to_hf_main.py (its "grounding-dino-tiny"
+mapping of the official transformers conversion script
+src/transformers/models/grounding_dino/convert_grounding_dino_to_hf.py at
+https://github.com/huggingface/transformers (Apache-2.0; consulted, not
+vendored - upstream source copies stay out of this repository). Its
+"grounding-dino-tiny"
 variant converts exactly groundingdino_swint_ogc.pth, with SwinT backbone
 config embed_dim 96, depths [2,2,6,2], num_heads [3,6,12,24], window 7,
 image_size 224; the GroundingDinoConfig defaults d_model 256 / 6 encoder and

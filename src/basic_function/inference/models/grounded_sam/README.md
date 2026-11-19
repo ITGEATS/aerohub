@@ -16,8 +16,11 @@ SAM `predict_torch` 多框 mask 取并集、失败返回（小数组, False）�
 
 - 检测：HF transformers `GroundingDinoForObjectDetection`（纯 PyTorch deformable attention）。
   **默认权重为 `artifacts/grounding-dino-swin-ogc/`：由本地
-  `weights/groundingdino_swint_ogc.pth` 经 `convert_checkpoint.py` 转换而来**（使用
-  transformers 官方转换脚本的键映射，保存于 `reference/convert_grounding_dino_to_hf_main.py`，
+  `weights/groundingdino_swint_ogc.pth` 经 `convert_checkpoint.py` 转换而来**（键映射
+  依据 transformers 官方转换脚本
+  `src/transformers/models/grounding_dino/convert_grounding_dino_to_hf.py`
+  （huggingface/transformers main，Apache-2.0；上游源码不复制入库，按
+  AGENTS Fork/拷贝约定以 URL 溯源），
   其 grounding-dino-tiny 变体即 SwinT-OGC：Swin-T embed_dim 96、depths [2,2,6,2]、
   window 7、text tower BERT——与上游 label_encoder 同源，可完整映射）。
   `artifacts/grounding-dino-base/`（`IDEA-Research/grounding-dino-base`，Swin-B 骨干，
@@ -33,8 +36,9 @@ DINO 默认权重与上游 SwinT-OGC checkpoint 同源（本地 HF 转换）。*
 短语解码使用 transformers 4.57.6 自带的 `get_phrases_from_posmap`
 （`transformers/models/grounding_dino/processing_grounding_dino.py`，logits 为
 (nq, 256) 文本 token 头，与上游注释一致）；IDEA-Research 原版
-`groundingdino/util/utils.py` 参考件保存在 `reference/`（经
-`https://gh-proxy.com/https://github.com/IDEA-Research/GroundingDINO` 获取）。
+`groundingdino/util/utils.py` 语义核对自上游仓库
+`https://github.com/IDEA-Research/GroundingDINO`（本机经
+`https://gh-proxy.com` 镜像获取阅读；上游源码不复制入库）。
 
 ## 环境
 

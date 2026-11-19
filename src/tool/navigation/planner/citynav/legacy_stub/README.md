@@ -18,7 +18,7 @@
 .venv\Scripts\python.exe make_data.py
 
 # 1) Blocks：备份 Documents\AirSim\settings.json，拷入 settings.citynav_legacy.json，
-#    启动 D:\Apps\airsim\Blocks\Blocks\WindowsNoEditor\Blocks.exe
+#    启动本机 Blocks 安装目录下的 Blocks.exe（个人路径不入库）
 
 # 2) grounded_sam Inference 服务（见 src/basic_function/inference/models/grounded_sam/README.md）
 

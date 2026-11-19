@@ -49,9 +49,13 @@ python deployment/airsim/demos/citynav_blocks/run.py mission --output log/cityna
 python deployment/airsim/demos/citynav_blocks/run.py stop    --output log/citynav/pc-e2e/run-XXXX
 ```
 
-智谱 key 从 `src/tool/navigation/planner/citynav/legacy_stub/.env` 读取并经
-`docker -e` 注入 inference 容器的云 worker，不落库。GPU 推理服务由主任务在宿主运行，
-`start` 的 host_probe 与 `health` 会检查其可达性；本 Demo 不启动也不停止它们。
+本机前提（个人配置不入库，贡献指导 6.2）：运行会话需先设置两个环境变量——
+`CITYNAV_BLOCKS_PATH`（指向本机 Blocks `WindowsNoEditor` 目录）与
+`OPENAI_API_KEY`（智谱 key，从私有存储导出；供应商绑定在 gitignored 的
+`config/inference.cloud.local.yaml`，经 `docker -e` 注入 inference 容器的云
+worker，不落库；2026-11-19 起不再读取历史 `legacy_stub/.env`）。GPU 推理服务
+由主任务在宿主运行，`start` 的 host_probe 与 `health` 会检查其可达性；
+本 Demo 不启动也不停止它们。
 
 预留开关（本轮不启用）：`--cancel-after N`（goal 后 N 秒注入 `citynav/cancel`）、
 `--use-memory 0|1`（goal payload 记忆开关，跨任务 exploit 复用轮使用）。

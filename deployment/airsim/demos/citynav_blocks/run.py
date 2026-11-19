@@ -38,7 +38,11 @@ APP = Path(__file__).resolve().parent
 FLIGHT = 'ghcr.io/popc0rn7/aerohub/flight-board:v0.1.1'
 ONBOARD = 'ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1'
 GROUND = 'osrf/ros:humble-desktop-full-jammy'
-BLOCKS_WIN_PATH = r'D:\Apps\airsim\Blocks\Blocks\WindowsNoEditor'
+# Local machine paths are NEVER committed (contrib guide 6.2): point the
+# Blocks WindowsNoEditor directory at your own install through this
+# environment variable, e.g.
+#   $env:CITYNAV_BLOCKS_PATH = '<...>\Blocks\WindowsNoEditor'
+BLOCKS_WIN_PATH = os.environ.get('CITYNAV_BLOCKS_PATH', '')
 RPC_PORT = 45481
 TCP_PORT = 4581
 SAM_PORT, CLIP_PORT = 8100, 8101
@@ -113,6 +117,11 @@ def check_owner(output, role):
 
 def restart_blocks(output, observe=False):
     """Blocks must be fresh so PX4 is the first TCP client (single-slot server)."""
+    if not BLOCKS_WIN_PATH:
+        raise RuntimeError(
+            'CITYNAV_BLOCKS_PATH is not set; point it at your local Blocks '
+            'install directory (the one containing Blocks.exe) before '
+            'running start/mission')
     settings = json.loads((APP / 'settings.json').read_text())
     if observe:
         # AGENTS multi-deployment rule: centroid-tracking top-down view through
@@ -241,11 +250,19 @@ def pick_domain(output):
 
 
 def api_key():
-    env_path = ROOT / 'src/tool/navigation/planner/citynav/legacy_stub/.env'
-    for line in env_path.read_text().splitlines():
-        if line.startswith('OPENAI_API_KEY='):
-            return line.split('=', 1)[1].strip()
-    raise RuntimeError('OPENAI_API_KEY missing from legacy_stub/.env')
+    # Key source per the shared convention: the gitignored
+    # config/inference.cloud.local.yaml references api_key_env
+    # OPENAI_API_KEY, so the operator exports it in the session (from any
+    # private store). The historical legacy_stub/.env fallback was removed:
+    # active deployment entries must not depend on the stage-1 baseline
+    # directory (contrib guide 2.2/6.2).
+    key = os.environ.get('OPENAI_API_KEY', '').strip()
+    if key:
+        return key
+    raise RuntimeError(
+        'OPENAI_API_KEY is not set; export it in the session first '
+        '(PowerShell: $env:OPENAI_API_KEY = ...) or switch '
+        'config/inference.cloud.local.yaml to an inline api_key')
 
 
 def generate_planner_params(output, host):
