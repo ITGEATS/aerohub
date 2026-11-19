@@ -21,7 +21,7 @@ class Runtime(Node):
         super().__init__(
             "falcon_compute_runtime",
             parameter_overrides=[Parameter("use_sim_time", value=True)])
-        self.output = Path("/evidence")
+        self.output = Path("/results")
         self.children = {}
         self.streams = {}
         self.stopping = False
@@ -78,11 +78,11 @@ class Runtime(Node):
         parameter_file = self.output / "falcon.params.yaml"
         runtime_dir = self.output / "falcon-runtime"
         subprocess.run([
-            "python3", "/workspace/deployment/falcon/prepare_params.py",
-            "--source", "/workspace/src/tool/navigation/planner/falcon/upstream/falcon_planner",
+            "python3", "/opt/falcon/runtime/prepare_params.py",
+            "--source", "/opt/falcon/config/upstream",
             "--runtime-dir", str(runtime_dir), "--output", str(parameter_file),
         ], check=True)
-        self.start("as2", ["python3", "/workspace/deployment/airsim/as2/run.py"])
+        self.start("as2", ["python3", "/opt/falcon/runtime/run_as2.py"])
         self.start("falcon", [
             "ros2", "run", "falcon_ros2", "falcon_exploration_node",
             "--ros-args", "--params-file", str(parameter_file),

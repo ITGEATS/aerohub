@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,7 +12,11 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FALCON_IMAGE = "aerohub/falcon:ros2-humble"
+FALCON_WORKSTATION_IMAGE = "aerohub/falcon-workstation:ros2-humble"
+sys.path.insert(0, str(ROOT / "deployment/falcon"))
 sys.path.insert(0, str(ROOT / "deployment/airsim/demos/catora_open_field"))
+from source_manifest import source_digest, source_files
 from sim_startup import StartupRelay
 
 
@@ -78,14 +81,40 @@ def wait_px4_preflight(container, output, timeout=60.0, stable_seconds=2.0):
 
 
 def source_hashes():
-    paths = []
-    for directory in (
-            ROOT / "src/tool/navigation/planner/falcon/ros2_adapter",
-            ROOT / "deployment/falcon"):
-        paths.extend(path for path in directory.rglob("*") if path.is_file()
-                     and "__pycache__" not in path.parts)
-    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in sorted(paths)}
+    import hashlib
+    return {
+        str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in source_files(ROOT)
+    }
+
+
+def image_label(image, name):
+    value = subprocess.check_output([
+        "docker", "image", "inspect", "--format",
+        f"{{{{index .Config.Labels {json.dumps(name)}}}}}", image,
+    ], text=True).strip()
+    if not value or value == "<no value>":
+        raise RuntimeError(f"{image} is missing image label {name}")
+    return value
+
+
+def inspect_mounts(container):
+    data = json.loads(subprocess.check_output(
+        ["docker", "inspect", container], text=True))[0]
+    return sorted(({
+        "type": mount["Type"],
+        "source": str(Path(mount["Source"]).resolve()),
+        "destination": mount["Destination"],
+        "rw": bool(mount["RW"]),
+    } for mount in data.get("Mounts", [])), key=lambda item: item["destination"])
+
+
+def require_mounts(container, expected):
+    observed = inspect_mounts(container)
+    if observed != sorted(expected, key=lambda item: item["destination"]):
+        raise RuntimeError(
+            f"runtime mount policy failed for {container}: {observed}")
+    return observed
 
 
 def main():
@@ -108,6 +137,13 @@ def main():
 
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
+    current_source_digest = source_digest(ROOT)
+    for image in (FALCON_IMAGE, FALCON_WORKSTATION_IMAGE):
+        embedded = image_label(image, "io.aerohub.source.digest")
+        if embedded != current_source_digest:
+            raise RuntimeError(
+                f"{image} was built from {embedded}, current source is "
+                f"{current_source_digest}; rebuild before acceptance")
     binary = resolve_airsim_binary(args.binary)
     domain = free_domain()
     settings = json.loads((
@@ -139,12 +175,12 @@ def main():
     }
     (output / "profile.json").write_text(json.dumps(profile, indent=2) + "\n")
 
-    images = ("flight_board:v0.1.0", "onboard_computer:v0.1.0",
-              "osrf/ros:humble-desktop-full-jammy")
+    images = ("flight_board:v0.1.0", FALCON_IMAGE, FALCON_WORKSTATION_IMAGE)
     manifest = {
         "case": args.case, "ros_domain": domain,
         "display": display, "render_mode": "windowed",
         "source_hashes": source_hashes(),
+        "source_digest": current_source_digest,
         "fork_revision": subprocess.check_output([
             "git", "-C", str(ROOT / "src/tool/navigation/planner/falcon/upstream"),
             "rev-parse", "HEAD"], text=True).strip(),
@@ -178,6 +214,7 @@ def main():
             raise RuntimeError("reserved container already exists: " + name)
     manager = [sys.executable, ROOT / "simulator/airsim/manager/manager.py"]
     owned = []
+    runtime_mounts = {}
     relay = None
     scene_started = False
     try:
@@ -199,6 +236,12 @@ def main():
             ]
             run(command, stdout=subprocess.DEVNULL)
             owned.append(name)
+            runtime_mounts[name] = require_mounts(name, [{
+                "type": "bind",
+                "source": str((output / "px4-settings.json").resolve()),
+                "destination": "/config/settings.json",
+                "rw": False,
+            }])
         wait_px4_preflight(names[0], output)
 
         compute_command = [
@@ -207,38 +250,42 @@ def main():
             "-e", "AS2_EXECUTION_BACKEND=follow_path",
             "-e", "AS2_TIMED_CONTINUITY_TOLERANCE=0.25",
             "-e", "AS2_TIMED_YAW_CONTINUITY_TOLERANCE=0.20",
-            "-e", "AS2_FLEET_FILE=/evidence/fleet.yaml",
+            "-e", "AS2_FLEET_FILE=/results/fleet.yaml",
+            "-e", "AS2_CONFIG_FILE=/opt/falcon/runtime/as2_config.yaml",
+            "-e", "AS2_CONTROLLER_CONFIG_FILE=/opt/falcon/runtime/pid.yaml",
             "-e", "AIRSIM_RPC_PORT=43482",
-            "-v", f"{ROOT}:/workspace", "-v", f"{output}:/evidence",
-            "--entrypoint", "bash", "onboard_computer:v0.1.0", "-lc",
-            "set -eo pipefail; "
-            "cd /workspace/log/falcon/deps; "
-            "sha256sum -c /workspace/deployment/falcon/dependencies.sha256; "
-            "dependency_root=/tmp/falcon-deps-root; "
-            "rm -rf \"$dependency_root\"; mkdir -p \"$dependency_root\"; "
-            "for package in ./*.deb; do dpkg-deb -x \"$package\" \"$dependency_root\"; done; "
-            "export LD_LIBRARY_PATH=\"$dependency_root/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}\"; "
-            "source /root/aerostack2_ws/install/setup.bash; "
-            "source /workspace/log/falcon/install/setup.bash; "
-            "python3 /workspace/deployment/falcon/compute_runtime.py",
+            "-v", f"{output}:/results:rw",
+            FALCON_IMAGE, "compute",
         ]
         run(compute_command, stdout=subprocess.DEVNULL)
         owned.append(names[2])
+        runtime_mounts[names[2]] = require_mounts(names[2], [{
+            "type": "bind", "source": str(output),
+            "destination": "/results", "rw": True,
+        }])
 
         workstation_command = [
-            "docker", "run", "--rm", "--init", "--network", "host",
+            "docker", "run", "--detach", "--init", "--network", "host",
             "--name", names[3], "-e", f"ROS_DOMAIN_ID={domain}",
             "-e", f"FALCON_CASE={args.case}",
-            "-e", "PYTHONPATH=/workspace/deployment/robopi/vendor",
-            "-v", f"{ROOT}:/workspace", "-v", f"{output}:/evidence",
-            "--entrypoint", "bash", "osrf/ros:humble-desktop-full-jammy", "-lc",
-            "set -eo pipefail; source /opt/ros/humble/setup.bash; "
-            "source /workspace/log/falcon/workstation/install/setup.bash; "
-            "python3 /workspace/deployment/falcon/mission.py",
+            "-v", f"{output}:/results:rw",
+            FALCON_WORKSTATION_IMAGE, "mission",
         ]
+        run(workstation_command, stdout=subprocess.DEVNULL)
         owned.append(names[3])
+        runtime_mounts[names[3]] = require_mounts(names[3], [{
+            "type": "bind", "source": str(output),
+            "destination": "/results", "rw": True,
+        }])
+        (output / "runtime-mounts.json").write_text(
+            json.dumps(runtime_mounts, indent=2, sort_keys=True) + "\n")
+        exit_code = int(subprocess.check_output(
+            ["docker", "wait", names[3]], text=True).strip())
         with (output / "mission.log").open("w") as stream:
-            run(workstation_command, stdout=stream, stderr=subprocess.STDOUT)
+            subprocess.run(["docker", "logs", names[3]], stdout=stream,
+                           stderr=subprocess.STDOUT)
+        if exit_code:
+            raise subprocess.CalledProcessError(exit_code, workstation_command)
     finally:
         for name in reversed(owned):
             with (output / f"{name}.log").open("w") as stream:
@@ -246,10 +293,22 @@ def main():
                                stderr=subprocess.STDOUT)
             subprocess.run(["docker", "stop", "--time", "10", name],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["docker", "rm", "--force", name],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if relay is not None:
             relay.close()
         if scene_started:
             run(manager + ["stop", "--run-dir", output / "scene"])
+        remaining = [name for name in names if subprocess.run(
+            ["docker", "inspect", name], stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL).returncode == 0]
+        (output / "cleanup.json").write_text(json.dumps({
+            "containers_absent": not remaining,
+            "remaining_containers": remaining,
+            "scene_stopped": scene_started,
+        }, indent=2) + "\n")
+        if remaining and sys.exc_info()[0] is None:
+            raise RuntimeError("FALCON containers remained after cleanup: " + str(remaining))
 
 
 if __name__ == "__main__":

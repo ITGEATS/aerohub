@@ -32,7 +32,7 @@ from .sensor_pose import compose, interpolate, normalize, rotate
 def replan_deadline(current: float, message_type: int, now: float,
                     static_timeout: float) -> float:
     if message_type == 1:
-        return now + static_timeout
+        return max(current, now + static_timeout)
     if message_type == 0 and not current:
         return now + 0.5
     return current

@@ -547,8 +547,14 @@ capability_types:
     transport:
       protocol: ros2_action
       schema: uav_inference_interfaces/action/InferVisionLanguage
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
     semantics:
       unit_system: textual
       units: {}
       coordinate_frame: original_camera_optical_frame
+      axes: optical_x_right_y_down_z_forward
       timestamp: image_acquisition_time
