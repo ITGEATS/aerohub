@@ -1,0 +1,19 @@
+# Offline replay is allowed: preserve source header, do not replace with now.
+string request_id
+uint64 generation
+sensor_msgs/Image image
+# Open-vocabulary text. Lowercase, strip and append final '.' before tokenization.
+string prompt
+# Both thresholds are required, finite, strictly between 0 and 1.
+float64 box_threshold
+float64 text_threshold
+---
+bool success
+string error
+# category is the grounded token phrase, not a closed-set class.
+# mask has source header, empty width/height/data: this model has no segmentation.
+DetectionFrame result
+string prompt
+string normalized_prompt
+float64 box_threshold
+float64 text_threshold

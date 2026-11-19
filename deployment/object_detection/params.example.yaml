@@ -1,6 +1,7 @@
 /**:
   ros__parameters:
-    target_class: person
+    query: person
+    detector_backend: yolo
     registered_depth: true
     depth_is_perspective: false
     depth_scale_16u: 0.001

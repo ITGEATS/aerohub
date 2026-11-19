@@ -95,3 +95,21 @@ runtime 的构建输入复制到容器临时目录，保持相对依赖路径，
 交付核心与 Harness 包、launch/配置、接口说明、运行与停止入口、健康条件、测试矩阵、证据索引和限制。复现结束后回顾过程记录，只把本轮证实且可复用的经验更新到正式 Skill。
 
 
+
+## 独立 Python 核心的原样安装
+
+从已锁定子模块直接复用单文件算法时，优先在 Adapter 包安装原文件和许可证，
+不复制成第二份算法实现。`ament_python` 的 colcon `data_files` 要求源路径为相对路径；
+包外子模块可使用相对路径引用，运行时通过 ament share 查找安装件。实际构建后用
+`cmp` 核对算法与许可证安装件，并在隔离源码挂载下实际导入核心。YOPO-Tracker
+目标 EKF 已验证此方式；首次使用绝对 data_files 的构建失败，不能沿用该配置。
+
+
+## 证据记录器的真实消息回归
+
+飞行前用目标overlay的真实生成消息驱动记录回调，并实际写盘、读回关键事件和失败
+结果。固定长度PX4 float数组可能返回NumPy float32，直接list不会转成Python float；
+Mountains记录器因此在最终JSON序列化失败。边界处逐元素转float已通过真实
+TrajectorySetpoint回调回归。该测试不需要发布、解锁或仿真，也不证明飞行成功。
+结果先于节点销毁落盘，销毁异常逐项记录；宿主保存短生命周期probe的stdout/stderr，
+避免容器自动删除后只剩CalledProcessError而丢失原始原因。

@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    detector_backend: grounding_dino
+    query: car
+    box_threshold: 0.30
+    text_threshold: 0.25
+    # Independent deployment budgets, not a real-time performance guarantee.
+    timeout_s: 10.0
+    stream_enabled: false
+    registered_depth: true
+    depth_is_perspective: false
+    output_frame: drone0/odom
+    use_sim_time: false

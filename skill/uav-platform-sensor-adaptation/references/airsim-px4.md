@@ -85,3 +85,50 @@ reliable/depth100；YOLO地面对照中其Buffer落后537–735ms，独立观察
 该Tool改用sensor-data best-effort/depth5后，相同100次调用TF超时由4降为0，
 仍有2次深度配对失败。仅调整动态TF，静态TF保持可靠transient-local，Buffer
 继续按采样stamp查询和原预算等待；此对照不是长期网络可靠性或所有TF故障保证。
+
+## ProjectAirSim 原生静态相机标定
+
+ProjectAirSim/UE5.2 的原生 CameraInfo 在传感器初始化时由 capture-settings 生成，
+原生 C++ ROS 桥使用 SensorDataQoS。归一化桥不得向它请求 reliable/transient-local，
+否则图像正常而标定永远缺失。先核对实际 publisher QoS 与消息生命周期。
+
+本项目 `simulator/projectairsim/sensor_node.py` 对已核实的零畸变 pinhole 模型，
+从 resolved capture-settings 构造 timeless CameraInfo（fx=fy=width/(2 tan(FOV/2))），
+持续提供给晚加入的消费者；同时校验收到的原生标定及实际图像尺寸。
+该标定是仿真配置派生量，非额外传感器测量，不重写 RGB/depth 的采样 stamp。
+仅适用于已核对源码的固定原生模型；动态标定、其他畸变或非方形像素须另行适配。
+WestStreet 实际 RGB-D 投影验证通过了静态标定可用性，但跑步阶段的配对失败仍保留。
+
+## ProjectAirSim导航LiDAR的初始化核查
+
+场景模板的LiDAR不能仅凭16通道/100m等参数判为适用导航。WestStreet已观测到
+模板vertical-fov为0..-90deg，FRD origin z+.2意味着位于机体下方；近地面实测
+注册点云全在局部z[-.970,-.223]，ROGMap发布空地图，启动门阻止起飞。
+先核对resolved_scene的原生FOV/安装位置及实际点云xyz范围。±15deg环扫、FRD
+z-.2上置是此轮专属修正配置；真实复验已形成14826个膨胀占据点并通过地图
+就绪门。这只证明该场景地面建图链，不是完整飞行、其他场景或真机通用推荐。
+
+地图非空门失败时分别区分：虚拟地面膨胀导致丢弃、真实输入全在地面以下、
+与大PointCloud2传输丢失。通过独立轻量订阅记录width/height/data长度，空width0
+是实际空地图证据，不能继续以带宽猜测替代诊断。
+
+## 原生双轴云台的实际几何
+
+当前ProjectAirSim UnrealSensorFactory以零长度SpringArm实现lock-roll/pitch；
+相机origin杆臂也挂在该稳定坐标系下，不能只抵消旋转而保持机体刚性杆臂TF。
+支持该模式时，对原生actual_pose姿态历史按图像stamp插值，计算
+q_body^-1*q_yaw对光学旋转和安装位移的共同作用；原生姿态仅充当模拟云台编码器，
+不成为导航状态权威。缺姿态/过大插值间隔时拒绝该图像，不用最新姿态补齐。
+稳定camera frame只发动态TF，保留刚性传感器原静态TF；其他云台模式另行验证。
+
+采集裁减要核对resolved_scene内每个camera.enabled和capture-enabled，使用原生
+capture-interval而非ROS节流。单路RGB/15Hz配置在WestStreet实测唯一采集13.77Hz，
+其余capture关闭；不将窗口观察相机混入传感器数。验收分别检查配置、真实采样间隔、
+动态TF、实际图像及算法消费；配置或TF水平不单独证明渲染姿态精度和持续追踪成功。
+
+视觉指向动态云台时，目标来自Tracking有效状态（采样时间、valid_until、frame齐全），
+使用自身状态TF计算指向，API留在平台桥，不能用Actor真值/LookAtObject替代感知。
+SetPose确认不提供原子渲染采样姿态时，用原生仿真时间夹取切换区间，丢弃该区间
+图像，区间后使用确认的新安装外参；未知结果与时钟回退要求重启，不能继续旧TF。
+有意指向人体中心的俯角与机体roll/pitch稳定分开表达。记录实际相机确认、画幅居中、
+观测连续性及飞行指标；框居中不证明高度先验测距或速度约束通过。

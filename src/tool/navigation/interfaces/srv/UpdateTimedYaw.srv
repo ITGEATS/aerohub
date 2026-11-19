@@ -1,0 +1,8 @@
+# Updates an active continuous-yaw execution only; never starts motion.
+string task_id
+uint64 revision
+float64 target_yaw
+builtin_interfaces/Time valid_until
+---
+bool accepted
+string reason

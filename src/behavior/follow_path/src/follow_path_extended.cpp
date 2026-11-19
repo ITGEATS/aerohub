@@ -12,11 +12,14 @@
 #include "uav_planner_interfaces/action/follow_timed_path.hpp"
 #include "uav_follow_path_execution/timeline.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "uav_follow_path_execution/yaw_tracker.hpp"
+#include "uav_planner_interfaces/srv/update_timed_yaw.hpp"
 
 namespace uf = uav_follow_path_execution;
 using Timed = uav_planner_interfaces::action::FollowTimedPath;
 using Handle = rclcpp_action::ServerGoalHandle<Timed>;
 using Trigger = std_srvs::srv::Trigger;
+using UpdateYaw = uav_planner_interfaces::srv::UpdateTimedYaw;
 
 class ExtendedFollowPath : public FollowPathBehavior {
 public:
@@ -58,6 +61,9 @@ public:
       [this](const auto &, std::shared_ptr<const Timed::Goal> goal) {
         if (legacy_ || timed_ || !flying_ || !poseFresh()) {return rclcpp_action::GoalResponse::REJECT;}
         try {
+          if (goal->path.continuous_yaw && (goal->path.valid_fields & 4)) {
+            throw std::invalid_argument("continuous yaw and trajectory yaw are mutually exclusive");
+          }
           timeline_.start(convert(goal->path), now().seconds());
           if (uf::distance(actual_, timeline_.active.points.front().p) > continuity_) {
             throw std::invalid_argument("initial point is not continuous with vehicle position");
@@ -66,6 +72,17 @@ public:
           RCLCPP_WARN(get_logger(), "%s", e.what());
           timeline_.reset();
           return rclcpp_action::GoalResponse::REJECT;
+        }
+        yaw_tracker_.reset();
+        if (goal->path.continuous_yaw) {
+          try {
+            yaw_tracker_.start(goal->path.task_id,yaw_,goal->path.target_yaw,
+              rclcpp::Time(goal->path.yaw_valid_until).seconds(),now().seconds(),
+              goal->path.max_yaw_rate,goal->path.yaw_revision);
+          } catch (const std::exception & e) {
+            timeline_.reset(); RCLCPP_WARN(get_logger(),"%s",e.what());
+            return rclcpp_action::GoalResponse::REJECT;
+          }
         }
         held_yaw_ = yaw_;
         trajectory_started_ = trajectory_acquired_ = mode_lost_ = false;
@@ -81,12 +98,32 @@ public:
     modify_ = create_service<Timed::Impl::SendGoalService>(
       "follow_timed_path/_behavior/modify", [this](Timed::Impl::SendGoalService::Request::SharedPtr req, Timed::Impl::SendGoalService::Response::SharedPtr res) {
         res->accepted = false;
-        if (!timed_ || paused_ || needs_replan_) {return;}
+        if (!timed_ || paused_ || needs_replan_) {
+          RCLCPP_WARN(get_logger(), "Timed execution modify rejected inactive: now=%.9f incoming=%lu active=%lu timed=%d paused=%d replan=%d",
+            now().seconds(), req->goal.path.revision, timeline_.active.revision, timed_, paused_, needs_replan_);
+          return;
+        }
         try {
+          if (req->goal.path.continuous_yaw != yaw_tracker_.active ||
+              (yaw_tracker_.active && (req->goal.path.valid_fields & 4))) {
+            throw std::invalid_argument("yaw policy cannot change during execution");
+          }
           timeline_.update(convert(req->goal.path), now().seconds(), continuity_, velocity_continuity_,
             acceleration_continuity_, yaw_continuity_);
           res->accepted = true;
         } catch (const std::exception & e) {RCLCPP_WARN(get_logger(), "%s", e.what());}
+      });
+    yaw_update_ = create_service<UpdateYaw>("follow_timed_path/update_yaw",
+      [this](UpdateYaw::Request::SharedPtr req, UpdateYaw::Response::SharedPtr res) {
+        res->accepted=false;
+        if (!timed_ || !handle_ || paused_ || needs_replan_ || cancel_requested_ || handle_->is_canceling()) {
+          res->reason="execution inactive or stopping"; return;
+        }
+        try {
+          yaw_tracker_.update(req->task_id,req->revision,req->target_yaw,
+            rclcpp::Time(req->valid_until).seconds(),now().seconds());
+          res->accepted=true;
+        } catch (const std::exception & e) {res->reason=e.what();}
       });
     pause_ = create_service<Trigger>("follow_timed_path/_behavior/pause",
       [this](Trigger::Request::SharedPtr, Trigger::Response::SharedPtr res) {
@@ -140,6 +177,8 @@ private:
     return has_pose_ && age>=0 && age<=pose_timeout_;
   }
   bool finish(bool success, const std::string & reason, bool canceled=false) {
+    RCLCPP_INFO(get_logger(), "Timed execution finish: now=%.9f revision=%lu success=%d reason=%s pending=%zu end=%.9f",
+      now().seconds(), timeline_.active.revision, success, reason.c_str(), timeline_.pending.size(), timeline_.active.end());
     auto result=std::make_shared<Timed::Result>();
     result->success=success; result->reason=reason; result->revision=timeline_.active.revision;
     const bool stopped = hover_.sendHover();
@@ -148,7 +187,7 @@ private:
       else if (success) {handle_->succeed(result);}
       else {handle_->abort(result);}
     }
-    handle_.reset(); timeline_.reset(); timed_=paused_=needs_replan_=cancel_requested_=false;
+    handle_.reset(); timeline_.reset(); yaw_tracker_.reset(); timed_=paused_=needs_replan_=cancel_requested_=false;
     return stopped;
   }
   void tick() {
@@ -161,6 +200,7 @@ private:
     const auto sample_time=now();
     const double t=sample_time.seconds();
     if (t<last_tick_) {finish(false,"CLOCK_RESET"); return;}
+    const double dt=t-last_tick_;
     last_tick_=t;
     if (!poseFresh()) {finish(false,"STALE_LOCALIZATION"); return;}
     if (!flying_) {finish(false,"NOT_FLYING"); return;}
@@ -186,12 +226,18 @@ private:
       }
       return;
     }
+    if (yaw_tracker_.active && t>yaw_tracker_.expires) {finish(false,"YAW_TARGET_EXPIRED"); return;}
     if (t>p.end() && !p.final) {finish(false,"TRAJECTORY_EXPIRED"); return;}
     if (t>=p.end() && p.final) {
-      if (feedback->tracking_error<=tolerance_) {finish(true,"COMPLETED"); return;}
+      if (feedback->tracking_error<=tolerance_ && (!yaw_tracker_.active ||
+          std::abs(uf::YawTracker::wrap(yaw_tracker_.target-yaw_))<.05)) {finish(true,"COMPLETED"); return;}
       if (t>p.end()+settle_timeout_) {finish(false,"TRACKING_TIMEOUT"); return;}
     }
-    const double yaw=(p.fields & 4)?s.yaw:held_yaw_;
+    double yaw=(p.fields & 4)?s.yaw:held_yaw_;
+    if (yaw_tracker_.active) {
+      try {yaw=yaw_tracker_.step(dt,t);}
+      catch (const std::exception & e) {finish(false,e.what()); return;}
+    }
     bool sent;
     if ((p.fields & 1) && t<p.end()) {
       trajectory_started_ = true;
@@ -227,6 +273,8 @@ private:
   std::string vehicle_,frame_;
   uf::Vec actual_{};
   uf::Timeline timeline_;
+  uf::YawTracker yaw_tracker_;
+  rclcpp::Service<UpdateYaw>::SharedPtr yaw_update_;
   std::shared_ptr<as2::tf::TfHandler> timed_tf_;
   as2::motionReferenceHandlers::PositionMotion position_;
   as2::motionReferenceHandlers::TrajectoryMotion trajectory_;

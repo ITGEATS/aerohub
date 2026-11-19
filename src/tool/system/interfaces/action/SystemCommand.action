@@ -1,0 +1,19 @@
+uint8 TAKEOFF=1
+uint8 LAND=2
+uint8 command
+# Relative takeoff height; ignored for LAND. Metres and metres/second.
+float64 height
+float64 speed
+# Wall-clock budget, including readiness, platform preparation and Behavior.
+float64 timeout
+---
+bool success
+string code
+string reason
+bool stop_confirmed
+bool landed
+bool disarmed
+---
+string phase
+float64 relative_height
+bool armed

@@ -26,6 +26,14 @@ PX4 SITL + AirSim
 
 Tool 不必经过运动 Behavior 才能读取状态、传感器或地图。State Estimator 负责飞行器自身状态，Perception 负责环境感知、建图和环境表示。通信、生命周期和资源仲裁贯穿各层。完整设计与接口说明见[项目简介](docs/项目简介.md)。
 
+## 场景客户端与开发资源
+
+仿真场景、外部源码和 UE 工具链统一从 [config/](config/README.md) 进入。
+ProjectAirSim 源码登记为 `projectairsim_source`；本机路径通过资源配置解析，
+见 [开发资源导航](config/README.md#开发资源导航)。
+显示及接口开发先查阅 [ProjectAirSim 原生能力参考](docs/ProjectAirSim原生显示接口核查.md)，
+再定位上游实现与本项目插件；工作项见 [场景客户端开发清单](docs/场景客户端开发清单.md)。
+
 ## 当前 AirSim / RoboPi 入口
 
 全仓库的 Library、算法、适配组件及 Demo 统一采用四个运行角色的职责约定；完整职责见[项目简介](docs/项目简介.md#deployment-roles)。
@@ -59,7 +67,7 @@ AirSim / RoboPi 扩展与主线 Gazebo、FAST-LIVO2 入口并存：
 - 主线 AS2 依赖仍在 `as2/aerostack2/` 和 `as2/as2_platform_pixhawk/`；AS2 核心直接锁定 AeroHub fork，Pixhawk 的 PX4 1.18 适配在构建副本应用兼容补丁。
 - SUPER 实际源码与 CAT-ORA 一致：`src/tool/navigation/planner/super/ros2_adapter/native/`，AS2 适配在 `bridge/`，`upstream/` 子模块只作参考。运行产物进入被忽略的 `log/airsim/`。
 
-已有 Skill 集中在 `skill/`；历史运行证据保留在忽略的 `log/pr-history/`，复现过程记录在 `skill/temp/`。`docs/` 只跟踪三份主文档及其图片。AS2 直接使用 AeroHub fork 子模块并锁定到 `f387e0d`；构建流程不再对官方 AS2 副本重复应用同等补丁。
+已有 Skill 集中在 `skill/`；历史运行证据保留在忽略的 `log/pr-history/`，复现过程记录在 `skill/temp/`。`docs/` 维护三份主文档、场景客户端开发参考及相关图片。AS2 直接使用 AeroHub fork 子模块并锁定到 `f387e0d`；构建流程不再对官方 AS2 副本重复应用同等补丁。
 
 主线依赖准备入口仍为 `bash deployment/prepare_sources.sh`；AirSim / SUPER 使用 `bash tools/robopi/prepare_sources.sh`。
 两者都需从仓库根目录执行后续构建命令。AirSim 构建还依赖 PR 指定的基础镜像与外部仿真资源；目录迁移不表示它们已在当前机器上完成闭环验收。

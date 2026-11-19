@@ -65,7 +65,7 @@ def main():
             time.sleep(.01)
         health=adapter.detector.client.request('/health/ready')
         assert health['device'].startswith('cuda'),health
-        response=drone.object_detection.detect(category='person',timeout=2.,estimate_position=True)
+        response=drone.object_detection.detect(query='person',timeout=2.,estimate_position=True)
         assert response.success,response.reason
         assert response.result.detections,'Expected people in real bus image'
         assert all(d.detection.category=='person' and d.position_valid for d in response.result.detections),str(response)

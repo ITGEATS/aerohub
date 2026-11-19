@@ -14,6 +14,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/InferYopo.srv"
   "srv/InferDiffphys.srv"
   "srv/InferDetections.srv"
+  "srv/InferGroundingDino.srv"
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs action_msgs)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()

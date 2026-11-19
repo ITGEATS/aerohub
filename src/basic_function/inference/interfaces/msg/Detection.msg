@@ -1,4 +1,4 @@
-# Original image pixel coordinates, clipped to image dimensions.
+# Original image pixel coordinates; clipping is specified by the model service contract.
 float64[4] xyxy
 string category
 float64 confidence

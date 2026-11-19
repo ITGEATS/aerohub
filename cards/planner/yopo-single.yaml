@@ -1,6 +1,6 @@
 schema_version: "1.0"
 id: planner.yopo-single
-version: "0.2.0"
+version: "0.3.0"
 type: tool
 name: YOPO reference-mode single-vehicle navigation
 description: Accepts a single-vehicle goal and performs rolling depth-conditioned planning through the existing FollowTimedPath execution chain.
@@ -36,6 +36,12 @@ interfaces:
     protocol: ros2_action
     schema: uav_planner_interfaces/action/NavigateToPose
     parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+  - id: update_target
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_planner_interfaces/srv/UpdateNavigationTarget
+    parameter_schema: src/tool/navigation/interfaces/srv/UpdateNavigationTarget.srv
 
 lifecycle:
   management: system_managed

@@ -212,7 +212,7 @@ def main():
         if subprocess.run(["docker", "inspect", name], stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL).returncode == 0:
             raise RuntimeError("reserved container already exists: " + name)
-    manager = [sys.executable, ROOT / "simulator/airsim/manager/manager.py"]
+    manager = [sys.executable, ROOT / "simulator/manager/manager.py"]
     owned = []
     runtime_mounts = {}
     relay = None

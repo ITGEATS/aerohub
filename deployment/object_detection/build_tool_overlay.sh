@@ -22,5 +22,5 @@ cd /work
 colcon build --merge-install --parallel-workers 2 --base-paths \
  /repo/as2/aerostack2/as2_python_api \
  /repo/src/basic_function/inference/interfaces /repo/src/basic_function/inference/ros2_adapter \
- /repo/src/tool/object_detection --event-handlers console_direct+
+ /repo/src/tool/object_detection /repo/src/tool/target_tracking --event-handlers console_direct+
 '

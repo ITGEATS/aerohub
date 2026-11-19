@@ -48,6 +48,16 @@ Behavior 返回停止确认，再从新的实测状态建立规划初值并刷�
 
 单目 SLAM 依赖 Sim(3) 对齐时，冻结条件不能只有样本数和拟合 RMSE；还必须检查总基线、水平基线及多方向激励，避免在纯升降或近单一直线运动中冻结弱可观测变换。全局校正输入中断或算法退出后，插件保持最后一个已接受的 `map -> odom`，拒绝陈旧新值，同时由新鲜局部里程计继续提供 `odom -> base_link` 和 twist；该降级语义必须通过运动中故障注入验证。
 
+## 原生起飞高度与阻塞诊断
+
+锁定版 `takeoff_plugin_position` 将请求 `takeoff_height` 加到激活时的 earth 高度，
+成功后保留该位置目标；其反馈高度是 earth z。不能把请求值当成绝对高度，
+也不能把 position 插件的规则推广到 speed/trajectory 插件。诊断先记录实际插件、
+激活起点、最终目标、控制输入/输出模式和送入 PX4 的参考。
+Mountains 实测在车底碰撞时仍持续收到约0.485m/s向上速度，实际只爬升约0.35m，
+估计高度却漂移至约2.5m；不能因此调 PID、放宽成功阈值或延长起飞预算。
+本次通过 Demo 出生点配置避开车辆，原生3m Takeoff/hover/Land恢复通过。
+
 ## 高频本地状态与低频协同校正
 
 协同 SLAM 的 peer 优化与 landmark 输出频率不应决定控制状态频率。插件将每个全局 pose 与时间邻近的 local odometry 配对，计算并保持 `map -> odom`；每个新 local sample 都以原采样 stamp 提交保持的校正、`odom -> base_link` 和 body twist。独立 smoke 使用非恒等校正检查组合结果，端到端 authority 则测量飞行窗口内 canonical source stamp 与本地 arrival gap。

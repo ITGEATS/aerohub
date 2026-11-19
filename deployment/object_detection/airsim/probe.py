@@ -133,7 +133,7 @@ def main():
         result['observations']=outcomes
         for index,category in enumerate(['car']*args.samples if args.near_target else ['person','car','bus']):
             before={ns(m.header) for m in images}
-            started=time.monotonic();response=drone.object_detection.detect(category=category,timeout=2.,estimate_position=args.estimate_position)
+            started=time.monotonic();response=drone.object_detection.detect(query=category,timeout=2.,estimate_position=args.estimate_position)
             result['last_response']=dict(category=category,code=response.code,reason=response.reason,
                 start_wall=started,end_wall=time.monotonic(),rgb_stamp_ns=ns(response.result.image_header),
                 depth_stamp_ns=ns(response.result.depth_header),

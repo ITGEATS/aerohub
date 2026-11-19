@@ -56,5 +56,24 @@ class Polynomial:
         if count > 10000:
             raise ValueError('excessive trajectory')
         # Preserve every original piece boundary, including entry into backup.
-        return sorted(set([start, self.end]+[start+i*step for i in range(1,count)] +
-                          [self.start+t for t in self.ends if start < self.start+t < self.end]))
+        boundaries = [start, self.end] + [
+            self.start+t for t in self.ends if start < self.start+t < self.end]
+        # ROS Duration stores integer nanoseconds. Float-distinct samples can
+        # serialize to the same time; retain exact source boundaries in that
+        # case and discard only the redundant regular sample (no retiming).
+        by_nanosecond = {}
+        for absolute in boundaries + [start+i*step for i in range(1, count)]:
+            by_nanosecond.setdefault(round((absolute-start)*1e9), absolute)
+        return sorted(by_nanosecond.values())
+
+
+def yaw_polynomial(message, start, end):
+    """Validate scalar yaw on its own original epoch; never extrapolate or retime."""
+    coefficients = list(message.coef_yaw)
+    curve = Polynomial(message.start_wt_yaw, message.time_yaw,
+        [coefficients, [0.]*len(coefficients), [0.]*len(coefficients)], message.order_yaw)
+    if message.piece_num_yaw != len(curve.durations):
+        raise ValueError('yaw piece count mismatch')
+    if curve.start > start+1e-6 or curve.end < end-1e-6:
+        raise ValueError('yaw does not cover position trajectory')
+    return curve

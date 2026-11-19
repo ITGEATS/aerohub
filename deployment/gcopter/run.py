@@ -46,7 +46,7 @@ def main():
         'project': 'AirSimNH', 'args': ['-vulkan', '-nosound', '-windowed', '-ResX=960', '-ResY=540']}
     (out/'profile.json').write_text(json.dumps(profile)+'\n')
     (out/'fleet.yaml').write_text('vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: 71\n')
-    manager = [sys.executable, ROOT/'simulator/airsim/manager/manager.py']
+    manager = [sys.executable, ROOT/'simulator/manager/manager.py']
     names = ['aerohub-gcopter-vehicle', 'aerohub-gcopter-clock', 'aerohub-gcopter-compute', 'aerohub-gcopter-workstation']
     owned = []
     relay = None

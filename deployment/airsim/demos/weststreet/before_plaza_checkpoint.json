@@ -1,0 +1,18 @@
+{
+  "evidence": "log/weststreet-demo/live-tangent-pv-lead1s-recovery1s-65s-01",
+  "historical_commit": "2c60c6b94fa17ca3c1d10b2f30b43e72455a8686",
+  "scope": "Pre-plaza mission with bounded Mission recovery, historical Navigation, and private causal pose cache preserving 0.5s expiry",
+  "sha256": {
+    "follow_policy.py": "c0d958ee0ff8b8a0b319b0a52f5222d7f8b7c87de5d7bb50adefa056361ed26e",
+    "tangent_policy.py": "2296872ab4b32a628efe073d5173e26558c933a3b3aafd1fcd47e8a4cdb898f7",
+    "observation_policy.py": "2f868653eef7a997384767467930129a5c053250148c0a6086a287bc9fb47f2b",
+    "tool_runtime.py": "571404a0f3808c6225b2afa64a5b911cb0affa1e1ab7a6b9225ad7984a3a323e",
+    "navigation_runtime.py": "cc902f0d43f16cd9a68d0020e844f215492708ee1d3d9c4258525c0869ae2786",
+    "yolo_viewer.py": "2f46dd2a2227b9ebff1029fd090e57c528825e293f6ebc538bb3ca6732d74cee",
+    "demo_before_plaza.py": "8290a028872ad0da7c68152908c1292572efadae353a4932c4ee3b4996a4c83e",
+    "observation_recovery.py": "4ad850763229726ee7afd74207459052a2a48e4f36e5852bd70b416f554e0c52"
+  },
+  "historical_navigation_sha256": "40c2a13f528c0bb9132b25fe239486cf214aee45aa331430f3f78f94e7ed2e94",
+  "historical_mission_sha256": "f46463d4880fe631cd6819d8c35bb41d89814d2856810b4255a21ee713ca5a92",
+  "mission_change": "Bounded 2s Mission recovery after Tracking expiry; no invalid pose used for pursuit or yaw prediction; duration=0 disables Mission/host deadlines, finite Tool Action budgets set to 1e12 seconds"
+}

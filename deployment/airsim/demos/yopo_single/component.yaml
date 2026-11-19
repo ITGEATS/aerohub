@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.planner.yopo-single
-version: '0.2.0'
+version: '0.3.0'
 source:
   upstream: src/tool/navigation/planner/yopo/upstream
   revision: bd8a7f91953cfef9f1aa9a48d7ff0ab7bceee132
@@ -36,6 +36,10 @@ runtime:
       address: /drone0/navigate_to_pose
       schema: uav_planner_interfaces/action/NavigateToPose
       parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+    update_target:
+      address: /drone0/navigate_to_pose/update_target
+      schema: uav_planner_interfaces/srv/UpdateNavigationTarget
+      parameter_schema: src/tool/navigation/interfaces/srv/UpdateNavigationTarget.srv
   python_entry: drone.navigation.to_point
   stop: standard-navigation-Action-cancel-then-STOPPED-speed-gate-before-native-Land
   sharing: one-selected-navigation-provider-per-UAV-public-address-no-cross-process-arbitrator

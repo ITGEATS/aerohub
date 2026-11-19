@@ -9,6 +9,14 @@
 | [Swarm 空旷场地](swarm_open_field/README.md) | `swarm_formation` | 两 PC 加一 RoboPi，三机真实 LiDAR | 地面输入检查及完整任务；不代表默认七机验收 |
 | [SUPER forest8](super_forest/README.md) | SUPER | 四方：工作站 Mission → RoboPi SUPER/AS2 → PC PX4/AirSim；保留旧模式 | 四方地面/短程通过；原 forest8 更新拒绝，详见 Validation |
 
+## 任务组合样例（规划中）
+
+[目标追踪](target_tracking/README.md) 的跟随 Mission 仍为规划项。
+YOPO-Tracker 参考子模块已锁定，独立 Target Tracking Tool 已接入原始 EKF，
+提供只观测的 TrackObject Action；构建、接口和平台验证状态见
+[Tracking 部署](../../target_tracking/README.md)。它不调用导航或运动执行，
+不能将 Tool 接入视为移动目标跟随任务已经完成。
+
 ## 从仓库根目录运行
 
 先完成对应 README 的镜像、AirSim 场景、设备与 `.env` 配置。下面的地面检查

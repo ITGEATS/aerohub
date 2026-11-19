@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -48,6 +49,36 @@ class TorchBackendTest(unittest.TestCase):
                 self.backend.infer(feed)
         with self.assertRaises(ValueError):
             self.backend.infer({'value': np.zeros((1, 2))}, {'unknown': np.float32})
+
+    def test_cuda_unavailable_never_falls_back(self):
+        with patch('torch.cuda.is_available', return_value=False):
+            with self.assertRaisesRegex(RuntimeError, 'no CPU fallback'):
+                TorchBackend(Network, 'unused', 'tiny',
+                    {'value': dict(shape=[1, 2], dtype='float32')},
+                    {'result': dict(shape=[1, 2], dtype='float32')}, device='cuda')
+
+    def test_variable_dimensions_and_custom_state_loader(self):
+        with tempfile.TemporaryDirectory() as directory:
+            weights = Path(directory) / 'opaque-weights'
+            weights.write_bytes(b'loader-owned format')
+            loaded = []
+            def loader(path):
+                loaded.append(path)
+                return Network().state_dict()
+            backend = TorchBackend(Network, weights, 'dynamic',
+                {'value': dict(shape=[1, None], dtype='float32')},
+                {'result': dict(shape=[1, None], dtype='float32')},
+                device=os.environ.get('TEST_TORCH_DEVICE', 'cpu'), state_loader=loader)
+            try:
+                for width in (2, 5):
+                    output, _ = backend.infer({'value': np.ones((1, width))})
+                    np.testing.assert_array_equal(output['result'], np.full((1, width), 2.))
+                for shape in ((1, 0), (2, 3), (1, 2, 3)):
+                    with self.assertRaises(ValueError):
+                        backend.infer({'value': np.ones(shape)})
+                self.assertEqual(loaded, [weights])
+            finally:
+                backend.close()
 
     def test_close_is_idempotent_and_rejects_execution(self):
         self.backend.close()

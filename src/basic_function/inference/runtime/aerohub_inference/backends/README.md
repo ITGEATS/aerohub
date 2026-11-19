@@ -12,7 +12,7 @@ Both `TorchBackend` and `aerohub_houmo.HmmBackend` expose:
 - `metadata`: at least `model_id`, `model_version` (artifact SHA256), `device`,
   `inputs`, `outputs`; models may extend identity with processing parameters.
 - `infer(inputs, output_dtypes=None)`: exact named NumPy tensors →
-  `(named_outputs, timings_ms)`. Shapes are fixed by the loaded model contract.
+  `(named_outputs, timings_ms)`. Ranks and fixed dimensions follow the loaded model contract; `None` permits a positive variable dimension.
   The backend casts inputs to its declared dtype and returns owned CPU arrays.
   `output_dtypes` optionally selects CPU output dtypes by output name.
 - `warmup(inputs)`: execute supplied model-specific tensors.
@@ -35,3 +35,9 @@ when CUDA is requested. Tuple outputs follow the declared output order; dictiona
 must have exactly the declared names. `HmmBackend` discovers specs from the compiled
 HMM and uses the matching target TCIM runtime. Image operations and model-specific
 state transforms belong in neither engine.
+
+For complete safetensors snapshots, callers may pass `state_loader(path)` to
+TorchBackend; it must return the full compatible state_dict, loaded strictly by
+the model. The default remains torch.load(weights_only=True). Variable dimensions
+are checked before/after execution; model-specific upper bounds belong in the
+Predictor/schema. Grounding DINO uses variable image geometry and token lengths.
