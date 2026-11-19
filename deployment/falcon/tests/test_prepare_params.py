@@ -1,8 +1,17 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from prepare_params import build_parameters, flatten
+
+
+def config_source():
+    configured = os.environ.get("FALCON_CONFIG_SOURCE")
+    if configured:
+        return Path(configured)
+    return (Path(__file__).resolve().parents[3]
+            / "src/tool/navigation/planner/falcon/upstream/falcon_planner")
 
 
 class ParameterTests(unittest.TestCase):
@@ -19,9 +28,8 @@ class ParameterTests(unittest.TestCase):
             flatten({"planner": {"magic": [1, 2]}})
 
     def test_runtime_outputs_are_kept_outside_the_fork(self):
-        source = Path(__file__).resolve().parents[3] / "src/tool/navigation/planner/falcon/upstream/falcon_planner"
-        if not source.is_dir():
-            self.skipTest("FALCON submodule is not available")
+        source = config_source()
+        self.assertTrue(source.is_dir(), f"FALCON config source is missing: {source}")
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory).resolve()
             parameters = build_parameters(source, runtime)
@@ -29,9 +37,8 @@ class ParameterTests(unittest.TestCase):
             self.assertEqual(parameters["voxel_mapping.map_save_path"], str(runtime / "map.pcd"))
 
     def test_publish_periods_are_numeric_durations(self):
-        source = Path(__file__).resolve().parents[3] / "src/tool/navigation/planner/falcon/upstream/falcon_planner"
-        if not source.is_dir():
-            self.skipTest("FALCON submodule is not available")
+        source = config_source()
+        self.assertTrue(source.is_dir(), f"FALCON config source is missing: {source}")
         with tempfile.TemporaryDirectory() as directory:
             parameters = build_parameters(source, Path(directory).resolve())
             for name in (

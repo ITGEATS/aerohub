@@ -21,7 +21,7 @@ def run(command, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--image', default='onboard_computer:v0.1.1')
+    parser.add_argument('--image', default='onboard_computer:v0.1.2')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     output = args.output.resolve()

@@ -2,7 +2,7 @@
 
 DPV-SLAM runs the locked DPVO source, its three CUDA extensions, the native ROS
 2 Humble Adapter, and the AS2 plugin from one component image derived from
-`onboard_computer:v0.1.1`. Runtime source/workspace/overlay mounts and ROS 1
+`onboard_computer:v0.1.2`. Runtime source/workspace/overlay mounts and ROS 1
 processes are not supported.
 
 ## Prepare and build
@@ -17,7 +17,7 @@ DPV_SLAM_ARTIFACT_ROOT="$PWD/log/workspaces/dpv_slam" \
   bash deployment/dpv_slam/prepare_models.sh
 
 DPV_SLAM_ARTIFACT_ROOT="$PWD/log/workspaces/dpv_slam" \
-ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
 DPV_SLAM_IMAGE=aerohub/dpv-slam:ros2-humble \
   bash deployment/dpv_slam/prepare_workspace.sh
 ```

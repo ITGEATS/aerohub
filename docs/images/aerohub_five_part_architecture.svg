@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="3840" height="2160" viewBox="0 0 3840 2160" role="img" aria-labelledby="figure-title figure-desc">
+<title id="figure-title">AeroHub: Offline Adaptation, Online Runtime, Benchmark, Training and Gallery</title>
+<desc id="figure-desc">Target architecture. Human download and automatic selection both trigger the Offline Agent, guided by adaptation skills, to deliver PC or board packages and capability cards. Online Runtime includes four tools, basic behaviors, interchangeable state-estimation and perception providers, inference, control, sensors and platform interfaces. Same-type benchmarks publish a leaderboard and inform selection. Gallery automatically presents runtime effects. Training remains conceptual.</desc>
+<defs>
+<marker id="arrow-20272b" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#20272b" stroke="#20272b"/></marker>
+<marker id="arrow-437eaf" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#437eaf" stroke="#437eaf"/></marker>
+<marker id="arrow-bc7026" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#bc7026" stroke="#bc7026"/></marker>
+<marker id="arrow-8462ad" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#8462ad" stroke="#8462ad"/></marker>
+<marker id="arrow-4c8c71" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#4c8c71" stroke="#4c8c71"/></marker>
+<marker id="arrow-56636a" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M 1,1 L 11,6 L 1,11 L 3,6 Z" fill="#56636a" stroke="#56636a"/></marker>
+<pattern id="hatch-437eaf" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M -6,6 L 6,-6 M 0,22 L 22,0 M 16,28 L 28,16" stroke="#437eaf" stroke-opacity=".075" stroke-width="1.1"/></pattern>
+<pattern id="hatch-bc7026" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M -6,6 L 6,-6 M 0,22 L 22,0 M 16,28 L 28,16" stroke="#bc7026" stroke-opacity=".075" stroke-width="1.1"/></pattern>
+<pattern id="hatch-8462ad" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M -6,6 L 6,-6 M 0,22 L 22,0 M 16,28 L 28,16" stroke="#8462ad" stroke-opacity=".075" stroke-width="1.1"/></pattern>
+<pattern id="hatch-4c8c71" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M -6,6 L 6,-6 M 0,22 L 22,0 M 16,28 L 28,16" stroke="#4c8c71" stroke-opacity=".075" stroke-width="1.1"/></pattern>
+<pattern id="hatch-be7e69" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M -6,6 L 6,-6 M 0,22 L 22,0 M 16,28 L 28,16" stroke="#be7e69" stroke-opacity=".075" stroke-width="1.1"/></pattern>
+<symbol id="icon-search" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="21" cy="21" r="13"/><path d="M31 31l12 12M11 21h20M21 8c-8 8-8 18 0 26M21 8c8 8 8 18 0 26"/></g></symbol>
+<symbol id="icon-robot" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="14" width="34" height="27" rx="8"/><path d="M24 14V6M20 6h8M2 22v12M46 22v12M17 34h14"/><circle cx="16" cy="24" r="2"/><circle cx="32" cy="24" r="2"/></g></symbol>
+<symbol id="icon-store" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20v24h36V20M3 18l5-13h32l5 13M3 18q5 9 10 0 5 9 11 0 6 9 11 0 5 9 10 0M20 44V29h12v15"/></g></symbol>
+<symbol id="icon-human" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="20" cy="11" r="7"/><path d="M6 39v-8q0-10 14-10t14 10v8M31 27l13 9-8 2-2 8z"/></g></symbol>
+<symbol id="icon-book" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M24 12Q11 5 3 10v31q10-5 21 2 11-7 21-2V10q-8-5-21 2v31M8 17l11 1M8 24l11 1M8 31l11 1M29 18l10-1M29 25l10-1M29 32l10-1"/></g></symbol>
+<symbol id="icon-card" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h21l9 9v33H9zM29 3v10h10M15 21h17M15 28h17M15 35h11"/></g></symbol>
+<symbol id="icon-pc" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="42" height="29" rx="3"/><path d="M18 34v8M30 34v8M11 43h26M8 27h32"/></g></symbol>
+<symbol id="icon-board" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="34" height="34" rx="4"/><rect x="17" y="17" width="14" height="14" rx="2"/><path d="M15 2v5M24 2v5M33 2v5M15 41v5M24 41v5M33 41v5M2 15h5M2 24h5M2 33h5M41 15h5M41 24h5M41 33h5"/></g></symbol>
+<symbol id="icon-route" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 39q29 3 13-13T39 9" stroke-dasharray="4 4"/><circle cx="7" cy="39" r="4"/><path d="M31 8h10v12M41 8l-9 9"/></g></symbol>
+<symbol id="icon-target" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V4h11M33 4h11v11M44 33v11H33M15 44H4V33"/><circle cx="24" cy="24" r="9"/><path d="M24 11v6M24 31v6M11 24h6M31 24h6"/></g></symbol>
+<symbol id="icon-compass" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="20"/><path d="M33 13l-5 15-14 7 7-16zM21 19l7 9"/></g></symbol>
+<symbol id="icon-tracking" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16h7M3 24h10M3 32h7"/><circle cx="29" cy="24" r="14"/><path d="M29 7v8M29 33v8M12 24h8M38 24h8"/><circle cx="29" cy="24" r="4"/></g></symbol>
+<symbol id="icon-map" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l14-6 14 6 14-6v34l-14 6-14-6-14 6zM17 4v34M31 10v34"/><path d="M9 25q8-15 16 0t14-1" stroke-dasharray="3 4"/></g></symbol>
+<symbol id="icon-inference" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="9" r="4"/><circle cx="10" cy="24" r="4"/><circle cx="38" cy="24" r="4"/><circle cx="24" cy="39" r="4"/><path d="M21 13l-8 8M27 13l8 8M13 28l8 8M35 28l-8 8M14 24h20M24 13v22"/></g></symbol>
+<symbol id="icon-control" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="17"/><path d="M8 11l7 7M33 30l7 7M7 28l11-3M31 18l10-5"/><circle cx="24" cy="24" r="6"/></g></symbol>
+<symbol id="icon-drone" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 13l22 22M13 35l22-22"/><rect x="18" y="18" width="12" height="12" rx="4"/><ellipse cx="10" cy="10" rx="9" ry="6"/><ellipse cx="38" cy="10" rx="9" ry="6"/><ellipse cx="10" cy="38" rx="9" ry="6"/><ellipse cx="38" cy="38" rx="9" ry="6"/></g></symbol>
+<symbol id="icon-trophy" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h22v14q0 13-11 13T13 19zM13 9H4v9q0 8 11 8M35 9h9v9q0 8-11 8M24 32v9M14 44h20"/></g></symbol>
+<symbol id="icon-play" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="42" height="34" rx="5"/><path d="M19 15l15 9-15 9z"/></g></symbol>
+<symbol id="icon-shield" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M24 3l17 7v14q-2 14-17 22Q9 38 7 24V10zM15 24l7 7 13-16"/></g></symbol>
+<symbol id="icon-sensor" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="16" width="34" height="26" rx="5"/><circle cx="24" cy="28" r="8"/><path d="M14 16l4-7h12l4 7M3 8q4-6 10-5M35 3q6-1 10 5"/></g></symbol>
+<symbol id="icon-switch" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15h36l-8-8M44 33H8l8 8"/><path d="M40 15l-8 8M8 33l8-8"/></g></symbol>
+<symbol id="icon-chart" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v38h39M13 35V23h6v12M25 35V14h6v21M37 35V5h6v30"/></g></symbol>
+<symbol id="icon-download" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M24 4v28M14 22l10 10 10-10M7 32v12h34V32"/></g></symbol>
+<symbol id="icon-papers" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h27v34H13zM7 11H3v34h29v-4M19 12h15M19 20h15M19 28h10"/></g></symbol>
+</defs>
+<rect width="3840" height="2160" fill="white"/>
+<text x="60" y="79" font-family="Chilanka, Comic Sans MS, cursive" font-size="65" font-weight="600" fill="#20272b" text-anchor="start">AeroHub / UAV Ecosystem</text>
+<text x="62" y="120" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="29" font-weight="400" fill="#56636a" text-anchor="start">五部分目标架构 · Discover, adapt, run, evaluate and showcase</text>
+<path d="M 3253,38 Q 3517.5,39.20378567999914 3782,38 Q 3800,38 3800,56 Q 3800.992069032872,73.0 3800,90 Q 3800,108 3782,108 Q 3517.5,107.5286471189806 3253,108 Q 3235,108 3235,90 Q 3233.636410908831,73.0 3235,56 Q 3235,38 3253,38 Z" fill="#fafaf7" stroke="#89938c" stroke-width="2" stroke-dasharray="9 6"/>
+<text x="3517" y="83" font-family="Chilanka, Comic Sans MS, cursive" font-size="29" font-weight="600" fill="#56636a" text-anchor="middle">TARGET ARCHITECTURE</text>
+<path d="M 70,190 Q 590.0,188.55427251514274 1110,190 Q 1140,190 1140,220 Q 1139.6438976000866,1080.0 1140,1940 Q 1140,1970 1110,1970 Q 590.0,1969.98403007619 70,1970 Q 40,1970 40,1940 Q 39.77052509862985,1080.0 40,220 Q 40,190 70,190 Z" fill="#f3f8fc" stroke="#437eaf" stroke-width="3.8" stroke-dasharray="15 10"/>
+<path d="M 71,193 Q 590.0,193 1109,193 Q 1137,193 1137,221 Q 1137,1080.0 1137,1939 Q 1137,1967 1109,1967 Q 590.0,1967 71,1967 Q 43,1967 43,1939 Q 43,1080.0 43,221 Q 43,193 71,193 Z" fill="url(#hatch-437eaf)" stroke="none" stroke-width="0"/>
+<text x="78" y="260" font-family="Chilanka, Comic Sans MS, cursive" font-size="45" font-weight="600" fill="#20272b" text-anchor="start">(1) Offline Adaptation</text>
+<text x="80" y="304" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">发现工作 → 技能驱动适配 → PC / 开发板交付</text>
+<path d="M 118,380 Q 587.5,378.9955104936062 1057,380 Q 1075,380 1075,398 Q 1075.5316076995387,530.0 1075,662 Q 1075,680 1057,680 Q 587.5,678.5102539560769 118,680 Q 100,680 100,662 Q 101.47321033202861,530.0 100,398 Q 100,380 118,380 Z" fill="#ffffff" stroke="#437eaf" stroke-width="2.6"/>
+<use xlink:href="#icon-search" x="140" y="415" width="64" height="64" color="#20272b"/>
+<text x="225" y="462" font-family="Chilanka, Comic Sans MS, cursive" font-size="43" font-weight="600" fill="#20272b" text-anchor="start">Auto Search Agent</text>
+<use xlink:href="#icon-papers" x="965" y="412" width="66" height="66" color="#20272b"/>
+<text x="145" y="526" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="34" font-weight="600" fill="#20272b" text-anchor="start">持续抓取无人机相关工作</text>
+<text x="145" y="580" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="400" fill="#20272b" text-anchor="start">综合效果、会议 / 期刊与已适配基线</text>
+<path d="M 159,610 Q 267.5,608.6605272003274 376,610 Q 390,610 390,624 Q 388.5189295159635,634.0 390,644 Q 390,658 376,658 Q 267.5,657.3261920218669 159,658 Q 145,658 145,644 Q 145.73033569968808,634.0 145,624 Q 145,610 159,610 Z" fill="#ecf3f9" stroke="#437eaf" stroke-width="1.9"/>
+<text x="267.5" y="643" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#437eaf" text-anchor="middle">Discover</text>
+<path d="M 431,610 Q 539.5,610.2100601481974 648,610 Q 662,610 662,624 Q 663.2615590062353,634.0 662,644 Q 662,658 648,658 Q 539.5,657.1252458182778 431,658 Q 417,658 417,644 Q 415.9324362474941,634.0 417,624 Q 417,610 431,610 Z" fill="#ecf3f9" stroke="#437eaf" stroke-width="1.9"/>
+<text x="539.5" y="643" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#437eaf" text-anchor="middle">Compare</text>
+<path d="M 704,610 Q 812.5,610.2495203889579 921,610 Q 935,610 935,624 Q 933.8212438038169,634.0 935,644 Q 935,658 921,658 Q 812.5,657.7814720768368 704,658 Q 690,658 690,644 Q 688.6537840930592,634.0 690,624 Q 690,610 704,610 Z" fill="#ecf3f9" stroke="#437eaf" stroke-width="1.9"/>
+<text x="812.5" y="643" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#437eaf" text-anchor="middle">Select</text>
+<path d="M 315,680 L 315,770" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 245.5,701 Q 315.0,701 384.5,701 Q 392.5,701 392.5,709 Q 392.5,722.0 392.5,735 Q 392.5,743 384.5,743 Q 315.0,743 245.5,743 Q 237.5,743 237.5,735 Q 237.5,722.0 237.5,709 Q 237.5,701 245.5,701 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="315" y="733" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#437eaf" text-anchor="middle">持续上架</text>
+<path d="M 865,680 L 865,790" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 795.5,709 Q 865.0,709 934.5,709 Q 942.5,709 942.5,717 Q 942.5,730.0 942.5,743 Q 942.5,751 934.5,751 Q 865.0,751 795.5,751 Q 787.5,751 787.5,743 Q 787.5,730.0 787.5,717 Q 787.5,709 795.5,709 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="865" y="741" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#437eaf" text-anchor="middle">自动筛选</text>
+<path d="M 118,770 Q 332.5,771.197099353333 547,770 Q 565,770 565,788 Q 564.0415697614604,950.0 565,1112 Q 565,1130 547,1130 Q 332.5,1130.9600614225544 118,1130 Q 100,1130 100,1112 Q 100.18037956778956,950.0 100,788 Q 100,770 118,770 Z" fill="#ffffff" stroke="#437eaf" stroke-width="2.6"/>
+<use xlink:href="#icon-store" x="133" y="801" width="54" height="54" color="#20272b"/>
+<text x="205" y="840" font-family="Chilanka, Comic Sans MS, cursive" font-size="38" font-weight="600" fill="#20272b" text-anchor="start">Work Store</text>
+<text x="135" y="889" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="400" fill="#20272b" text-anchor="start">前端 · 浏览无人机工作</text>
+<path d="M 147,916 Q 194.5,917.2800159593277 242,916 Q 252,916 252,926 Q 250.9596993738089,951.0 252,976 Q 252,986 242,986 Q 194.5,985.7047789736623 147,986 Q 137,986 137,976 Q 136.62745242805983,951.0 137,926 Q 137,916 147,916 Z" fill="#f2f6fa" stroke="#8a9ead" stroke-width="1.5"/>
+<use xlink:href="#icon-papers" x="173" y="928" width="44" height="44" color="#20272b"/>
+<path d="M 280,916 Q 327.5,916.6584586730118 375,916 Q 385,916 385,926 Q 383.6723001017375,951.0 385,976 Q 385,986 375,986 Q 327.5,986.6592425382684 280,986 Q 270,986 270,976 Q 269.3873084338514,951.0 270,926 Q 270,916 280,916 Z" fill="#f2f6fa" stroke="#8a9ead" stroke-width="1.5"/>
+<use xlink:href="#icon-papers" x="306" y="928" width="44" height="44" color="#20272b"/>
+<path d="M 413,916 Q 460.5,916.2895786586811 508,916 Q 518,916 518,926 Q 518.5385083019049,951.0 518,976 Q 518,986 508,986 Q 460.5,985.6303006182048 413,986 Q 403,986 403,976 Q 403.4923769568458,951.0 403,926 Q 403,916 413,916 Z" fill="#f2f6fa" stroke="#8a9ead" stroke-width="1.5"/>
+<use xlink:href="#icon-papers" x="439" y="928" width="44" height="44" color="#20272b"/>
+<path d="M 153,1015 Q 267.5,1014.6950847747954 382,1015 Q 400,1015 400,1033 Q 399.30893637268855,1053.0 400,1073 Q 400,1091 382,1091 Q 267.5,1091.6033396572666 153,1091 Q 135,1091 135,1073 Q 135.89394440412428,1053.0 135,1033 Q 135,1015 153,1015 Z" fill="#dcebf7" stroke="#437eaf" stroke-width="2.5"/>
+<use xlink:href="#icon-download" x="153" y="1030" width="44" height="44" color="#20272b"/>
+<text x="291" y="1066" font-family="Chilanka, Comic Sans MS, cursive" font-size="33" font-weight="600" fill="#437eaf" text-anchor="middle">Download</text>
+<use xlink:href="#icon-human" x="434" y="1030" width="62" height="62" color="#20272b"/>
+<path d="M 668,790 Q 862.5,790.8085588361863 1057,790 Q 1075,790 1075,808 Q 1073.8323875383114,912.5 1075,1017 Q 1075,1035 1057,1035 Q 862.5,1034.0892933861842 668,1035 Q 650,1035 650,1017 Q 650.1922206046281,912.5 650,808 Q 650,790 668,790 Z" fill="#ffffff" stroke="#437eaf" stroke-width="2.6"/>
+<text x="862" y="851" font-family="Chilanka, Comic Sans MS, cursive" font-size="33" font-weight="600" fill="#20272b" text-anchor="middle">Better candidate?</text>
+<use xlink:href="#icon-chart" x="690" y="893" width="57" height="57" color="#20272b"/>
+<text x="785" y="921" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="29" font-weight="600" fill="#20272b" text-anchor="start">优于已适配工作</text>
+<text x="862" y="985" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="middle">效果 + 发表质量</text>
+<path d="M 330,1130 L 330,1265" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 248.0,1156 Q 330.0,1156 412.0,1156 Q 420.0,1156 420.0,1164 Q 420.0,1178.5 420.0,1193 Q 420.0,1201 412.0,1201 Q 330.0,1201 248.0,1201 Q 240.0,1201 240.0,1193 Q 240.0,1178.5 240.0,1164 Q 240.0,1156 248.0,1156 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="330" y="1191" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="500" fill="#20272b" text-anchor="middle">人类触发</text>
+<text x="330" y="1228" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="middle">点击下载</text>
+<path d="M 862,1035 L 862,1265" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 780.0,1124 Q 862.0,1124 944.0,1124 Q 952.0,1124 952.0,1132 Q 952.0,1146.5 952.0,1161 Q 952.0,1169 944.0,1169 Q 862.0,1169 780.0,1169 Q 772.0,1169 772.0,1161 Q 772.0,1146.5 772.0,1132 Q 772.0,1124 780.0,1124 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="862" y="1159" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="500" fill="#20272b" text-anchor="middle">自动触发</text>
+<text x="862" y="1199" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="middle">发现更优工作时</text>
+<path d="M 122,1265 Q 587.5,1266.0108545039047 1053,1265 Q 1075,1265 1075,1287 Q 1074.8020348356274,1390.0 1075,1493 Q 1075,1515 1053,1515 Q 587.5,1516.136157116683 122,1515 Q 100,1515 100,1493 Q 100.37959894123145,1390.0 100,1287 Q 100,1265 122,1265 Z" fill="#fffaf0" stroke="#bc7026" stroke-width="3"/>
+<use xlink:href="#icon-robot" x="145" y="1300" width="75" height="75" color="#20272b"/>
+<text x="245" y="1352" font-family="Chilanka, Comic Sans MS, cursive" font-size="47" font-weight="600" fill="#20272b" text-anchor="start">Offline Agent</text>
+<text x="145" y="1416" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="32" font-weight="400" fill="#20272b" text-anchor="start">按适配 Skills 检查、迁移、构建与验证</text>
+<text x="145" y="1473" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="31" font-weight="400" fill="#20272b" text-anchor="start">适配 PC / 开发板 · 生成功能卡片</text>
+<path d="M 118,1610 Q 315.0,1610.1817922625964 512,1610 Q 530,1610 530,1628 Q 528.6973866876212,1745.0 530,1862 Q 530,1880 512,1880 Q 315.0,1880.718068941139 118,1880 Q 100,1880 100,1862 Q 99.22500032286304,1745.0 100,1628 Q 100,1610 118,1610 Z" fill="#f8f3fc" stroke="#8462ad" stroke-width="2.6"/>
+<use xlink:href="#icon-book" x="130" y="1640" width="60" height="60" color="#20272b"/>
+<text x="210" y="1683" font-family="Chilanka, Comic Sans MS, cursive" font-size="34" font-weight="600" fill="#20272b" text-anchor="start">Adaptation Skills</text>
+<text x="135" y="1746" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="400" fill="#20272b" text-anchor="start">适配中总结的可复用方法</text>
+<text x="135" y="1797" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#20272b" text-anchor="start">环境 · 接口 · 构建 · 验证</text>
+<text x="135" y="1843" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#8462ad" text-anchor="start">随适配经验持续迭代</text>
+<path d="M 235,1610 L 235,1515" fill="none" stroke="#8462ad" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-8462ad)"/>
+<path d="M 150.0,1540 Q 210.0,1540 270.0,1540 Q 278.0,1540 278.0,1548 Q 278.0,1560.0 278.0,1572 Q 278.0,1580 270.0,1580 Q 210.0,1580 150.0,1580 Q 142.0,1580 142.0,1572 Q 142.0,1560.0 142.0,1548 Q 142.0,1540 150.0,1540 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="210" y="1570" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#8462ad" text-anchor="middle">指导适配</text>
+<path d="M 435,1515 L 435,1610" fill="none" stroke="#8462ad" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="8 7" marker-end="url(#arrow-8462ad)"/>
+<path d="M 389.0,1540 Q 449.0,1540 509.0,1540 Q 517.0,1540 517.0,1548 Q 517.0,1560.0 517.0,1572 Q 517.0,1580 509.0,1580 Q 449.0,1580 389.0,1580 Q 381.0,1580 381.0,1572 Q 381.0,1560.0 381.0,1548 Q 381.0,1540 389.0,1540 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="449" y="1570" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#8462ad" text-anchor="middle">经验沉淀</text>
+<path d="M 862,1515 L 862,1610" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 785.0,1538 Q 862.0,1538 939.0,1538 Q 947.0,1538 947.0,1546 Q 947.0,1559.0 947.0,1572 Q 947.0,1580 939.0,1580 Q 862.0,1580 785.0,1580 Q 777.0,1580 777.0,1572 Q 777.0,1559.0 777.0,1546 Q 777.0,1538 785.0,1538 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="862" y="1570" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#20272b" text-anchor="middle">交付产物</text>
+<path d="M 668,1610 Q 862.5,1609.899046735778 1057,1610 Q 1075,1610 1075,1628 Q 1075.1046845844844,1745.0 1075,1862 Q 1075,1880 1057,1880 Q 862.5,1879.3340978665426 668,1880 Q 650,1880 650,1862 Q 651.3751976056635,1745.0 650,1628 Q 650,1610 668,1610 Z" fill="#f4faf6" stroke="#4c8c71" stroke-width="2.6"/>
+<use xlink:href="#icon-pc" x="685" y="1644" width="65" height="65" color="#20272b"/>
+<use xlink:href="#icon-board" x="791" y="1644" width="65" height="65" color="#20272b"/>
+<use xlink:href="#icon-card" x="958" y="1644" width="65" height="65" color="#20272b"/>
+<text x="862" y="1760" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="32" font-weight="600" fill="#20272b" text-anchor="middle">PC 或 开发板</text>
+<text x="862" y="1811" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="500" fill="#20272b" text-anchor="middle">适配包 + 功能卡片</text>
+<text x="862" y="1854" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="middle">Tool / 基础能力接入</text>
+<path d="M 1290,190 Q 1990.0,188.7789227033761 2690,190 Q 2720,190 2720,220 Q 2719.0682143092263,1080.0 2720,1940 Q 2720,1970 2690,1970 Q 1990.0,1968.6706581043848 1290,1970 Q 1260,1970 1260,1940 Q 1258.6273266076812,1080.0 1260,220 Q 1260,190 1290,190 Z" fill="#fffaf0" stroke="#bc7026" stroke-width="3.8" stroke-dasharray="15 10"/>
+<path d="M 1291,193 Q 1990.0,193 2689,193 Q 2717,193 2717,221 Q 2717,1080.0 2717,1939 Q 2717,1967 2689,1967 Q 1990.0,1967 1291,1967 Q 1263,1967 1263,1939 Q 1263,1080.0 1263,221 Q 1263,193 1291,193 Z" fill="url(#hatch-bc7026)" stroke="none" stroke-width="0"/>
+<text x="1298" y="260" font-family="Chilanka, Comic Sans MS, cursive" font-size="45" font-weight="600" fill="#20272b" text-anchor="start">(2) Online Runtime</text>
+<text x="1300" y="304" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">人类任务 → 工具调用 → 基础执行与平台</text>
+<path d="M 1428,350 Q 2030.0,348.8140020625115 2632,350 Q 2650,350 2650,368 Q 2649.294500991047,405.0 2650,442 Q 2650,460 2632,460 Q 2030.0,460.1296685649323 1428,460 Q 1410,460 1410,442 Q 1409.6487527207855,405.0 1410,368 Q 1410,350 1428,350 Z" fill="white" stroke="#20272b" stroke-width="2.6"/>
+<use xlink:href="#icon-drone" x="1443" y="373" width="60" height="60" color="#20272b"/>
+<text x="1530" y="399" font-family="Chilanka, Comic Sans MS, cursive" font-size="37" font-weight="600" fill="#20272b" text-anchor="start">Application</text>
+<text x="1843" y="399" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="400" fill="#20272b" text-anchor="start">巡检 · 建图 · 自定义应用</text>
+<text x="1530" y="438" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">Human mission / 人类目标</text>
+<path d="M 2030,460 L 2030,505" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 1428,505 Q 2030.0,505.59114297421877 2632,505 Q 2650,505 2650,523 Q 2650.7358236580303,582.5 2650,642 Q 2650,660 2632,660 Q 2030.0,658.7868718833423 1428,660 Q 1410,660 1410,642 Q 1410.9908642795149,582.5 1410,523 Q 1410,505 1428,505 Z" fill="#fffdf7" stroke="#20272b" stroke-width="2.6"/>
+<use xlink:href="#icon-robot" x="1443" y="538" width="61" height="61" color="#20272b"/>
+<text x="1530" y="558" font-family="Chilanka, Comic Sans MS, cursive" font-size="39" font-weight="600" fill="#20272b" text-anchor="start">Mission / Online Agent</text>
+<text x="1530" y="607" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="400" fill="#20272b" text-anchor="start">拆解任务 · 依据功能卡片选工具 · 消费反馈</text>
+<text x="1530" y="645" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="start">任务策略 / 权限 · 人工接管</text>
+<path d="M 2030,660 L 2030,725" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 1430,725 Q 2030.0,724.0084530864118 2630,725 Q 2650,725 2650,745 Q 2650.9351146120516,852.5 2650,960 Q 2650,980 2630,980 Q 2030.0,978.6245920496866 1430,980 Q 1410,980 1410,960 Q 1409.940256969396,852.5 1410,745 Q 1410,725 1430,725 Z" fill="#f2faf5" stroke="#4c8c71" stroke-width="2.7"/>
+<text x="1443" y="770" font-family="Chilanka, Comic Sans MS, cursive" font-size="36" font-weight="600" fill="#20272b" text-anchor="start">Tools</text>
+<use xlink:href="#icon-card" x="2120" y="738" width="36" height="36" color="#4c8c71"/>
+<text x="2170" y="767" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#4c8c71" text-anchor="start">功能卡片 / Capability card</text>
+<path d="M 1456,795 Q 1580.5,796.1665364018371 1705,795 Q 1721,795 1721,811 Q 1719.934751641261,856.5 1721,902 Q 1721,918 1705,918 Q 1580.5,917.8533606720692 1456,918 Q 1440,918 1440,902 Q 1438.9345211982352,856.5 1440,811 Q 1440,795 1456,795 Z" fill="white" stroke="#4c8c71" stroke-width="2"/>
+<use xlink:href="#icon-route" x="1456" y="808" width="42" height="42" color="#20272b"/>
+<use xlink:href="#icon-card" x="1676" y="807" width="29" height="29" color="#4c8c71"/>
+<text x="1580" y="868" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="500" fill="#20272b" text-anchor="middle">Navigation</text>
+<text x="1580" y="905" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">导航</text>
+<path d="M 1754,795 Q 1878.5,796.4709558057725 2003,795 Q 2019,795 2019,811 Q 2020.3506238997977,856.5 2019,902 Q 2019,918 2003,918 Q 1878.5,917.4066554613046 1754,918 Q 1738,918 1738,902 Q 1738.9499991093946,856.5 1738,811 Q 1738,795 1754,795 Z" fill="white" stroke="#4c8c71" stroke-width="2"/>
+<use xlink:href="#icon-target" x="1754" y="808" width="42" height="42" color="#20272b"/>
+<use xlink:href="#icon-card" x="1974" y="807" width="29" height="29" color="#4c8c71"/>
+<text x="1878" y="868" font-family="Chilanka, Comic Sans MS, cursive" font-size="28" font-weight="500" fill="#20272b" text-anchor="middle">Object Detection</text>
+<text x="1878" y="905" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">目标检测</text>
+<path d="M 2052,795 Q 2176.5,794.3001976351921 2301,795 Q 2317,795 2317,811 Q 2316.5473875259913,856.5 2317,902 Q 2317,918 2301,918 Q 2176.5,918.9703896363139 2052,918 Q 2036,918 2036,902 Q 2036.6790847535049,856.5 2036,811 Q 2036,795 2052,795 Z" fill="white" stroke="#4c8c71" stroke-width="2"/>
+<use xlink:href="#icon-compass" x="2052" y="808" width="42" height="42" color="#20272b"/>
+<use xlink:href="#icon-card" x="2272" y="807" width="29" height="29" color="#4c8c71"/>
+<text x="2176" y="868" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="500" fill="#20272b" text-anchor="middle">Exploration</text>
+<text x="2176" y="905" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">探索</text>
+<path d="M 2350,795 Q 2474.5,793.5771288394164 2599,795 Q 2615,795 2615,811 Q 2614.513075797689,856.5 2615,902 Q 2615,918 2599,918 Q 2474.5,918.2399999646291 2350,918 Q 2334,918 2334,902 Q 2334.1980925342805,856.5 2334,811 Q 2334,795 2350,795 Z" fill="white" stroke="#4c8c71" stroke-width="2"/>
+<use xlink:href="#icon-tracking" x="2350" y="808" width="42" height="42" color="#20272b"/>
+<use xlink:href="#icon-card" x="2570" y="807" width="29" height="29" color="#4c8c71"/>
+<text x="2474" y="868" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="500" fill="#20272b" text-anchor="middle">Tracking</text>
+<text x="2474" y="905" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">跟踪</text>
+<text x="1444" y="956" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="400" fill="#4c8c71" text-anchor="start">运行时约束：资源仲裁 · 超时 / 取消 · 执行交接</text>
+<path d="M 2030,980 L 2030,1045" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 1935.5,992 Q 2030.0,992 2124.5,992 Q 2132.5,992 2132.5,1000 Q 2132.5,1012.5 2132.5,1025 Q 2132.5,1033 2124.5,1033 Q 2030.0,1033 1935.5,1033 Q 1927.5,1033 1927.5,1025 Q 1927.5,1012.5 1927.5,1000 Q 1927.5,992 1935.5,992 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2030" y="1023" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#20272b" text-anchor="middle">运动执行请求</text>
+<path d="M 1428,1045 Q 2030.0,1044.8967823142575 2632,1045 Q 2650,1045 2650,1063 Q 2649.0633372896928,1115.0 2650,1167 Q 2650,1185 2632,1185 Q 2030.0,1184.5475548837308 1428,1185 Q 1410,1185 1410,1167 Q 1409.1936398403311,1115.0 1410,1063 Q 1410,1045 1428,1045 Z" fill="white" stroke="#20272b" stroke-width="2.6"/>
+<text x="1444" y="1093" font-family="Chilanka, Comic Sans MS, cursive" font-size="36" font-weight="600" fill="#20272b" text-anchor="start">Basic Behaviors</text>
+<text x="1815" y="1093" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="29" font-weight="400" fill="#56636a" text-anchor="start">基础执行</text>
+<text x="1444" y="1147" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="29" font-weight="400" fill="#20272b" text-anchor="start">Takeoff · Land · GoTo · FollowPath (+ FollowTimedPath)</text>
+<text x="2444" y="1093" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#56636a" text-anchor="middle">FollowReference</text>
+<path d="M 1430,1255 Q 2030.0,1253.9366022365748 2630,1255 Q 2650,1255 2650,1275 Q 2649.313534082076,1477.5 2650,1680 Q 2650,1700 2630,1700 Q 2030.0,1700.3466190956635 1430,1700 Q 1410,1700 1410,1680 Q 1410.5457483950197,1477.5 1410,1275 Q 1410,1255 1430,1255 Z" fill="#ffffff" stroke="#aeb4a8" stroke-width="2"/>
+<text x="1444" y="1302" font-family="Chilanka, Comic Sans MS, cursive" font-size="35" font-weight="600" fill="#20272b" text-anchor="start">Basic Functions</text>
+<text x="1830" y="1302" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">基础能力 · 兼容接口下选择 / 切换实现</text>
+<path d="M 1456,1330 Q 1597.5,1330.0927949690674 1739,1330 Q 1755,1330 1755,1346 Q 1754.7623543548664,1466.0 1755,1586 Q 1755,1602 1739,1602 Q 1597.5,1602.3495471024503 1456,1602 Q 1440,1602 1440,1586 Q 1439.9243975579905,1466.0 1440,1346 Q 1440,1330 1456,1330 Z" fill="#eff8f3" stroke="#4c8c71" stroke-width="2.3"/>
+<text x="1597.5" y="1376" font-family="Chilanka, Comic Sans MS, cursive" font-size="32" font-weight="600" fill="#20272b" text-anchor="middle">State Estimator</text>
+<text x="1597.5" y="1415" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">自身状态</text>
+<path d="M 1490,1441 Q 1564.0,1441.9853235844637 1638,1441 Q 1660,1441 1660,1463 Q 1661.3770423747003,1470.0 1660,1477 Q 1660,1499 1638,1499 Q 1564.0,1497.9420164877026 1490,1499 Q 1468,1499 1468,1477 Q 1469.1530960580928,1470.0 1468,1463 Q 1468,1441 1490,1441 Z" fill="#f4f7f4" stroke="#4c8c71" stroke-width="2"/>
+<path d="M 1491,1446 Q 1515.0,1446.1765192783084 1539,1446 Q 1557,1446 1557,1464 Q 1558.100383684756,1470.0 1557,1476 Q 1557,1494 1539,1494 Q 1515.0,1493.0102276331002 1491,1494 Q 1473,1494 1473,1476 Q 1472.7215683818488,1470.0 1473,1464 Q 1473,1446 1491,1446 Z" fill="#d6ebdd" stroke="#4c8c71" stroke-width="2"/>
+<text x="1515" y="1479" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="600" fill="#4c8c71" text-anchor="middle">A</text>
+<text x="1613" y="1479" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="middle">B</text>
+<use xlink:href="#icon-switch" x="1680" y="1448" width="45" height="45" color="#4c8c71"/>
+<text x="1597.5" y="1535" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#4c8c71" text-anchor="middle">选择 / 切换</text>
+<path d="M 1791,1330 Q 1932.5,1329.2631590679791 2074,1330 Q 2090,1330 2090,1346 Q 2090.340759929832,1466.0 2090,1586 Q 2090,1602 2074,1602 Q 1932.5,1601.6284851458217 1791,1602 Q 1775,1602 1775,1586 Q 1774.4305423666417,1466.0 1775,1346 Q 1775,1330 1791,1330 Z" fill="#eff8f3" stroke="#4c8c71" stroke-width="2.3"/>
+<text x="1932.5" y="1376" font-family="Chilanka, Comic Sans MS, cursive" font-size="32" font-weight="600" fill="#20272b" text-anchor="middle">Perception</text>
+<text x="1932.5" y="1415" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">感知与建图</text>
+<path d="M 1825,1441 Q 1899.0,1441.1180211523103 1973,1441 Q 1995,1441 1995,1463 Q 1996.3050812711972,1470.0 1995,1477 Q 1995,1499 1973,1499 Q 1899.0,1498.4883101508829 1825,1499 Q 1803,1499 1803,1477 Q 1803.4845459950707,1470.0 1803,1463 Q 1803,1441 1825,1441 Z" fill="#f4f7f4" stroke="#4c8c71" stroke-width="2"/>
+<path d="M 1826,1446 Q 1850.0,1447.3918748577698 1874,1446 Q 1892,1446 1892,1464 Q 1890.8151970605552,1470.0 1892,1476 Q 1892,1494 1874,1494 Q 1850.0,1493.914814755195 1826,1494 Q 1808,1494 1808,1476 Q 1807.1803491913104,1470.0 1808,1464 Q 1808,1446 1826,1446 Z" fill="#d6ebdd" stroke="#4c8c71" stroke-width="2"/>
+<text x="1850" y="1479" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="600" fill="#4c8c71" text-anchor="middle">A</text>
+<text x="1948" y="1479" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="middle">B</text>
+<use xlink:href="#icon-switch" x="2015" y="1448" width="45" height="45" color="#4c8c71"/>
+<text x="1932.5" y="1535" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#4c8c71" text-anchor="middle">选择 / 切换</text>
+<text x="1597" y="1578" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#20272b" text-anchor="middle">Pose · Twist · TF</text>
+<text x="1932" y="1578" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#20272b" text-anchor="middle">Maps · Detections</text>
+<path d="M 2126,1330 Q 2220.0,1331.291022393671 2314,1330 Q 2330,1330 2330,1346 Q 2331.2103253478376,1466.0 2330,1586 Q 2330,1602 2314,1602 Q 2220.0,1601.133805064635 2126,1602 Q 2110,1602 2110,1586 Q 2110.6367866672654,1466.0 2110,1346 Q 2110,1330 2126,1330 Z" fill="#f8f5fc" stroke="#8462ad" stroke-width="2.2"/>
+<use xlink:href="#icon-inference" x="2193" y="1350" width="55" height="55" color="#20272b"/>
+<text x="2220" y="1450" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="600" fill="#20272b" text-anchor="middle">Inference</text>
+<text x="2220" y="1493" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#56636a" text-anchor="middle">模型推理</text>
+<text x="2220" y="1550" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#56636a" text-anchor="middle">Model services</text>
+<path d="M 2366,1330 Q 2485.0,1330.0823187878627 2604,1330 Q 2620,1330 2620,1346 Q 2618.86338712447,1466.0 2620,1586 Q 2620,1602 2604,1602 Q 2485.0,1601.6863673313933 2366,1602 Q 2350,1602 2350,1586 Q 2350.286928918493,1466.0 2350,1346 Q 2350,1330 2366,1330 Z" fill="#fff8e8" stroke="#bc7026" stroke-width="2.3"/>
+<use xlink:href="#icon-control" x="2457" y="1350" width="55" height="55" color="#20272b"/>
+<text x="2485" y="1444" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="600" fill="#20272b" text-anchor="middle">Motion</text>
+<text x="2485" y="1485" font-family="Chilanka, Comic Sans MS, cursive" font-size="31" font-weight="600" fill="#20272b" text-anchor="middle">Controller</text>
+<text x="2485" y="1536" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#56636a" text-anchor="middle">运动参考 + 状态</text>
+<text x="2485" y="1578" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="500" fill="#20272b" text-anchor="middle">控制指令</text>
+<path d="M 2525,1185 L 2525,1230 L 2485,1230 L 2485,1330" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 2458.0,1195 Q 2515.0,1195 2572.0,1195 Q 2580.0,1195 2580.0,1203 Q 2580.0,1214.0 2580.0,1225 Q 2580.0,1233 2572.0,1233 Q 2515.0,1233 2458.0,1233 Q 2450.0,1233 2450.0,1225 Q 2450.0,1214.0 2450.0,1203 Q 2450.0,1195 2458.0,1195 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2515" y="1223" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="23" font-weight="500" fill="#20272b" text-anchor="middle">运动参考</text>
+<path d="M 1428,1750 Q 1845.0,1749.7584246192512 2262,1750 Q 2280,1750 2280,1768 Q 2280.1151375825366,1816.0 2280,1864 Q 2280,1882 2262,1882 Q 1845.0,1882.5431627179619 1428,1882 Q 1410,1882 1410,1864 Q 1411.1498936821997,1816.0 1410,1768 Q 1410,1750 1428,1750 Z" fill="#f1f6fb" stroke="#437eaf" stroke-width="2.3"/>
+<use xlink:href="#icon-sensor" x="1440" y="1785" width="58" height="58" color="#20272b"/>
+<text x="1530" y="1798" font-family="Chilanka, Comic Sans MS, cursive" font-size="33" font-weight="600" fill="#20272b" text-anchor="start">Sensors / Data Bridges</text>
+<text x="1530" y="1845" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">IMU · Camera · LiDAR · 时间与坐标</text>
+<path d="M 1600,1750 L 1600,1720 L 1718,1720 L 1718,1602" fill="none" stroke="#437eaf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="8 7" marker-end="url(#arrow-437eaf)"/>
+<path d="M 1905,1750 L 1905,1720 L 2054,1720 L 2054,1602" fill="none" stroke="#437eaf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="8 7" marker-end="url(#arrow-437eaf)"/>
+<path d="M 2368,1750 Q 2485.0,1751.2344183233708 2602,1750 Q 2620,1750 2620,1768 Q 2619.949748395809,1816.0 2620,1864 Q 2620,1882 2602,1882 Q 2485.0,1882.0092563753099 2368,1882 Q 2350,1882 2350,1864 Q 2348.9739259994103,1816.0 2350,1768 Q 2350,1750 2368,1750 Z" fill="#fff8e8" stroke="#bc7026" stroke-width="2.3"/>
+<text x="2485" y="1796" font-family="Chilanka, Comic Sans MS, cursive" font-size="29" font-weight="600" fill="#20272b" text-anchor="middle">Platform / PX4</text>
+<text x="2485" y="1840" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#56636a" text-anchor="middle">平台与飞控</text>
+<path d="M 2485,1602 L 2485,1750" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 2452.0,1690 Q 2485.0,1690 2518.0,1690 Q 2526.0,1690 2526.0,1698 Q 2526.0,1710.0 2526.0,1722 Q 2526.0,1730 2518.0,1730 Q 2485.0,1730 2452.0,1730 Q 2444.0,1730 2444.0,1722 Q 2444.0,1710.0 2444.0,1698 Q 2444.0,1690 2452.0,1690 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2485" y="1720" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#20272b" text-anchor="middle">控制</text>
+<text x="1440" y="1930" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#20272b" text-anchor="start">AirSim + PX4 SITL / UAV / Other AS2 platforms</text>
+<path d="M 2317,1897 Q 2477.5,1896.0264698725655 2638,1897 Q 2650,1897 2650,1909 Q 2651.116414395539,1927.0 2650,1945 Q 2650,1957 2638,1957 Q 2477.5,1957.2946884553005 2317,1957 Q 2305,1957 2305,1945 Q 2305.3723025470367,1927.0 2305,1909 Q 2305,1897 2317,1897 Z" fill="#fff8f4" stroke="#be7e69" stroke-width="1.6"/>
+<use xlink:href="#icon-shield" x="2316" y="1907" width="38" height="38" color="#9a6854"/>
+<text x="2367" y="1923" font-family="Chilanka, Comic Sans MS, cursive" font-size="23" font-weight="500" fill="#20272b" text-anchor="start">Emergency Handling</text>
+<text x="2367" y="1948" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="23" font-weight="400" fill="#56636a" text-anchor="start">独立保护 / 人工接管</text>
+<path d="M 2350,1816 L 2280,1816" fill="none" stroke="#437eaf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="8 7" marker-end="url(#arrow-437eaf)"/>
+<path d="M 1305,800 Q 1328.0,800.7149718204139 1351,800 Q 1368,800 1368,817 Q 1368.239339619522,1341.0 1368,1865 Q 1368,1882 1351,1882 Q 1328.0,1880.8440103007401 1305,1882 Q 1288,1882 1288,1865 Q 1288.8570618999092,1341.0 1288,817 Q 1288,800 1305,800 Z" fill="#fff2df" stroke="#bc7026" stroke-width="1.7"/>
+<text x="1335" y="1510" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="500" fill="#bc7026" text-anchor="middle" transform="rotate(-90 1335 1510)">共享数据 / State · Maps · Sensors · Inference</text>
+<path d="M 1368,854 L 1440,854" fill="none" stroke="#bc7026" stroke-width="3.7" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<path d="M 1368,1110 L 1410,1110" fill="none" stroke="#bc7026" stroke-width="3.7" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<path d="M 1597,1602 L 1597,1629 L 1387,1629 L 1387,1564 L 1368,1564" fill="none" stroke="#bc7026" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<path d="M 1932,1602 L 1932,1640 L 1737,1640 L 1737,1629 L 1597,1629" fill="none" stroke="#bc7026" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+<path d="M 2220,1602 L 2220,1640 L 1932,1640" fill="none" stroke="#bc7026" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+<path d="M 2220,1640 L 2374,1640 L 2374,1602" fill="none" stroke="#bc7026" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<text x="2330" y="1677" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#bc7026" text-anchor="middle">State</text>
+<path d="M 1410,1816 L 1368,1816" fill="none" stroke="#bc7026" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<path d="M 2650,1110 L 2693,1110 L 2693,583 L 2650,583" fill="none" stroke="#437eaf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="9 7" marker-end="url(#arrow-437eaf)"/>
+<text x="2681" y="862" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="23" font-weight="500" fill="#437eaf" text-anchor="middle" transform="rotate(-90 2681 862)">Feedback / Result</text>
+<text x="2653" y="1460" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="22" font-weight="400" fill="#56636a" text-anchor="middle" transform="rotate(-90 2653 1460)">ROS 2 · Action / Service / Topic / TF</text>
+<path d="M 2850,190 Q 3310.0,191.4425763227756 3770,190 Q 3800,190 3800,220 Q 3800.7356736595493,505.0 3800,790 Q 3800,820 3770,820 Q 3310.0,818.8160040228817 2850,820 Q 2820,820 2820,790 Q 2819.6946538203965,505.0 2820,220 Q 2820,190 2850,190 Z" fill="#f3faf5" stroke="#4c8c71" stroke-width="3.8" stroke-dasharray="15 10"/>
+<path d="M 2851,193 Q 3310.0,193 3769,193 Q 3797,193 3797,221 Q 3797,505.0 3797,789 Q 3797,817 3769,817 Q 3310.0,817 2851,817 Q 2823,817 2823,789 Q 2823,505.0 2823,221 Q 2823,193 2851,193 Z" fill="url(#hatch-4c8c71)" stroke="none" stroke-width="0"/>
+<text x="2858" y="260" font-family="Chilanka, Comic Sans MS, cursive" font-size="45" font-weight="600" fill="#20272b" text-anchor="start">(3) Benchmark</text>
+<text x="2860" y="304" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">已适配、同类型工作的公平比较</text>
+<path d="M 2888,345 Q 3310.0,345.39599322791844 3732,345 Q 3750,345 3750,363 Q 3750.9408287273886,437.5 3750,512 Q 3750,530 3732,530 Q 3310.0,530.1065378636039 2888,530 Q 2870,530 2870,512 Q 2869.645824225367,437.5 2870,363 Q 2870,345 2888,345 Z" fill="#ffffff" stroke="#4c8c71" stroke-width="2.6"/>
+<use xlink:href="#icon-chart" x="2908" y="381" width="66" height="66" color="#20272b"/>
+<text x="3002" y="401" font-family="Chilanka, Comic Sans MS, cursive" font-size="39" font-weight="600" fill="#20272b" text-anchor="start">Same-type Benchmark</text>
+<text x="3002" y="454" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="400" fill="#20272b" text-anchor="start">同任务 / 同平台 · 质量与效率评测</text>
+<text x="3002" y="502" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="400" fill="#56636a" text-anchor="start">成功率 · 误差 · 时延 · 资源</text>
+<path d="M 3310,530 L 3310,585" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 2888,585 Q 3310.0,584.0128707343033 3732,585 Q 3750,585 3750,603 Q 3748.7137714687474,672.5 3750,742 Q 3750,760 3732,760 Q 3310.0,759.8795334881447 2888,760 Q 2870,760 2870,742 Q 2870.6070829938817,672.5 2870,603 Q 2870,585 2888,585 Z" fill="#ffffff" stroke="#4c8c71" stroke-width="2.6"/>
+<use xlink:href="#icon-trophy" x="2910" y="622" width="67" height="67" color="#20272b"/>
+<text x="3002" y="641" font-family="Chilanka, Comic Sans MS, cursive" font-size="40" font-weight="600" fill="#20272b" text-anchor="start">Leaderboard UI</text>
+<text x="3002" y="695" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="30" font-weight="400" fill="#20272b" text-anchor="start">前端打榜 · 同类排名与指标对比</text>
+<text x="3002" y="736" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="start">按工作类型与评测条件分榜</text>
+<path d="M 2850,880 Q 3310.0,879.2052181975022 3770,880 Q 3800,880 3800,910 Q 3798.5076898712728,1030.0 3800,1150 Q 3800,1180 3770,1180 Q 3310.0,1180.564357888867 2850,1180 Q 2820,1180 2820,1150 Q 2820.391535280602,1030.0 2820,910 Q 2820,880 2850,880 Z" fill="#f8f4fc" stroke="#8462ad" stroke-width="3.8" stroke-dasharray="15 10"/>
+<path d="M 2851,883 Q 3310.0,883 3769,883 Q 3797,883 3797,911 Q 3797,1030.0 3797,1149 Q 3797,1177 3769,1177 Q 3310.0,1177 2851,1177 Q 2823,1177 2823,1149 Q 2823,1030.0 2823,911 Q 2823,883 2851,883 Z" fill="url(#hatch-8462ad)" stroke="none" stroke-width="0"/>
+<text x="2858" y="950" font-family="Chilanka, Comic Sans MS, cursive" font-size="45" font-weight="600" fill="#20272b" text-anchor="start">(4) Training</text>
+<text x="2860" y="994" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">未来方向 · 目前仍在构思阶段</text>
+<use xlink:href="#icon-inference" x="2885" y="1030" width="77" height="77" color="#8462ad"/>
+<text x="3010" y="1067" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="37" font-weight="600" fill="#8462ad" text-anchor="start">Concept stage / 构思中</text>
+<text x="3010" y="1120" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="29" font-weight="400" fill="#56636a" text-anchor="start">目标、数据与训练流程待定义</text>
+<path d="M 2850,1240 Q 3310.0,1238.9974526551362 3770,1240 Q 3800,1240 3800,1270 Q 3798.747737852445,1605.0 3800,1940 Q 3800,1970 3770,1970 Q 3310.0,1970.1150984132626 2850,1970 Q 2820,1970 2820,1940 Q 2819.589568399038,1605.0 2820,1270 Q 2820,1240 2850,1240 Z" fill="#fff7f2" stroke="#be7e69" stroke-width="3.8" stroke-dasharray="15 10"/>
+<path d="M 2851,1243 Q 3310.0,1243 3769,1243 Q 3797,1243 3797,1271 Q 3797,1605.0 3797,1939 Q 3797,1967 3769,1967 Q 3310.0,1967 2851,1967 Q 2823,1967 2823,1939 Q 2823,1605.0 2823,1271 Q 2823,1243 2851,1243 Z" fill="url(#hatch-be7e69)" stroke="none" stroke-width="0"/>
+<text x="2858" y="1310" font-family="Chilanka, Comic Sans MS, cursive" font-size="45" font-weight="600" fill="#20272b" text-anchor="start">(5) Gallery</text>
+<text x="2860" y="1354" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">自动展示已适配工作在适配平台上的效果</text>
+<path d="M 2888,1400 Q 3310.0,1398.6049162861575 3732,1400 Q 3750,1400 3750,1418 Q 3749.7767950287034,1652.5 3750,1887 Q 3750,1905 3732,1905 Q 3310.0,1903.6904437664487 2888,1905 Q 2870,1905 2870,1887 Q 2868.527225385933,1652.5 2870,1418 Q 2870,1400 2888,1400 Z" fill="#ffffff" stroke="#be7e69" stroke-width="2.5"/>
+<path d="M 2870,1461 L 3750,1461" fill="none" stroke="#be7e69" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+<circle cx="2895" cy="1430" r="5" fill="#be7e69"/>
+<circle cx="2917" cy="1430" r="5" fill="#be7e69"/>
+<circle cx="2939" cy="1430" r="5" fill="#be7e69"/>
+<text x="2980" y="1441" font-family="Chilanka, Comic Sans MS, cursive" font-size="32" font-weight="600" fill="#20272b" text-anchor="start">Adapted Works Gallery</text>
+<text x="3706" y="1440" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="23" font-weight="400" fill="#56636a" text-anchor="end">界面示意</text>
+<path d="M 2924,1483 Q 2980.0,1483.8355301236259 3036,1483 Q 3050,1483 3050,1497 Q 3050.6608445219517,1507.0 3050,1517 Q 3050,1531 3036,1531 Q 2980.0,1531.741902618722 2924,1531 Q 2910,1531 2910,1517 Q 2911.231735020443,1507.0 2910,1497 Q 2910,1483 2924,1483 Z" fill="#fff3e9" stroke="#9a6854" stroke-width="1.9"/>
+<text x="2980.0" y="1516" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="500" fill="#9a6854" text-anchor="middle">PC</text>
+<path d="M 3084,1483 Q 3147.5,1481.741268535614 3211,1483 Q 3225,1483 3225,1497 Q 3225.591790133248,1507.0 3225,1517 Q 3225,1531 3211,1531 Q 3147.5,1532.4796248838022 3084,1531 Q 3070,1531 3070,1517 Q 3068.9337475952075,1507.0 3070,1497 Q 3070,1483 3084,1483 Z" fill="#fff3e9" stroke="#9a6854" stroke-width="1.9"/>
+<text x="3147.5" y="1516" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="500" fill="#9a6854" text-anchor="middle">开发板</text>
+<text x="3705" y="1517" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#56636a" text-anchor="end">Work / Platform</text>
+<path d="M 2924,1570 Q 3032.5,1570.156477865958 3141,1570 Q 3155,1570 3155,1584 Q 3153.897679828642,1668.0 3155,1752 Q 3155,1766 3141,1766 Q 3032.5,1766.0200181687524 2924,1766 Q 2910,1766 2910,1752 Q 2910.742369314779,1668.0 2910,1584 Q 2910,1570 2924,1570 Z" fill="#faf8f4" stroke="#ab8c7c" stroke-width="1.6"/>
+<use xlink:href="#icon-play" x="3097" y="1719" width="33" height="33" color="#9a6854"/>
+<text x="3032" y="1812" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#20272b" text-anchor="middle">轨迹 / 飞行</text>
+<path d="M 3194,1570 Q 3302.5,1570.2367725225984 3411,1570 Q 3425,1570 3425,1584 Q 3424.8480384127747,1668.0 3425,1752 Q 3425,1766 3411,1766 Q 3302.5,1767.192460968436 3194,1766 Q 3180,1766 3180,1752 Q 3178.7118092219075,1668.0 3180,1584 Q 3180,1570 3194,1570 Z" fill="#faf8f4" stroke="#ab8c7c" stroke-width="1.6"/>
+<use xlink:href="#icon-play" x="3367" y="1719" width="33" height="33" color="#9a6854"/>
+<text x="3302" y="1812" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#20272b" text-anchor="middle">地图 / 定位</text>
+<path d="M 3464,1570 Q 3572.5,1568.720217509034 3681,1570 Q 3695,1570 3695,1584 Q 3695.449651280596,1668.0 3695,1752 Q 3695,1766 3681,1766 Q 3572.5,1765.508453429587 3464,1766 Q 3450,1766 3450,1752 Q 3448.743294532525,1668.0 3450,1584 Q 3450,1570 3464,1570 Z" fill="#faf8f4" stroke="#ab8c7c" stroke-width="1.6"/>
+<use xlink:href="#icon-play" x="3637" y="1719" width="33" height="33" color="#9a6854"/>
+<text x="3572" y="1812" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="500" fill="#20272b" text-anchor="middle">检测 / 跟踪</text>
+<path d="M 2935,1712 Q 2985,1585 3020,1686 T 3125,1610" fill="none" stroke="#437eaf" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 7"/>
+<use xlink:href="#icon-drone" x="2985" y="1613" width="60" height="60" color="#20272b"/>
+<circle cx="3213.4" cy="1639.1" r="3.8" fill="#4c8c71" opacity=".65"/>
+<circle cx="3370.3" cy="1631.0" r="3.9" fill="#4c8c71" opacity=".65"/>
+<circle cx="3350.7" cy="1611.2" r="3.0" fill="#4c8c71" opacity=".65"/>
+<circle cx="3280.4" cy="1614.0" r="2.9" fill="#4c8c71" opacity=".65"/>
+<circle cx="3379.0" cy="1650.6" r="2.3" fill="#4c8c71" opacity=".65"/>
+<circle cx="3387.1" cy="1653.5" r="2.0" fill="#4c8c71" opacity=".65"/>
+<circle cx="3263.1" cy="1622.3" r="2.1" fill="#4c8c71" opacity=".65"/>
+<circle cx="3303.0" cy="1682.3" r="3.4" fill="#4c8c71" opacity=".65"/>
+<circle cx="3240.2" cy="1665.1" r="2.6" fill="#4c8c71" opacity=".65"/>
+<circle cx="3379.7" cy="1686.2" r="3.8" fill="#4c8c71" opacity=".65"/>
+<circle cx="3340.5" cy="1650.6" r="3.1" fill="#4c8c71" opacity=".65"/>
+<circle cx="3362.4" cy="1604.2" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3389.4" cy="1685.2" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3239.1" cy="1696.1" r="2.8" fill="#4c8c71" opacity=".65"/>
+<circle cx="3379.0" cy="1606.3" r="2.4" fill="#4c8c71" opacity=".65"/>
+<circle cx="3229.8" cy="1658.7" r="2.3" fill="#4c8c71" opacity=".65"/>
+<circle cx="3395.8" cy="1688.6" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3338.8" cy="1677.1" r="2.2" fill="#4c8c71" opacity=".65"/>
+<circle cx="3385.3" cy="1661.9" r="3.1" fill="#4c8c71" opacity=".65"/>
+<circle cx="3234.2" cy="1658.0" r="3.5" fill="#4c8c71" opacity=".65"/>
+<circle cx="3274.7" cy="1635.0" r="2.9" fill="#4c8c71" opacity=".65"/>
+<circle cx="3386.1" cy="1700.6" r="3.1" fill="#4c8c71" opacity=".65"/>
+<circle cx="3384.8" cy="1635.5" r="2.6" fill="#4c8c71" opacity=".65"/>
+<circle cx="3353.3" cy="1669.5" r="3.2" fill="#4c8c71" opacity=".65"/>
+<circle cx="3272.8" cy="1696.0" r="3.3" fill="#4c8c71" opacity=".65"/>
+<circle cx="3299.0" cy="1675.7" r="2.1" fill="#4c8c71" opacity=".65"/>
+<circle cx="3243.8" cy="1648.7" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3376.0" cy="1692.8" r="2.2" fill="#4c8c71" opacity=".65"/>
+<circle cx="3274.2" cy="1660.0" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3256.5" cy="1654.2" r="3.5" fill="#4c8c71" opacity=".65"/>
+<circle cx="3207.2" cy="1640.9" r="2.9" fill="#4c8c71" opacity=".65"/>
+<circle cx="3359.0" cy="1616.6" r="2.6" fill="#4c8c71" opacity=".65"/>
+<circle cx="3218.2" cy="1689.4" r="2.8" fill="#4c8c71" opacity=".65"/>
+<circle cx="3254.2" cy="1704.5" r="3.5" fill="#4c8c71" opacity=".65"/>
+<circle cx="3315.3" cy="1710.1" r="2.6" fill="#4c8c71" opacity=".65"/>
+<circle cx="3373.7" cy="1702.0" r="2.9" fill="#4c8c71" opacity=".65"/>
+<circle cx="3261.8" cy="1625.3" r="3.4" fill="#4c8c71" opacity=".65"/>
+<circle cx="3216.7" cy="1670.8" r="3.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3335.2" cy="1646.2" r="2.7" fill="#4c8c71" opacity=".65"/>
+<circle cx="3238.5" cy="1613.5" r="3.6" fill="#4c8c71" opacity=".65"/>
+<use xlink:href="#icon-map" x="3256" y="1615" width="62" height="62" color="#20272b"/>
+<use xlink:href="#icon-human" x="3535" y="1620" width="59" height="59" color="#20272b"/>
+<path d="M 3512,1595 Q 3567.5,1595 3623,1595 Q 3626,1595 3626,1598 Q 3626,1652.5 3626,1707 Q 3626,1710 3623,1710 Q 3567.5,1710 3512,1710 Q 3509,1710 3509,1707 Q 3509,1652.5 3509,1598 Q 3509,1595 3512,1595 Z" fill="none" stroke="#4c8c71" stroke-width="2"/>
+<path d="M 3490,1725 L 3535,1718 L 3568,1705" fill="none" stroke="#437eaf" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="5 5"/>
+<text x="3310" y="1864" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="500" fill="#56636a" text-anchor="middle">自动归档：视频 · 轨迹 · 地图 · 运行指标</text>
+<path d="M 1075,1743 L 1200,1743 L 1200,745 L 1410,745" fill="none" stroke="#20272b" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<text x="1183" y="1244" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="500" fill="#20272b" text-anchor="middle" transform="rotate(-90 1183 1244)">部署适配包 + 功能卡片</text>
+<path d="M 2720,447 L 2870,447" fill="none" stroke="#20272b" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 2765.5,389 Q 2790.0,389 2814.5,389 Q 2822.5,389 2822.5,397 Q 2822.5,409.0 2822.5,421 Q 2822.5,429 2814.5,429 Q 2790.0,429 2765.5,429 Q 2757.5,429 2757.5,421 Q 2757.5,409.0 2757.5,397 Q 2757.5,389 2765.5,389 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2790" y="419" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="500" fill="#20272b" text-anchor="middle">评测</text>
+<path d="M 2720,1625 L 2870,1625" fill="none" stroke="#20272b" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<path d="M 2743.0,1560 Q 2790.0,1560 2837.0,1560 Q 2845.0,1560 2845.0,1568 Q 2845.0,1579.5 2845.0,1591 Q 2845.0,1599 2837.0,1599 Q 2790.0,1599 2743.0,1599 Q 2735.0,1599 2735.0,1591 Q 2735.0,1579.5 2735.0,1568 Q 2735.0,1560 2743.0,1560 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2790" y="1589" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="24" font-weight="500" fill="#20272b" text-anchor="middle">运行效果</text>
+<path d="M 3750,681 L 3820,681 L 3820,151 L 1173,151 L 1173,541 L 1075,541" fill="none" stroke="#4c8c71" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="12 9" marker-end="url(#arrow-4c8c71)"/>
+<path d="M 2025.5,113 Q 2400.0,113 2774.5,113 Q 2782.5,113 2782.5,121 Q 2782.5,134.5 2782.5,148 Q 2782.5,156 2774.5,156 Q 2400.0,156 2025.5,156 Q 2017.5,156 2017.5,148 Q 2017.5,134.5 2017.5,121 Q 2017.5,113 2025.5,113 Z" fill="white" stroke="none" stroke-width="0"/>
+<text x="2400" y="146" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="28" font-weight="500" fill="#4c8c71" text-anchor="middle">Benchmark feedback · 评测结果反馈自动筛选</text>
+<text x="70" y="2040" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="600" fill="#20272b" text-anchor="start">图例</text>
+<path d="M 165,2028 L 235,2028" fill="none" stroke="#20272b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-20272b)"/>
+<text x="255" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#20272b" text-anchor="start">调用 / 交付</text>
+<path d="M 520,2028 L 590,2028" fill="none" stroke="#bc7026" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" marker-end="url(#arrow-bc7026)"/>
+<text x="610" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#bc7026" text-anchor="start">数据访问</text>
+<path d="M 865,2028 L 935,2028" fill="none" stroke="#437eaf" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="9 7" marker-end="url(#arrow-437eaf)"/>
+<text x="955" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#437eaf" text-anchor="start">状态 / 执行反馈</text>
+<path d="M 1300,2028 L 1370,2028" fill="none" stroke="#8462ad" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="1" stroke-dasharray="9 7" marker-end="url(#arrow-8462ad)"/>
+<text x="1390" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#8462ad" text-anchor="start">经验更新</text>
+<use xlink:href="#icon-card" x="1732" y="2007" width="37" height="37" color="#4c8c71"/>
+<text x="1790" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#4c8c71" text-anchor="start">功能卡片</text>
+<text x="2230" y="2038" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#4c8c71" text-anchor="start">A / B 选择器：兼容接口下切换实现</text>
+<text x="2230" y="2083" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#4c8c71" text-anchor="start">State：单一权威源；Perception：匹配表示 / 显式转换</text>
+<text x="70" y="2110" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="27" font-weight="400" fill="#56636a" text-anchor="start">目标设计；具体实现与验收状态以组件文档为准。Training 尚在构思阶段。</text>
+<text x="3765" y="2110" font-family="Noto Sans CJK SC, DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#56636a" text-anchor="end">AeroHub · Architecture v2</text>
+</svg>

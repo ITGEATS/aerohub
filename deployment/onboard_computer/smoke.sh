@@ -3,7 +3,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 out="${VERIFY_OUTPUT:-$root/log/airsim/onboard-computer-verification}"
-image="${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.0}"
+image="${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.2}"
 mkdir -p "$out"
 name=aerohub-onboard-computer-smoke
 required=(platform state_estimator controller_manager)

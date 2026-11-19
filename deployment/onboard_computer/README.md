@@ -8,19 +8,41 @@ AeroHub 正式维护的 PC 机载计算开发与仿真验证环境，承载 AS2�
 通用 AS2 启动代码与配置由 `deployment/airsim/as2/`、`deployment/airsim/config/` 共享。该镜像随项目交付，用户可选择是否使用 PC 开发；
 日常源码迭代按下节使用工作区补编译，基础镜像维护单独处理。Library 接入仍必须完成 RoboPi 验证。
 
-新构建与已发布版本为 `onboard_computer:v0.1.1`，配套
+当前开发版本为 `onboard_computer:v0.1.2`，配套
 [固定 flight_board 镜像](../flight_board/README.md#使用固定镜像)仍为 `v0.1.0`。
-GHCR 地址、不可变 digest 和历史 `v0.1.0` 均见
-[发布说明](../releases/README.md)。现有各功能启动默认值未统一迁移，
-使用新镜像时显式设置 `ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1`。
+已发布 `v0.1.1` 的 GHCR 地址、不可变 digest 和历史 `v0.1.0` 均见
+[发布说明](../releases/README.md)。`v0.1.2` 在完成发布验收前只作为本地开发标签。
 基础环境使用 `onboard_computer_dependencies:humble-px4-1.18`，其中固定 PX4 消息已编译。
 该依赖镜像基于 `osrf/ros:humble-desktop-full-jammy`，默认锁定其 digest：
 `sha256:592f97da6b871a438fdb97f86b422ab9f80657e80efa7b98d258894738c8a0c0`。
 
+### v0.1.2 依赖整理
+
+`v0.1.2` 将 `python3-msgpack` 提升为算力板通用依赖。该决定来自已完成的
+D²SLAM、DPV-SLAM、FAST-LIVO2、PIN-SLAM、ROG-Map 和 FALCON 镜像实测包差异：
+六个算力端镜像均在 `v0.1.1` 之外安装该包，且使用 Ubuntu Jammy 的同一系统版本。
+OpenBLAS 仍只由 D²SLAM 安装，NLopt、glog 和 libdw 仍只由 FALCON 安装，CUDA、
+PyTorch、ONNX Runtime 及各算法源码也继续留在派生镜像中。
+构建显式保留已验收基线使用的 `python3-rosdep=0.27.0-1`，避免提升通用依赖时
+意外回退已有构建工具。
+
+基础镜像只提供 ROS 2 Humble、匹配 flight-board 的 PX4 消息、AS2、公共执行接口、
+构建工具和上述通用 Python 传输依赖。它不包含 PX4 SITL、算法实现或算法专属依赖；
+PX4 继续由 `flight_board:v0.1.0` 提供。构建后执行以下契约检查：
+
+```bash
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
+  bash deployment/onboard_computer/check.sh
+```
+
+构建使用固定依赖基础层内置的 rosdep 索引，并在解析依赖前检查该缓存；不在每次
+构建时从 `raw.githubusercontent.com` 刷新可变索引。更新 ROS 依赖基线时应先显式
+重建并验证依赖基础层，再更新其标签或 digest。
+
 ## 固定镜像与源码开发（用户确认的目标）
 
 基础镜像的显式升级使用 `bash deployment/onboard_computer/build.sh`；默认输出
-本地 `onboard_computer:v0.1.1`，不覆盖历史 `v0.1.0`。默认重新构建固定
+本地 `onboard_computer:v0.1.2`，不覆盖历史 `v0.1.0` 或 `v0.1.1`。默认重新构建固定
 px4_msgs 依赖，再编译 AS2/Pixhawk 及消费者；依赖与消费者两个阶段均断言
 `VehicleStatus.MESSAGE_VERSION == 4`，配套 `flight_board:v0.1.0` 不变。
 
@@ -31,7 +53,7 @@ px4_msgs 依赖，再编译 AS2/Pixhawk 及消费者；依赖与消费者两个�
 不能仅凭主仓库 revision 声称可精确复建。检查方式：
 
 ```bash
-docker image inspect onboard_computer:v0.1.1 --format '{{json .Config.Labels}}'
+docker image inspect onboard_computer:v0.1.2 --format '{{json .Config.Labels}}'
 ```
 
 普通源码迭代仍使用外部工作区补编译并显式加载 overlay。基础镜像升级需要

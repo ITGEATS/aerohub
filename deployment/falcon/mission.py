@@ -23,8 +23,7 @@ from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import String
 from std_srvs.srv import SetBool, Trigger
 
-sys.path.insert(0, "/workspace/simulator/airsim/sensors")
-from uav_as2_sensor_adapter.rpc import Rpc
+from falcon_airsim_rpc import Rpc
 
 
 class Mission(Node):
@@ -32,7 +31,7 @@ class Mission(Node):
         super().__init__(
             "falcon_acceptance",
             parameter_overrides=[Parameter("use_sim_time", value=True)])
-        self.output = Path("/evidence")
+        self.output = Path("/results")
         self.case = os.environ.get("FALCON_CASE", "normal")
         self.odom = None
         self.platform = None

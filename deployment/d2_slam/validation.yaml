@@ -3,7 +3,7 @@ scenario: d2-slam-three-vehicle-airsim-acceptance
 platform:
   simulator: AirSim 1.8.1, visible window
   flight_controller: PX4 SITL from flight_board:v0.1.0
-  compute: self-contained D2SLAM image built from onboard_computer:v0.1.1
+  compute: self-contained D2SLAM image built from onboard_computer:v0.1.2
   runtime_mounts: generated configuration and validation evidence only
   topology: three independent pc_simulation compute containers from deployment/swarm
 duration:

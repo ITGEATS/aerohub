@@ -85,7 +85,11 @@ rosbag2_*/
 # Local-only documents: Survey, discussions, handoffs and operations
 /docs/local/
 
-# Temporary reproduction records used to derive reusable Skills
+# Local development records, retained evidence and replay data; keep the entry point
+/dev/*
+!/dev/README.md
+
+# Legacy reproduction records; new records belong in dev/
 /skill/temp/
 
 # AirSim/RoboPi local deployment secrets and runtime products

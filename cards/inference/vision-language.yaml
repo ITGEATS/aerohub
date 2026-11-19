@@ -3,7 +3,7 @@ id: inference.vision-language
 version: "0.2.0"
 type: capability
 name: Vision-language model inference
-description: Generates text from a configured vehicle RGB camera and a caller prompt; no navigation or motion interpretation.
+description: Generates generic text from a configured vehicle RGB camera and caller prompt through an authorized cloud model binding; it preserves the acquisition header, enforces input/result age and timeout, rejects concurrent goals, and reports NOT_READY, unsupported model, stale data, timeout, cancellation, rate limit, authentication and payload failures without making navigation or motion decisions.
 implementation:
   component_id: aerohub.inference.vision-language
   manifest: deployment/inference/vision_language.component.yaml
@@ -12,8 +12,9 @@ implementation:
 inputs:
   - id: rgb_image
     capability_type: sensor/camera/rgb/image
-    note: per-vehicle configured camera; actual acquisition header preserved, max_result_age checked before and after inference
-outputs: []
+outputs:
+  - id: generated_text
+    capability_type: inference/vision-language/text
 interfaces:
   - id: infer
     role: functional_operation
@@ -21,23 +22,16 @@ interfaces:
     protocol: ros2_action
     schema: uav_inference_interfaces/action/InferVisionLanguage
     parameter_schema: src/basic_function/inference/interfaces/action/InferVisionLanguage.action
-    note: logical model_name (spf by default), prompt, finite positive timeout and max_result_age; returns generic text plus acquisition header, never point/depth/navigation decisions
 lifecycle:
   management: system_managed
   operations:
-    start: launch configured HTTP worker and ROS adapter
-    status: HTTP health/live and health/ready; server discovery alone does not prove sensor/model readiness
-    stop: cancel request then stop owned supervisor processes; remote cloud execution may continue
-  failures: NOT_READY, UNSUPPORTED_MODEL, STALE_INPUT, STALE_RESULT, TIMEOUT, CANCELED, RATE_LIMITED, AUTH_ERROR, BAD_PAYLOAD; busy goals rejected
+    start: null
+    status: null
+    stop: null
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
   - hardware_type: sensor/camera/rgb
-  - hardware_type: network/cloud-api
 resource_access:
   reads: [sensor/rgb-camera, external/vlm-cloud-api]
   shared_writes: []
   exclusive_writes: [inference/vision-language/worker]
-validation:
-  stage: real-cloud-and-platform-input-verified
-  evidence: [deployment/airsim/demos/spf_language_nav/cloud_inference_validation.md, deployment/airsim/demos/spf_language_nav/live_cloud_validation.md]
-  limitations: [single-provider-live-validation, cloud-only-no-local-SPF-engine, model-output-instability, no-board-validation]
