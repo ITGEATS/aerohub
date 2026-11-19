@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.tool.object-detection
-version: 0.3.0
+version: 0.4.0
 source:
   directory: src/tool/object_detection
   license: GPL-3.0-or-later
@@ -11,8 +11,10 @@ roles:
   workstation: [AS2-object-detection-module, ROS-client]
 dependencies:
   inference: deployment/inference/yolo26n_seg.component.yaml
+  inference_selection: deployment configured; no automatic fallback
+  inference_options: [deployment/inference/yolo26n_seg.component.yaml, deployment/inference/grounding_dino.component.yaml]
 runtime:
-  build: bash deployment/object_detection/build_tool_overlay.sh
+  build: bash deployment/object_detection/build_query_overlay.sh
   start: ros2 run uav_object_detection object_detection
   namespace: configurable
   public_interfaces:
@@ -22,7 +24,10 @@ runtime:
       parameter_schema: src/tool/object_detection/interfaces/srv/DetectSnapshot.srv
   python_entry: drone.object_detection.detect
   camera_binding: deployment/object_detection/params.example.yaml
-  categories: [person, car, truck, bus]
+  query: original text; backend-specific normalized interpretation
+  detector_backends: [yolo, grounding_dino]
+  yolo_supported_queries: [person, car, truck, bus]
+  dino_binding: deployment/object_detection/params.grounding-dino.example.yaml
   timeout_clock: monotonic-wall-clock
   partial_result: completed-2D-with-unavailable-3D-is-success-PARTIAL-per-object-position_valid-required
   sharing: public-observations-legacy-service-and-stream-share-one-adapter-and-inference-worker
@@ -38,10 +43,10 @@ runtime:
   stop: tools/object_detection/enable false discards pending generation; SIGINT exits owned Tool
   rollback: stop, restore code, rebuild overlay, restart caller generation
 resources:
-  reads: [bound-camera-new-RGB-frame, inference/yolo/infer]
+  reads: [bound-camera-new-RGB-frame, configured-inference-service]
   subscriptions: [RGB]
   optional_subscriptions: registered-depth and RGB-depth-CameraInfo for positioning
-  optional_processing: mask-depth-measurement and capture-time-TF projection only when estimate_position=true
+  optional_processing: model-specific-mask-or-box-surface-depth and capture-time-TF projection only when estimate_position=true
   tf: camera-optical-to-output-frame at depth capture time; no state publishing authority
   writes: [typed-3D-measurements, status, optional-overlay]
   enforcement: local single-call lock and latest-only stream queue; no global task arbiter
@@ -50,3 +55,4 @@ validation:
   evidence: src/basic_function/inference/models/yolo26n_seg/validation.json
   public_contract: deployment/object_detection/VALIDATION-tool.md
   airsim_ground: deployment/object_detection/airsim/README.md
+  query_contract: deployment/object_detection/VALIDATION-query.md

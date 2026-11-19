@@ -14,7 +14,7 @@ from rclpy.executors import MultiThreadedExecutor
 from std_srvs.srv import Trigger
 from uav_planner_interfaces.action import NavigateToPose
 from uav_yopo_planner.navigation import YopoNavigation
-from uav_yopo_planner.node import YopoPlanner
+from uav_yopo_planner.node import YopoPlanner, seconds
 from test_ros_planner import Fixture
 
 
@@ -41,7 +41,10 @@ def main():
         raise AssertionError((planner.state, planner.reason, planner.timeline.revision))
 
     def task(x=20., **kwargs):
-        wait(lambda: planner.observations_ready(planner.now_s()) and planner.ready())
+        # Submit with freshness headroom rather than at the edge of the 0.3s
+        # gate; execution starts on a later timer tick. Do not weaken that gate.
+        wait(lambda: planner.observations_ready(planner.now_s()) and planner.ready()
+             and planner.now_s() - seconds(planner.depth.header.stamp) < .15)
         assert nav.to_point(x, 0., 0., wait=False, **kwargs)
 
     def outcome(code):
@@ -94,6 +97,43 @@ def main():
             drone2.shutdown(); drone2.destroy_node()
         nav.cancel_async(); outcome('CANCELED')
         checks.append('busy rejection, legacy guard and cancellation')
+        task()
+        wait(lambda: planner.timeline.revision >= 2)
+        task_id, timeline, handle = planner.task, planner.timeline, nav._handle
+        nav.to_point(25., 0., 0., wait=False)
+        assert planner.goal.tolist() == [25., 0., 0.]
+        assert planner.task == task_id and planner.timeline is timeline and nav._handle is handle
+        from uav_planner_interfaces.srv import UpdateNavigationTarget
+        update = UpdateNavigationTarget.Request(target_revision=3)
+        update.target.header.frame_id = planner.frame
+        response = nav._wait(nav._updates.call_async(update), 2.)
+        assert not response.accepted and response.code == 'NOT_OWNER'
+        update.goal_id = nav._handle.goal_id
+        update.target_revision = 2
+        response = nav._wait(nav._updates.call_async(update), 2.)
+        assert not response.accepted and response.code == 'STALE_TARGET'
+        assert planner.goal.tolist() == [25., 0., 0.]
+        # A superseded inference must not inspect/submit even a completed old result.
+        stale = dict(goal=planner.goal.copy())
+        stale['goal'][0] = 20.
+        planner.inferred(stale, planner.now_s())
+        wait(lambda: nav.feedback and nav.feedback.target_revision == 2)
+        nav.cancel_async(); outcome('CANCELED')
+        checks.append('running destination update preserves task and timeline')
+        task(3., arrival_behavior='hold', target_timeout=10.)
+        wait(lambda: nav.feedback and nav.feedback.arrived)
+        assert not nav.done and nav.wait_until_arrived(timeout=1.)
+        handle = nav._handle
+        nav.to_point(3., 0., 0., wait=False)
+        assert planner.navigation.holding
+        nav.to_point(25., 0., 0., wait=False)
+        assert nav._handle is handle and not planner.navigation.holding
+        wait(lambda: planner.timeline.revision >= 2)
+        nav.cancel_async(); outcome('CANCELED')
+        checks.append('hold arrival, renewal, resume and cancel')
+        task(arrival_behavior='hold', target_timeout=.3)
+        outcome('TARGET_TIMEOUT')
+        checks.append('stale destination stream stops execution')
         task(timeout=.2); outcome('TIMEOUT')
         checks.append('task timeout and stop')
         fixture.reject = True

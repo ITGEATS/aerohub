@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>uav_object_detection_python_api</name><version>0.1.0</version>
+  <name>uav_object_detection_python_api</name><version>0.4.0</version>
   <description>AS2 module for single-observation object detection</description>
   <maintainer email="developer@example.com">Aerohub developers</maintainer><license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>

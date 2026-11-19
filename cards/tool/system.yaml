@@ -1,0 +1,35 @@
+schema_version: '1.0'
+id: tool.system
+version: 0.1.0
+type: tool
+name: System Tool
+description: Managed takeoff, landing and read-only platform/global and local navigation state. Runs onboard and wraps native AS2 Behaviors and platform preparation. Landing is ordinary landing, not emergency preemption. Navigation must finish and confirm stop before landing. Uses a shared per-vehicle motion journal with SUPER managed navigation; other motion entrypoints are outside current enforcement.
+implementation:
+  component_id: aerohub.tool.system
+  manifest: deployment/system/component.yaml
+  shared_runtime: system-tool
+  coupled_capabilities: []
+inputs: []
+outputs: []
+interfaces:
+  - id: command
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_system_interfaces/action/SystemCommand
+    parameter_schema: src/tool/system/interfaces/action/SystemCommand.action
+  - id: state
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_system_interfaces/srv/GetSystemState
+    parameter_schema: src/tool/system/interfaces/srv/GetSystemState.srv
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+resource_access:
+  reads: [platform/info, self_localization/pose, self_localization/twist, sensor_measurements/odom]
+  shared_writes: []
+  exclusive_writes: [vehicle.motion]

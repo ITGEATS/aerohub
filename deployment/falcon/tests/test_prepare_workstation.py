@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,10 +8,10 @@ from prepare_workstation import INTERFACES, prepare
 
 class WorkstationInterfaceTests(unittest.TestCase):
     def test_copies_locked_interface_files_and_records_hashes(self):
-        source = (Path(__file__).resolve().parents[3]
-                  / "as2/aerostack2/as2_msgs")
-        if not source.is_dir():
-            self.skipTest("AeroStack2 submodule is not available")
+        configured = os.environ.get("AS2_MSGS_SOURCE")
+        source = (Path(configured) if configured else
+                  Path(__file__).resolve().parents[3] / "as2/aerostack2/as2_msgs")
+        self.assertTrue(source.is_dir(), f"AS2 message source is missing: {source}")
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "workspace"
             manifest = prepare(source, output)

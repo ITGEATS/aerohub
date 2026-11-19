@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 image=${PIN_SLAM_IMAGE:-aerohub/pin-slam:ros2-humble}
-base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.1}
+base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.2}
 wheelhouse=${PIN_SLAM_WHEELHOUSE:-$root/log/workspaces/pin_slam/wheelhouse}
 
 test -d "$wheelhouse" || { echo "PIN-SLAM wheelhouse is missing: $wheelhouse" >&2; exit 2; }

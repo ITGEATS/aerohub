@@ -98,7 +98,7 @@ def simulator_platform():
 
 
 def scene_manager(action, output):
-    command = [sys.executable, ROOT / 'simulator/airsim/manager/manager.py', action,
+    command = [sys.executable, ROOT / 'simulator/manager/manager.py', action,
                '--profile', output / 'profile.json', '--run-dir', output / 'scene', '--timeout', '90']
     if os.environ.get('SPF_AIRSIM_BINARY'):
         command += ['--binary', os.environ['SPF_AIRSIM_BINARY']]

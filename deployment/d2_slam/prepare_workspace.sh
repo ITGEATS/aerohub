@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 image="${D2_SLAM_IMAGE:-aerohub/d2-slam:ros2-humble-native}"
-base_image="${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.1}"
+base_image="${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.2}"
 jobs="${D2_SLAM_BUILD_JOBS:-1}"
 
 if [[ ! "${jobs}" =~ ^[1-9][0-9]*$ ]]; then

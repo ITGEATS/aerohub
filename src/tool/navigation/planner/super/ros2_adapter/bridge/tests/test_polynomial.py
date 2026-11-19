@@ -25,6 +25,24 @@ class CommittedPolynomialTest(unittest.TestCase):
         self.assertEqual(curve.sample(102)[1],[0,0,0])
         self.assertEqual(curve.times(100.1)[-1],102)
 
+    def test_recorded_course_boundaries_have_distinct_ros_times(self):
+        # 2026-11-16 course plan: boundary and regular sample differed only
+        # by floating point rounding, then both serialized to 120000000 ns.
+        durations = [.054999999999999716, .09599999999999653,
+                     .09900000000000375, .18424204630889485,
+                     1.7002562183868806, 1.7002562183868806]
+        curve = Polynomial(43.011, durations, [[0]*48]*3, 7)
+        start = 43.141
+        times = curve.times(start)
+        nanos = [round((t-start)*1e9) for t in times]
+        self.assertTrue(all(b > a for a,b in zip(nanos,nanos[1:])))
+        self.assertEqual(times[0], start)
+        self.assertEqual(times[-1], curve.end)
+        for offset in curve.ends:
+            boundary = curve.start+offset
+            if boundary > start:
+                self.assertIn(boundary, times)
+
     def test_rejects_malformed_and_never_extrapolates(self):
         for args in [(0,[1],[[0]*8]*3,7),(100,[0],[[0]*8]*3,7),
                      (100,[1],[[math.nan]*8]*3,7),(100,[1],[[0]*7]*3,7)]:

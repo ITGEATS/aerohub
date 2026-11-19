@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 image=${DPV_SLAM_IMAGE:-aerohub/dpv-slam:ros2-humble}
-base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.1}
+base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.2}
 artifact_root=${DPV_SLAM_ARTIFACT_ROOT:-$root/log/workspaces/dpv_slam}
 wheelhouse=$artifact_root/wheelhouse
 cuda_packages=$artifact_root/cuda-packages

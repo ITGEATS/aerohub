@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=onboard_computer:v0.1.1
+ARG BASE_IMAGE=onboard_computer:v0.1.2
 FROM ${BASE_IMAGE} AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -32,8 +32,6 @@ RUN source /opt/ros/humble/setup.bash \
 FROM ${BASE_IMAGE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 LABEL org.opencontainers.image.title="AeroHub FAST-LIVO2 native ROS 2 runtime"
-RUN apt-get update && apt-get install -y --no-install-recommends python3-msgpack \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/fast-livo-deps/ /opt/fast-livo-deps/
 COPY --from=builder /opt/fast_livo2_ws/install/ /opt/fast_livo2_ws/install/
 COPY deployment/fast_livo2/airsim.yaml /opt/fast_livo2/config/airsim.yaml

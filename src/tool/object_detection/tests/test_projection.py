@@ -56,6 +56,21 @@ class ProjectionTest(unittest.TestCase):
         self.assertLess(abs(d.position.x-2.),.21)
         self.assertFalse(hasattr(d,'velocity'))
 
+    def test_box_only_surface_uses_same_capture_time_tf(self):
+        depth=np.full((20,20),8.,np.float32);depth[5:15,5:15]=2.
+        self.p.depth.clear()
+        self.image.data=array('B',depth.tobytes());self.p.on_depth(self.image)
+        self.frame.detections[0].mask=Image(header=self.header)
+        result=self.p.project(self.frame,8,lambda _:True,'box_foreground_surface_v1')
+        self.assertTrue(result.valid,result.error)
+        self.assertEqual(result.header.stamp,self.header.stamp)
+        self.assertEqual(result.header.frame_id,'odom')
+        measured=result.detections[0]
+        self.assertEqual(measured.position_method,'box_foreground_surface_v1')
+        self.assertAlmostEqual(measured.position.x,1.9)
+        self.assertAlmostEqual(measured.position.z,2.)
+        self.assertFalse(measured.detection.mask.data)
+
     def test_missing_tf_and_cancellation_never_return_valid_position(self):
         self.buffer.clear();self.p.wait=.001
         self.assertFalse(self.p.project(self.frame,8,lambda _:True).valid)

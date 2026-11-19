@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>uav_object_detection_interfaces</name><version>0.1.0</version>
+  <name>uav_object_detection_interfaces</name><version>0.4.0</version>
   <description>Object Detection Tool measurements with capture-time positions.</description>
   <maintainer email="developer@example.com">Aerohub developers</maintainer>
   <license>GPL-3.0-or-later</license>

@@ -1,0 +1,12 @@
+std_msgs/Header header
+builtin_interfaces/Time observation_stamp
+builtin_interfaces/Time valid_until
+string session_id
+uint64 generation
+uint64 capture_id
+string status
+bool valid
+geometry_msgs/Point position
+geometry_msgs/Vector3 velocity
+float64[36] covariance
+string reason

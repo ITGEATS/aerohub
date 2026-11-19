@@ -5,6 +5,7 @@
 ```text
 src/
 ├── tool/
+│   ├── target_tracking/    # 只观测的目标状态与有限跟踪会话
 │   ├── object_detection/   # 公共单次检测、实现适配与 AS2 Module
 │   └── navigation/
 │       ├── planner/       # cat_ora、swarm_formation、super、gcopter、ipc、yopo、diffphys
@@ -27,6 +28,11 @@ src/
 - `navigation/interfaces/` 保留现有 `uav_planner_interfaces` 包。它历史上同时包含规划与 FollowTimedPath 执行协议；本次不拆包或更改类型，避免破坏现有消费者。
 - AS2、PX4 和仿真器依赖保留原位置。Demo Mission 脚本和部署编排仍在 `deployment/`，卡片仍在 `cards/`。
 - RGB-D Object Detection Tool 位于 `tool/object_detection/`，对应用提供单次观测接口和 AS2 Module；YOLO 模型适配保留在 `basic_function/inference/models/yolo26n_seg/`，不承担任务编排。
+
+System Tool 初版位于 `tool/system/`，提供托管起飞、降落和系统状态查询；
+任务侧通过Tool客户端调用，算力侧封装原生Behavior和平台准备。
+它与SUPER托管Navigation接入同一车辆运动占用包，尚未覆盖其他Planner或底层直连。
+实现与验证边界见 [System Tool](tool/system/README.md)。
 
 ## 路径迁移
 

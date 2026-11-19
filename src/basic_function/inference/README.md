@@ -7,9 +7,16 @@ ROS depth/CameraInfo and historical TF for measured 3D positions; target KF and
 motion execution remain outside Inference. Select only `yolo26n-seg` with
 `config/inference.yolo26n-seg.example.yaml`; existing model selections are retained.
 
+[Grounding DINO tiny](models/grounding_dino/README.md) 提供文本条件二维框推理及
+`InferGroundingDino` typed ROS 服务，模型 ID 为 `grounding-dino-tiny`。
+使用[专用配置](../../../config/inference.grounding-dino.example.yaml)选择该模型；
+[组件清单](../../../deployment/inference/grounding_dino.component.yaml)与
+[能力卡片](../../../cards/inference/grounding-dino.yaml)关联既有 Engine 验证。
+当前为 `partial`，已存真实图像验证不代表实时传感器、Tracking 或飞行验收。
+
 Inference 是与 Perception、State Estimator 并列的基础能力：对外使用 ROS 2，内部通过 FastAPI 隔离模型服务。CUDA、Houmo、Cloud 是可选执行插件；模型适配内部可使用张量或供应商协议，调用者不选择设备/协议。CUDA/Cloud 使用独立 uv 环境，RoboPi HMM 使用板端 Python 与应用私有运行包。
 
-当前提供公共 FastAPI runtime、ROS HTTP 客户端、模型 manifest、用户 YAML 准备入口、原生 AS2 双容器通信基准，以及 [YOPO](models/yopo/README.md) 和 [DiffPhys](models/diffphys/README.md) typed ROS 推理服务。YOPO Planner 的轨迹重建和执行在 `src/tool/navigation/planner/yopo/`，模型服务只返回候选 PVA/cost；DiffPhys返回原始策略输出和显式GRU隐状态，尚无运动执行接入。
+当前提供公共 FastAPI runtime、ROS HTTP 客户端、模型 manifest、用户 YAML 准备入口、原生 AS2 双容器通信基准，以及 [YOPO](models/yopo/README.md)、[DiffPhys](models/diffphys/README.md)、[YOLO26n-seg](models/yolo26n_seg/README.md) 和 [Grounding DINO](models/grounding_dino/README.md) typed ROS 推理服务。YOPO Planner 的轨迹重建和执行在 `src/tool/navigation/planner/yopo/`，模型服务只返回候选 PVA/cost；DiffPhys返回原始策略输出和显式GRU隐状态，尚无运动执行接入。
 
 ## 开始前准备什么
 
@@ -66,7 +73,7 @@ ROS builder 的准备入口见 [OHOS 构建说明](../../../deployment/oh-ros-bu
 ## 文件职责
 
 - `runtime/`：公共 FastAPI 应用工厂，每进程加载并预热一个模型，提供 `/health/live`、`/health/ready`、`/infer`。模型提供 factory、请求与响应 Pydantic 类型。
-- `ros2_adapter/`：`uav_inference` ROS Python 包，提供内部 HTTP 客户端及 YOPO ROS Service Adapter。
+- `ros2_adapter/`：`uav_inference` ROS Python 包，提供内部 HTTP 客户端及 YOPO、DiffPhys、YOLO26n-seg、Grounding DINO ROS Service Adapter。
 - `manifest.json`：已支持模型 ID、仓库相对目录和描述；以实际 manifest 为准。
 - `models/`：各模型各自提供 README/setup、依赖声明和锁文件、schema 与推理 adapter。算法源码按功能归属保留原目录。
 
@@ -85,7 +92,13 @@ python3 deployment/inference/setup_models.py --config config/inference.example.y
 python3 deployment/inference/setup_models.py --config config/inference.example.yaml
 ```
 
-有已登记模型后，在 `inference.models` 中填写其 ID，脚本先验证全部选择，拒绝未知或重复 ID，再按顺序调用各模型 `setup.sh`；失败停止。`--check-cuda` 将同名标志转交模型准备脚本。空列表不操作，不卸载未选模型、不启动服务。现有本地配置如选择尚未登记的模型，会明确报错，不自动改写用户配置。
+Grounding DINO 的选择检查：
+
+```bash
+python3 deployment/inference/setup_models.py --config config/inference.grounding-dino.example.yaml --dry-run
+```
+
+在 `inference.models` 中填写其 ID，脚本先验证全部选择，拒绝未知或重复 ID，再按顺序调用各模型 `setup.sh`；失败停止。`--check-cuda` 将同名标志转交模型准备脚本。空列表不操作，不卸载未选模型、不启动服务。现有本地配置如选择尚未登记的模型，会明确报错，不自动改写用户配置。
 
 manifest 不重复保存模型版本、权重或依赖。新增模型必须有 README、setup.sh、pyproject.toml 和 uv.lock，CUDA 过程使用 [model-migration-cuda](../../../skill/model-migration-cuda/SKILL.md)，云端模型不要求本地权重或 CUDA 检查。每模型环境与 ROS overlay 分离，不重建稳定 AS2 镜像。
 

@@ -21,14 +21,14 @@ class ObjectDetectionModule(ModuleBase):
         """Service discovery only; sensor/model readiness is checked per call."""
         return self._client.service_is_ready()
 
-    def __call__(self, category='person', timeout=2.0, *, estimate_position=False):
-        return self.detect(category, timeout, estimate_position=estimate_position)
+    def __call__(self, query='person', timeout=2.0, *, estimate_position=False):
+        return self.detect(query, timeout, estimate_position=estimate_position)
 
-    def detect(self, category='person', timeout=2.0, *, estimate_position=False):
+    def detect(self, query='person', timeout=2.0, *, estimate_position=False):
         if not isinstance(estimate_position, bool):
             raise ValueError('estimate_position must be a bool')
-        if not isinstance(category, str) or not category:
-            raise ValueError('category must be a nonempty string')
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError('query must be a nonempty string')
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError('timeout must be finite and positive')
         if not self._lock.acquire(blocking=False):
@@ -40,7 +40,7 @@ class ObjectDetectionModule(ModuleBase):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return DetectSnapshot.Response(success=False, code='TIMEOUT', reason='Discovery exhausted task budget')
-            future = self._client.call_async(DetectSnapshot.Request(category=category, timeout=float(remaining), estimate_position=estimate_position))
+            future = self._client.call_async(DetectSnapshot.Request(query=query, timeout=float(remaining), estimate_position=estimate_position))
             # The server enforces the observation budget. Allow a small transport
             # margin, bounded on the client wall clock even if the server disappears.
             deadline += .5

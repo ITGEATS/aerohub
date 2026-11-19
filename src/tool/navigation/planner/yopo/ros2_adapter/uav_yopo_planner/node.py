@@ -13,7 +13,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener, TransformException
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import String
@@ -59,6 +59,9 @@ class YopoPlanner(Node):
         self.skew = param('max_observation_skew_s', .05)
         self.max_speed = param('max_speed', 6.)
         self.camera_pitch = param('camera_pitch_deg', 0.)
+        self.camera_x = float(param('camera_x_m', 0.))
+        if not math.isfinite(self.camera_x):
+            raise ValueError('camera_x_m must be finite')
         # Fail closed unless deployment explicitly identifies the measurement model.
         self.depth_model = param('depth_model', 'unverified')
         if not all(math.isfinite(x) and x > 0 for x in
@@ -95,7 +98,9 @@ class YopoPlanner(Node):
         self.create_subscription(PoseStamped, 'self_localization/pose', self.on_pose, qos_profile_sensor_data)
         self.create_subscription(TwistStamped, 'self_localization/twist', self.on_twist, qos_profile_sensor_data)
         self.create_subscription(Image, 'yopo/depth', self.on_depth, qos_profile_sensor_data)
-        self.create_subscription(CameraInfo, 'yopo/camera_info', self.on_info, qos_profile_sensor_data)
+        self.create_subscription(CameraInfo, 'yopo/camera_info', self.on_info,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                       reliability=ReliabilityPolicy.RELIABLE))
         self.create_subscription(PoseStamped, 'yopo/goal', self.on_goal, 1)
         self.create_subscription(ControllerInfo, 'controller/info', self.on_mode, qos_profile_sensor_data)
         self.create_service(Trigger, 'yopo/cancel', self.cancel)
@@ -189,7 +194,7 @@ class YopoPlanner(Node):
             q = transform.rotation
             actual = Rotation.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
             aligned_optical = np.array([[0., 0., 1.], [-1., 0., 0.], [0., -1., 0.]])
-            if (np.linalg.norm(vector(transform.translation)) > 1e-6 or
+            if (np.linalg.norm(vector(transform.translation)-np.array([self.camera_x, 0., 0.])) > 1e-6 or
                     not np.allclose(actual, self.rotation_bc @ aligned_optical, atol=1e-6)):
                 return False
         except (TransformException, ValueError):
@@ -253,6 +258,7 @@ class YopoPlanner(Node):
         self.generation += 1
         self.queued_goal = None
         self.goal = vector(msg.pose.position)
+        self.target_revision = 1
         self.task = 'yopo-' + uuid.uuid4().hex
         self.timeline = Timeline()
         self.goal_handle = None
@@ -277,6 +283,11 @@ class YopoPlanner(Node):
         self.status.publish(String(data=json.dumps(dict(
             state=state or self.state, reason=self.reason if reason is None else reason,
             ready=self.observations_ready(self.now_s()) and self.ready(),
+            ready_checks=dict(geometry=self.geometry_ready(),
+                observations=self.observations_ready(self.now_s()),
+                inference=self.infer_client.service_is_ready(),
+                action=self.action.server_is_ready(), modify=self.modify.service_is_ready(),
+                stop=self.stopper.service_is_ready()),
             task_id=getattr(self, 'task', ''), control_mode=self.mode,
             stop_ack=self.stop_ack, input_ages={name:self.now_s()-seconds(msg.header.stamp)
                 for name,msg in [('pose',self.pose),('twist',self.twist),('depth',self.depth)] if msg is not None},
@@ -420,10 +431,15 @@ class YopoPlanner(Node):
         assign(request.relative_goal, rotation.T @ (self.goal-initial[0]))
         self.last_image = seconds(self.depth.header.stamp)
         self.inference = dict(future=self.infer_client.call_async(request), generation=self.generation,
+                              target_revision=self.target_revision, goal=self.goal.copy(),
                               sent=time.monotonic(), expired=False, request=request,
                               epoch=epoch, initial=initial, yaw=yaw, rotation=rotation)
 
     def inferred(self, context, now):
+        # Drain superseded GPU work without applying its terminal state/yaw or
+        # counting it as a planner failure. Keep the accepted execution intact.
+        if not np.array_equal(context['goal'], self.goal):
+            return
         try:
             result = context['future'].result()
             request = context['request']
@@ -444,7 +460,7 @@ class YopoPlanner(Node):
             candidate = result.candidates[result.best_index]
             terminal = np.array([vector(candidate.position), vector(candidate.velocity), vector(candidate.acceleration)]) @ context['rotation'].T
             terminal[0] += context['initial'][0]
-            curve = Curve.create(context['epoch'], context['initial'], terminal, result.duration_s, context['yaw'], self.goal)
+            curve = Curve.create(context['epoch'], context['initial'], terminal, result.duration_s, context['yaw'], context['goal'])
             self.submit(curve, now)
         except Exception as error:
             self.failure('INFERENCE_RESULT:' + str(error))

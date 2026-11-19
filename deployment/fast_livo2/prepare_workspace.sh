@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 image=${FAST_LIVO2_IMAGE:-aerohub/fast-livo2:ros2-humble}
-base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.1}
+base_image=${ONBOARD_COMPUTER_IMAGE:-onboard_computer:v0.1.2}
 args=(--network host --file "$root/deployment/fast_livo2/Dockerfile")
 for variable in HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
   if [[ -n ${!variable:-} ]]; then args+=(--build-arg "$variable=${!variable}"); fi

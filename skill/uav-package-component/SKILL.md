@@ -27,3 +27,13 @@ Registry、清单和卡片引用同一组件版本、入口和证据。卡片按
 
 提供清单、卡片、注册项、配置 schema、启动/停止/检查命令、更新回滚方法和证据索引。需要 RoboPi 安装时转入 [`deploy-lib`](../deploy-lib/SKILL.md)，不在此 Skill 内复制板端构建或传输步骤。
 
+
+## Demo 单独选择检测后端
+
+切换一个 Demo 的模型时，将 worker 启动脚本/端口/model_id、ROS facade 的服务类型、
+Detect backend/query/阈值、参数文件及全部消费者 overlay 一起核对。共享 Harness 的
+后端参数保留原默认值，Demo 显式选择；不同生成接口不叠加旧 workspace。
+为入口提供无副作用的启动计划检查，再用真实 ROS 节点构造验证参数实际生效、
+服务类型匹配且无旧后端节点。只检查文本不能替代这一步。
+区分复用 worker 与本轮拥有的 worker，异常清理也只停止后者；模型身份或CUDA
+不匹配时失败，不自动换模型。新部署默认值与历史模型验收分别标记。

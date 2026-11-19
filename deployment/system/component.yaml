@@ -1,0 +1,38 @@
+schema_version: '0.1'
+id: aerohub.tool.system
+version: 0.1.0
+source:
+  directory: src/tool/system
+  license: Apache-2.0
+provides: [tool.system]
+cards: [cards/tool/system.yaml]
+roles:
+  compute: [system-tool]
+  workstation: [system-client]
+runtime:
+  image: onboard_computer:v0.1.1
+  build: bash deployment/system/build.sh
+  start: bash deployment/system/start.sh
+  stop: cancel and await command result before stopping owned process
+  health: tools/system/state fresh; action discovery alone is not flight readiness
+  namespace: configurable; drone0 default in start.sh
+  public_interfaces:
+    command:
+      address: /drone0/tools/system/command
+      schema: uav_system_interfaces/action/SystemCommand
+      parameter_schema: src/tool/system/interfaces/action/SystemCommand.action
+    state:
+      address: /drone0/tools/system/state
+      schema: uav_system_interfaces/srv/GetSystemState
+  python_entry: SystemClient or drone.system
+  timeout_clock: monotonic wall clock
+  persistent_state: motion journal in AEROHUB_MOTION_LOCK_DIR; mount persistently on compute host
+resources:
+  reads: [platform/info, self_localization/pose, self_localization/twist]
+  exclusive: [vehicle.motion]
+  enforcement: shared flock plus sticky journal; SUPER managed navigation participates
+  limitation: other planners and direct Behavior/platform clients do not yet participate
+validation:
+  stage: partial
+  evidence: deployment/system/VALIDATION.md
+  unfinished: [real-ROS-lifecycle, SUPER-concurrent-action, ProjectAirSim-PX4-flight]

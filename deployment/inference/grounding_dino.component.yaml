@@ -1,0 +1,41 @@
+schema_version: '0.1'
+id: aerohub.inference.grounding-dino
+version: 0.1.0
+source:
+  inference: src/basic_function/inference/models/grounding_dino
+  architecture: transformers==4.40.1 GroundingDinoForObjectDetection, unmodified dependency
+  upstream: https://huggingface.co/IDEA-Research/grounding-dino-tiny
+  artifacts: src/basic_function/inference/models/grounding_dino/artifacts.json
+  license: Apache-2.0 model and Transformers
+provides: [inference/grounding-dino]
+cards: [cards/inference/grounding-dino.yaml]
+roles:
+  compute: [grounding-dino-worker, grounding-dino-ros-adapter]
+  workstation: [ROS-client]
+runtime:
+  model_environment: src/basic_function/inference/models/grounding_dino/uv.lock
+  prepare: src/basic_function/inference/models/grounding_dino/setup.sh --check-cuda
+  build_ros: bash deployment/inference/build_grounding_dino_ros.sh
+  worker: bash deployment/inference/start_grounding_dino.sh
+  ros_adapter: ros2 run uav_inference grounding_dino_node
+  endpoint: http://127.0.0.1:8003
+  namespace: configurable
+  platform: linux-x86_64
+  ros_image: onboard_computer:v0.1.0
+  prerequisites: [ROS-2-Humble, Python-3.10, uv, NVIDIA-driver, CUDA-GPU, verified-local-snapshot]
+  ready: HTTP-/health/ready and inference/grounding_dino/status.ready plus actual ROS roundtrip
+  stop: SIGINT owned adapter and worker; confirm exit; no kernel cancellation guarantee
+  rollback: stop, restore source/lock/artifacts, rebuild overlay, restart with new caller generation
+  persistence: no recurrent state; verified external snapshot linked under ignored artifacts
+resources:
+  arbitration: one inflight per worker and facade; no global GPU arbiter
+  publishing_authority: box responses and status only; no TF, pose, motion or target identity
+  coupling: ROS facade pins worker version and generation; restart facade after worker replacement
+validation:
+  stage: partial
+  evidence: src/basic_function/inference/models/grounding_dino/validation.json
+  limitations: [saved-real-image-only, no-live-sensor-consumer, no-Tool-or-Tracking-integration, no-flight, no-board]
+registration:
+  status: registered
+  model_id: grounding-dino-tiny
+  manifest: src/basic_function/inference/manifest.json

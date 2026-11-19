@@ -63,3 +63,66 @@ PC Demo 通过 AS2 `NavigationModule` 调用统一 `NavigateToPose` Action，地
 
 公共 Python API、约束和结果语义见 [Navigation Module](../../python_api/README.md)。
 PC 构建、运行与回归入口见 Demo README 的“公共导航接口 overlay”。
+
+### 终点覆盖结束后的新目标
+
+滚动替换必须与旧计划在时间上重叠；旧final覆盖已结束、新目标的计划晚于其结束
+时刻时，不能继续修改旧FollowTimedPath Action。Adapter记录最后提交计划的原覆盖
+终点，HOLD任务在该情形走既有停止确认→重新接管，重新请求SUPER计划；不改动
+原生时间戳或填造过渡轨迹。交接期间接收并缓存拥有者的最新目标，停止确认前不
+启动新执行；取消/终止保护仍有效。非final或非托管计划的覆盖空洞仍报错。
+`super_adapter/state`中的`submitted_segment`与`coverage_handoffs`记录这些区别。
+原失败时间35.153291604→35.281s的回归位于bridge/tests/test_dispatch.py，
+完整实测与覆盖边界见WestStreet VALIDATION-tool-demo.md。
+
+已成功完成的执行自动路由：同一Navigation任务仍有效时，新目标到来若发现旧
+FollowTimedPath已成功完成，Adapter不再向旧Action发modify，而是先走停止确认、
+再请求新计划并提交新Action。新计划排队期间旧Action完成也走该路由。
+外层COMPLETE任务尚未终止时同样支持；目标未变只续期，取消/失败不自动重启。
+外层Goal和运动资源所有权不变，交接期间只缓存最新目标，不并发启动执行。
+
+### 可选目标yaw接入
+
+Adapter参数`target_yaw_enabled`默认false；默认UNCONSTRAINED/KEEP_YAW继续
+保持执行接管朝向。需要目标yaw时，在部署前同时启用SUPER的
+`fsm.click_yaw_en`、`super_planner.goal_yaw_en`与Adapter参数，调用Navigation
+`to_pose(target, orientation_mode=NavigateToPose.Goal.TARGET_YAW, ...)`，
+target提供有限、归一化的纯yaw四元数。不需要yaw的调用者无需填充朝向。
+不支持TARGET_ORIENTATION全姿态控制。
+
+原始yaw多项式按其独立start_wt_yaw和time_yaw采样，与位置曲线共同覆盖
+当前提交区间；缺失/非法/覆盖不足报错，不静默丢弃yaw或外推。经fleet NED
+转换后交给现有FollowTimedPath，不另发运动参考；只更新朝向也触发目标发布。
+目标yaw是规划目标约束，不保证整段持续盯住运动目标。
+
+WestStreet部署入口`run_tool_demo.py --target-yaw`统一开启两侧部署配置，
+但不自动更改Demo任务调用：当前任务仍to_point、不下达yaw，不能将开关
+开启当成已完成机头追人。安装后的Adapter23项回归通过，已进行真实转弯闭环，任务失败：目标yaw44.9度时执行参考仅3.4度，
+实际1.81度；接口贯通不等于及时视线跟踪。详见WestStreet VALIDATION。
+
+### 连续目标朝向（实验，默认关闭）
+
+`continuous_yaw_enabled:=true`允许Navigation的`CONTINUOUS_YAW=4`。
+调用`to_pose(..., orientation_mode=NavigateToPose.Goal.CONTINUOUS_YAW,
+wait=False, arrival_behavior='hold', target_timeout=1.0)`，使用归一化纯yaw
+四元数；必须显式设置目标更新超时。旧TARGET_YAW仍为SUPER末端约束，
+默认UNCONSTRAINED/KEEP_YAW和原FollowPath不变。
+
+该模式忽略SUPER的yaw多项式，仅保留位置/PVA；Framework把本地ENU
+yaw初态策略随TimedPath提交，并通过`follow_timed_path/update_yaw`刷新
+同一执行任务的目标。服务不启动动作，不发布运动参考。
+任务UUID、递增版本及绝对有效期约束更新；等待服务确认时只保留最新目标。
+位置轨迹滚动更新不重置yaw状态，旧服务回调不能跨取消/交接生效。
+
+扩展FollowPath在原50Hz循环内统一合成位置/PVA与yaw，一次输出；
+朝向与原轨迹yaw互斥。当前实验限制为1.5rad/s、4rad/s²，误差比例4/s；
+有效期由Navigation目标更新时间续期，最多1秒，不绕过原任务失跟门。
+过期/时钟异常/取消停止执行；新执行从实际机头重新接管。
+
+接口新增TimedPath字段和UpdateTimedYaw服务，需要重编译接口及Behavior、
+Framework、Adapter和客户端，禁止混用旧overlay。固定镜像不重建。
+连续yaw仅验证了单机，不能据此声明多机同步朝向支持。
+
+真实35秒预算首轮已运行，但约23.17秒失跟，正常降落。目标48.11度时
+参考27.17度、机头7.26度，相比末端yaw参考更及时但仍不足以维持可见性。
+该功能已接入，不代表任务验收成功；见WestStreet验证记录。

@@ -11,7 +11,8 @@ import torch
 class TorchBackend:
     """One model, fixed named tensors, synchronous CPU/CUDA execution."""
 
-    def __init__(self, model_factory, weights_path, model_id, inputs, outputs, device='cuda'):
+    def __init__(self, model_factory, weights_path, model_id, inputs, outputs, device='cuda',
+                 state_loader=None):
         self.device = torch.device(device)
         if self.device.type not in ('cuda', 'cpu'):
             raise ValueError('device must be CPU or CUDA')
@@ -27,7 +28,9 @@ class TorchBackend:
         self._lock = threading.Lock()
         self._closed = False
         self._model = model_factory().to(self.device).eval()
-        self._model.load_state_dict(torch.load(weights, map_location=self.device, weights_only=True))
+        state = (state_loader(weights) if state_loader is not None else
+                 torch.load(weights, map_location=self.device, weights_only=True))
+        self._model.load_state_dict(state)
         self.metadata = dict(model_id=model_id,
                              model_version='sha256:' + hashlib.sha256(weights.read_bytes()).hexdigest(),
                              device=str(self.device), inputs=self.inputs, outputs=self.outputs)
@@ -45,7 +48,7 @@ class TorchBackend:
         prepared = {}
         for name, spec in self.inputs.items():
             value = np.asarray(inputs[name])
-            if value.shape != tuple(spec['shape']):
+            if not self._matches_shape(value.shape, spec['shape']):
                 raise ValueError('{} shape {} does not match {}'.format(name, value.shape, spec['shape']))
             if not np.issubdtype(value.dtype, np.number):
                 raise ValueError('{} must contain numeric values'.format(name))
@@ -73,7 +76,7 @@ class TorchBackend:
             result = {}
             for name, spec in self.outputs.items():
                 value = named[name]
-                if list(value.shape) != list(spec['shape']):
+                if not self._matches_shape(value.shape, spec['shape']):
                     raise RuntimeError('{} output shape does not match contract'.format(name))
                 result[name] = np.array(value.cpu().numpy(),
                                         dtype=output_dtypes.get(name, spec['dtype']), copy=True)
@@ -84,6 +87,12 @@ class TorchBackend:
 
     def warmup(self, inputs):
         return self.infer(inputs)
+
+    @staticmethod
+    def _matches_shape(actual, declared):
+        """None denotes a positive variable dimension; ranks remain exact."""
+        return len(actual) == len(declared) and all(
+            a > 0 and (d is None or a == d) for a, d in zip(actual, declared))
 
     def close(self):
         with self._lock:

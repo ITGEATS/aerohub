@@ -1,0 +1,4 @@
+# Registry-only fallback, not the development installation entry.
+# For the configured native source SDK use:
+# python3 simulator/projectairsim/setup_client.py
+projectairsim==1.1.0

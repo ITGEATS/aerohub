@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.planner.super-single
-version: '0.1.0'
+version: '0.2.0'
 source:
   upstream: src/tool/navigation/planner/super/upstream
   integration: src/tool/navigation/planner/super/ros2_adapter
@@ -27,6 +27,10 @@ runtime:
       address: /drone0/navigate_to_pose
       schema: uav_planner_interfaces/action/NavigateToPose
       parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+    update_target:
+      address: /drone0/navigate_to_pose/update_target
+      schema: uav_planner_interfaces/srv/UpdateNavigationTarget
+      parameter_schema: src/tool/navigation/interfaces/srv/UpdateNavigationTarget.srv
   python_entry: drone.navigation.to_point
   stop: standard-navigation-Action-cancel-then-existing-execution-client-quiescent-before-native-Land
   sharing: native-SUPER-embedded-map-and-adapter-form-one-deployment-stop-affects-navigation

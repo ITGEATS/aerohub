@@ -38,7 +38,7 @@ def container_exists(name: str) -> bool:
 
 
 def manager(action: str, output: Path) -> list[str]:
-    command = [sys.executable, str(ROOT / "simulator/airsim/manager/manager.py"), action,
+    command = [sys.executable, str(ROOT / "simulator/manager/manager.py"), action,
                "--profile", str(output / "profile.json"), "--run-dir", str(output / "scene")]
     binary = os.environ.get("AIRSIM_BINARY")
     if binary:

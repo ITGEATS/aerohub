@@ -4,6 +4,15 @@ uint8 UNCONSTRAINED=0
 uint8 KEEP_YAW=1
 uint8 TARGET_YAW=2
 uint8 TARGET_ORIENTATION=3
+# Execute yaw continuously, independently of position trajectory end time.
+uint8 CONTINUOUS_YAW=4
+uint8 COMPLETE=0
+uint8 HOLD=1
+# HOLD keeps the navigation session alive after confirmed arrival.
+uint8 arrival_behavior
+# Optional maximum ROS-time interval between accepted targets (initial target included).
+bool use_target_timeout
+float64 target_timeout
 geometry_msgs/PoseStamped target
 uint8 orientation_mode
 bool use_max_speed
@@ -23,3 +32,6 @@ string phase
 geometry_msgs/PoseStamped current_pose
 float64 distance_remaining
 uint64 revision
+# Accepted destination revision; independent of trajectory revision above.
+uint64 target_revision
+bool arrived

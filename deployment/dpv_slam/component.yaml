@@ -14,7 +14,7 @@ cards:
   - cards/perception/dpv-slam-sparse-points.yaml
 shared_process_group: dpv-slam-gpu
 environment:
-  shared_image: onboard_computer:v0.1.1
+  shared_image: onboard_computer:v0.1.2
   runtime_image: aerohub/dpv-slam:ros2-humble
   architecture: linux/amd64
   image_build: deployment/dpv_slam/prepare_workspace.sh

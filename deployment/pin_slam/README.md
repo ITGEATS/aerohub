@@ -1,7 +1,7 @@
 # PIN-SLAM deployment
 
 PIN-SLAM runs as a native ROS 2 Humble Python node in a self-contained GPU
-image derived from `onboard_computer:v0.1.1`. The image contains the locked
+image derived from `onboard_computer:v0.1.2`. The image contains the locked
 upstream source, complete hash-locked Python environment, AeroHub Adapter, AS2
 plugin, sensor adapter, configuration, and validation programs. No source,
 workspace, ROS overlay, or ROS 1 runtime is mounted when the component runs.
@@ -16,7 +16,7 @@ PIN_SLAM_WORKSPACE="$PWD/log/workspaces/pin_slam" \
   bash deployment/pin_slam/download_wheels.sh
 
 PIN_SLAM_WHEELHOUSE="$PWD/log/workspaces/pin_slam/wheelhouse" \
-ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
 PIN_SLAM_IMAGE=aerohub/pin-slam:ros2-humble \
   bash deployment/pin_slam/prepare_workspace.sh
 ```

@@ -88,6 +88,44 @@ Humble DiffPhys 1.23MB深度图曾在BEST_EFFORT下出现源端约15Hz但消费�
 
 随机采样会影响学习式前端和回环图的精度、延迟及复验稳定性。检查上游正式评测入口是否固定随机种子或覆盖运行参数；若有，应通过 Adapter 参数显式复用并记录到证据清单，不能依赖进程默认随机状态。输出覆盖率应在算法边界用处理诊断中的原始输入时间戳核对；独立高带宽订阅器漏帧只说明观察器过载，不能直接判定算法未消费输入。
 
+## 有限观测 Action 与 AS2 Module
+
+Action 调用下游 Service 时，客户端取消/超时只终止当前观测会话，不证明下游调用
+已结束。保留真实 outstanding future 的占用，收到回复后先核对会话世代，再处理
+原始采样时间；旧回复只排空，不能用于后续 Goal。真实 DDS 回归至少覆盖取消后
+立即新建 Goal、旧回复迟到、单会话互斥、陈旧/未来观测和 ROS 时钟倒退。
+若不支持强制终止下游请求，永久无回复时保持占用并明确重启恢复策略。
+
+AS2 `ModuleBase` 在当前锁定版本要求实现抽象 `__call__`；仅提供命名方法不足以
+构造 Module。安装模块文件到 ament share 的 modules 目录，并通过真实
+DroneInterface `load_module()` 验证加载、调用和销毁。`destroy()` 应可重复调用：
+DroneInterface.shutdown 会销毁已加载模块，不应在探针中先重复销毁 ActionClient。
+YOPO-Tracker 静态 AirSim/CUDA 观测曾业务断言通过但清理失败，修正幂等销毁后
+完整地面复验通过；该证据不包含移动目标身份、精度或导航闭环。
+
+观测状态不能只在一个 timer tick 暴露成功标志，否则异步 Action 消费者可能仅收到
+外推帧而漏掉所有成功观测。反馈保留最近观测关联状态、采样 ID 和有效期；
+缺测/失效转换单独定义。验收按不同 capture ID/原始 stamp 计数，不能按重复反馈
+数量判定观测覆盖。该问题已由真实 DDS 回归先失败后通过，YOPO-Tracker 最终静态 AirSim/CUDA
+独立采样验收也已复验通过；移动目标与故障仍需各自验证。
+
+
+## 文本查询替换固定类别接口
+
+公共请求字段更名时同时更新 Service、Action Goal、Python Module、CLI、部署例子和
+在仓库内的调用方；输出模型标签保留自身语义。公共 query 与实际 label/phrase 分开
+记录，固定类别使用部署支持列表精确解析，开放词表不能按 query==phrase 再过滤。
+后端选择由部署配置负责；独立 backend adapter 收束请求构造、查询规范化和模型
+输出校验，避免将分割 mask 约束套到 boxes-only 模型。检查模型版本及 worker 世代，
+替换模型后要求显式重启并失效旧会话。
+
+字段更名和嵌套消息扩展都需重生成全部受影响消费者，避免只构建 Engine 而加载旧
+Tool/Tracking 类型。Detect query 已在固定 onboard v0.1.1 外部 overlay 连同 AS2 Python
+API 构建并通过实际 DDS；该镜像有 AS2 消息不代表已安装 Python API，运行前需实际
+导入并加载其锁定局部 Python 依赖。公共 capture 的新鲜度用配置时钟下的源 stamp
+与接纳时间/水位核查，接收发生在调用后并不排除排队的旧图；拒绝未来图时不推进
+水位，以免一个错误源 stamp 阻塞后续正常图。回滚时重置水位并失效在途世代。
+
 ## ROS 1 基线与迁移完成条件
 
 ROS 1 原实现可在隔离环境中用于迁移前数值对照，但对照环境不得被活动 Dockerfile、Compose、launch 或验收入口启动。基线输入、源码提交、参数和输出需可追溯；无法运行基线时如实记录，不以保留 ROS 1 runtime 代替迁移。
