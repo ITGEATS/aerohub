@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=onboard_computer:v0.1.1
+ARG BASE_IMAGE=onboard_computer:v0.1.2
 FROM ${BASE_IMAGE} AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -20,8 +20,6 @@ RUN source /opt/ros/humble/setup.bash \
 FROM ${BASE_IMAGE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 LABEL org.opencontainers.image.title="AeroHub ROG-Map ROS 2 runtime"
-RUN apt-get update && apt-get install -y --no-install-recommends python3-msgpack \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/rog_map_ws/install/ /opt/rog_map_ws/install/
 COPY deployment/rog_map/acceptance.py /opt/rog_map/runtime/acceptance.py
 COPY deployment/airsim/as2/run.py /opt/rog_map/runtime/run_as2.py

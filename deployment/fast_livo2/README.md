@@ -7,12 +7,12 @@ supported PC reproduction or delivery topology.
 
 ## Build
 
-Prerequisites are `onboard_computer:v0.1.1` and `flight_board:v0.1.0`.
+Prerequisites are `onboard_computer:v0.1.2` and `flight_board:v0.1.0`.
 External downloads on the build host must use its local proxy configuration;
 do not store proxy addresses in the repository.
 
 ```bash
-ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
 FAST_LIVO2_IMAGE=aerohub/fast-livo2:ros2-humble \
   bash deployment/fast_livo2/prepare_workspace.sh
 ```

@@ -5,7 +5,7 @@ FALCON_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FALCON_SOURCE="$FALCON_ROOT/src/tool/navigation/planner/falcon/upstream"
 FALCON_REVISION=b447c1b660ab2305c023a38121fb4feeea44e47b
 FALCON_IMAGE=${FALCON_IMAGE:-aerohub/falcon:ros2-humble}
-FALCON_BASE_IMAGE=${FALCON_BASE_IMAGE:-onboard_computer:v0.1.1}
+FALCON_BASE_IMAGE=${FALCON_BASE_IMAGE:-onboard_computer:v0.1.2}
 FALCON_WORKSTATION_IMAGE=${FALCON_WORKSTATION_IMAGE:-aerohub/falcon-workstation:ros2-humble}
 FALCON_WORKSTATION_BASE_IMAGE=${FALCON_WORKSTATION_BASE_IMAGE:-osrf/ros:humble-desktop-full-jammy}
 
