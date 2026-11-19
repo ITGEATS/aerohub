@@ -23,6 +23,11 @@ description: 按原生 Aerostack2 扩展约定实现 Planner、Behavior、State 
 3. 明确外部算法进程由谁启动、健康检查及退出如何收口。State Estimator 插件不自动具有 Behavior 生命周期，也不自动将结果送入 PX4 EKF。
 4. 参数默认值不得伪装成实机标定。保留原有部署可用性；添加显式选择入口，不擅自切换飞行中的权威状态源。
 
+滚动 Planner 需要重置执行状态时，停止请求与停止完成必须分开处理。先等待当前
+Behavior 返回停止确认，再从新的实测状态建立规划初值并刷新地图/前沿等依赖状态；
+不能在执行仍变化时用旧预测状态立即发布下一条轨迹。若新轨迹无法同时满足动力学
+上限和 P/V/A/偏航连续性，应停止后从悬停重规划，而不是放宽 Adapter 连续性门槛。
+
 外部 SLAM 的 Adapter 应先形成完整、可验证的 `nav_msgs/Odometry` 契约，插件再负责 AS2 坐标、杆臂、陈旧值和发布权。若上游没有速度，先用两个有效且单调的采样位姿计算 twist，首帧保持未就绪；不要把有限差分、GPU 算法和 AS2 宿主职责揉进同一个插件。跟踪丢失时停止提交新权威状态，恢复或重启产生新地图 epoch 时禁止在运动中热切换。带 PGO 的全局位姿可能跳变，未另行提供平滑局部 chart 时必须向消费者声明。
 
 定位精度通过不代表输出速率适合直接承担控制状态。低频 SLAM 与高频平台里程计并存时，优先让平台里程计提供连续的 `odom -> base_link` 和 body twist，让 SLAM 按时间配对后提供 `map -> odom` 全局校正。动态全局校正应以零阶保持方式随每个新的本地采样时间提交，使完整 TF 链满足控制 freshness；这不同于把陈旧 SLAM pose 重发成新的 `odom -> base_link`。插件必须分别验证两路 frame、时间、频率、失效语义和唯一 canonical 发布权。
@@ -52,3 +57,9 @@ description: 按原生 Aerostack2 扩展约定实现 Planner、Behavior、State 
 Mountains 实测在车底碰撞时仍持续收到约0.485m/s向上速度，实际只爬升约0.35m，
 估计高度却漂移至约2.5m；不能因此调 PID、放宽成功阈值或延长起飞预算。
 本次通过 Demo 出生点配置避开车辆，原生3m Takeoff/hover/Land恢复通过。
+
+## 高频本地状态与低频协同校正
+
+协同 SLAM 的 peer 优化与 landmark 输出频率不应决定控制状态频率。插件将每个全局 pose 与时间邻近的 local odometry 配对，计算并保持 `map -> odom`；每个新 local sample 都以原采样 stamp 提交保持的校正、`odom -> base_link` 和 body twist。独立 smoke 使用非恒等校正检查组合结果，端到端 authority 则测量飞行窗口内 canonical source stamp 与本地 arrival gap。
+
+不要把初始化等待、验证器阻塞或仿真时钟跳步混入控制 freshness。发布权检查还应确认运行图中选中的 `plugin_name`、canonical topic 与 TF 只有一个宿主；shadow 通过后才切换 authority，并要求相同源码、镜像和标定。

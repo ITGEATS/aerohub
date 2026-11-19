@@ -26,7 +26,7 @@ PREFIX = "aerohub-rog-map-"
 CONTAINERS = [PREFIX + name for name in (
     "clock", "vehicle", "sensors", "as2", "navigation", "map", "consumer")]
 BOARD = "flight_board:v0.1.0"
-ONBOARD = "onboard_computer:v0.1.0"
+ROG_IMAGE = os.environ.get("ROG_MAP_IMAGE", "aerohub/rog-map:ros2-humble")
 DOMAIN = 174
 RPC_PORT = 44571
 AIRSIM_TCP_PORT = 4990
@@ -34,18 +34,6 @@ RELAY_PORT = 5090
 AGENT_PORT = 8972
 
 
-def host_path(variable, default):
-    value = Path(os.environ.get(variable, default))
-    return (value if value.is_absolute() else ROOT / value).resolve()
-
-
-ROG_WORKSPACE = host_path("ROG_MAP_WORKSPACE", "log/workspaces/rog_map")
-SENSOR_WORKSPACE = host_path(
-    "AIRSIM_SENSOR_WORKSPACE", "log/workspaces/airsim_sensors")
-PX4_MSGS_WORKSPACE = host_path(
-    "PX4_MSGS_OVERLAY_WORKSPACE", "log/workspaces/px4_msgs-rog-map-01")
-AS2_RUN = ROOT / "deployment/airsim/as2/run.py"
-ACCEPTANCE = ROOT / "deployment/rog_map/acceptance.py"
 BASE_SETTINGS = ROOT / "simulator/airsim/scenarios/fast_livo2/settings.json"
 
 
@@ -61,7 +49,7 @@ def container_exists(name):
 
 def manager(action, output):
     command = [
-        sys.executable, ROOT / "simulator/airsim/manager/manager.py", action,
+        sys.executable, ROOT / "simulator/manager/manager.py", action,
         "--profile", output / "airsim-profile.json",
         "--run-dir", output / "scene",
     ]
@@ -101,24 +89,11 @@ def write_runtime_configuration(output):
 
 
 def validate_inputs():
-    required = (
-        ROG_WORKSPACE / "install/setup.bash",
-        ROG_WORKSPACE / "install/lib/uav_rog_map/rog_map_node",
-        ROG_WORKSPACE / "install/lib/as2_navigation_inputs/navigation_inputs_node",
-        ROG_WORKSPACE / "source-state.txt",
-        SENSOR_WORKSPACE / "install/setup.bash",
-        SENSOR_WORKSPACE / "install/lib/uav_as2_sensor_adapter/airsim_sensor_node",
-        SENSOR_WORKSPACE / "source-state.txt",
-        PX4_MSGS_WORKSPACE / "install/setup.bash",
-        PX4_MSGS_WORKSPACE / "source-state.env",
-        AS2_RUN,
-        ACCEPTANCE,
-        BASE_SETTINGS,
-    )
+    required = (BASE_SETTINGS,)
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         raise RuntimeError("required acceptance inputs are missing: " + ", ".join(missing))
-    for image in (BOARD, ONBOARD):
+    for image in (BOARD, ROG_IMAGE):
         execute(["docker", "image", "inspect", image], stdout=subprocess.DEVNULL)
 
 
@@ -161,25 +136,9 @@ def source_manifest(output, scenario):
             image: subprocess.check_output(
                 ["docker", "image", "inspect", image, "--format", "{{.Id}}"],
                 text=True).strip()
-            for image in (BOARD, ONBOARD)
+            for image in (BOARD, ROG_IMAGE)
         },
-        "workspaces": {
-            "rog_map": {
-                "path": str(ROG_WORKSPACE),
-                "source_state_sha256": hashlib.sha256(
-                    (ROG_WORKSPACE / "source-state.txt").read_bytes()).hexdigest(),
-            },
-            "airsim_sensors": {
-                "path": str(SENSOR_WORKSPACE),
-                "source_state_sha256": hashlib.sha256(
-                    (SENSOR_WORKSPACE / "source-state.txt").read_bytes()).hexdigest(),
-            },
-            "px4_msgs_diagnostics": {
-                "path": str(PX4_MSGS_WORKSPACE),
-                "source_state_sha256": hashlib.sha256(
-                    (PX4_MSGS_WORKSPACE / "source-state.env").read_bytes()).hexdigest(),
-            },
-        },
+        "runtime_policy": "self-contained image; no source or workspace mounts",
         "source_hashes": hashes,
     }
     (output / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -202,11 +161,10 @@ def run_detached(name, image, environment, volumes, command, labels=None):
 
 def start_map():
     run_detached(
-        PREFIX + "map", ONBOARD, {"ROS_DOMAIN_ID": str(DOMAIN)},
-        [(ROG_WORKSPACE, "/workspace", "ro")],
+        PREFIX + "map", ROG_IMAGE, {"ROS_DOMAIN_ID": str(DOMAIN)}, [],
         "source /opt/ros/humble/setup.bash && "
         "source /root/aerostack2_ws/install/setup.bash && "
-        "source /workspace/install/setup.bash && "
+        "source /opt/rog_map_ws/install/setup.bash && "
         "exec ros2 launch uav_rog_map rog_map.launch.py "
         "namespace:=drone0 global_frame:=drone0/odom sensor_frame:=drone0/Lidar",
         {"aerohub.task": "rog-map-runtime", "aerohub.namespace": "drone0"})
@@ -363,8 +321,8 @@ def write_cleanup_evidence(output):
 def run(args):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    if os.environ.get("DISPLAY") != ":3" or os.environ.get("AIRSIM_RENDER_MODE") != "windowed":
-        raise RuntimeError("acceptance requires DISPLAY=:3 and AIRSIM_RENDER_MODE=windowed")
+    if os.environ.get("DISPLAY") != ":1" or os.environ.get("AIRSIM_RENDER_MODE") != "windowed":
+        raise RuntimeError("acceptance requires DISPLAY=:1 and AIRSIM_RENDER_MODE=windowed")
     if any((output / name).exists() for name in ("result.json", "failure.json", "images.json")):
         raise RuntimeError("choose a fresh output directory")
     existing = [name for name in CONTAINERS if container_exists(name)]
@@ -385,7 +343,7 @@ def run(args):
         environment = Path(f"/proc/{pid}/environ").read_bytes().replace(
             b"\0", b"\n").decode(errors="replace")
         window = subprocess.check_output(
-            ["bash", "-lc", "DISPLAY=:3 xwininfo -root -tree | grep -i AirSimNH"],
+            ["bash", "-lc", "DISPLAY=:1 xwininfo -root -tree | grep -i AirSimNH"],
             text=True)
         (output / "window-evidence.txt").write_text(
             "command=" + json.dumps(state["command"]) + "\n" + environment + window)
@@ -424,46 +382,44 @@ def run(args):
 
         sensor_command = (
             "source /opt/ros/humble/setup.bash && "
-            "source /opt/platform_sensors/install/setup.bash && "
-            "source /sensor-overlay/install/setup.bash && "
+            "source /opt/rog_map_ws/install/setup.bash && "
             "exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args "
             "-p use_sim_time:=true -p settings_file:=/config/settings.json "
             "-p vehicle_name:=PX4 -p vehicle_namespace:=drone0 "
             f"-p rpc_host:=127.0.0.1 -p rpc_port:={RPC_PORT} "
             "-p camera_rate_hz:=5.0 -p imu_rate_hz:=100.0 -p lidar_rate_hz:=10.0")
         run_detached(
-            PREFIX + "sensors", BOARD, {"ROS_DOMAIN_ID": str(DOMAIN)},
-            [(SENSOR_WORKSPACE, "/sensor-overlay", "ro"),
-             (output / "airsim-settings.json", "/config/settings.json", "ro")],
+            PREFIX + "sensors", ROG_IMAGE, {"ROS_DOMAIN_ID": str(DOMAIN)},
+            [(output / "airsim-settings.json", "/config/settings.json", "ro")],
             sensor_command, {"aerohub.task": "rog-map-sensors"})
 
         as2_command = (
             "source /opt/ros/humble/setup.bash && "
             "source /opt/px4_ws/install/setup.bash && "
-            "source /px4-overlay/install/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "exec python3 /opt/aerohub/run_as2.py")
+            "source /opt/rog_map_ws/install/setup.bash && "
+            "exec python3 /opt/rog_map/runtime/run_as2.py")
         run_detached(
-            PREFIX + "as2", ONBOARD, {
+            PREFIX + "as2", ROG_IMAGE, {
                 "ROS_DOMAIN_ID": str(DOMAIN),
                 "AS2_FLEET_FILE": "/results/fleet.yaml",
                 "AS2_EXTERNAL_ODOM": "0",
+                "AS2_CONFIG_FILE": "/opt/rog_map/runtime/as2_config.yaml",
+                "AS2_CONTROLLER_CONFIG_FILE": "/opt/rog_map/runtime/pid.yaml",
             },
-            [(output, "/results", "rw"),
-             (PX4_MSGS_WORKSPACE, "/px4-overlay", "ro"),
-             (AS2_RUN, "/opt/aerohub/run_as2.py", "ro")],
+            [(output, "/results", "rw")],
             as2_command, {"aerohub.task": "rog-map-as2"})
 
         navigation_command = (
             "source /opt/ros/humble/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "source /workspace/install/setup.bash && "
+            "source /opt/rog_map_ws/install/setup.bash && "
             "exec ros2 run as2_navigation_inputs navigation_inputs_node --ros-args "
             "-r __ns:=/drone0 --params-file "
-            "/workspace/install/share/as2_navigation_inputs/config/drone0.yaml")
+            "/opt/rog_map_ws/install/share/as2_navigation_inputs/config/drone0.yaml")
         run_detached(
-            PREFIX + "navigation", ONBOARD, {"ROS_DOMAIN_ID": str(DOMAIN)},
-            [(ROG_WORKSPACE, "/workspace", "ro")], navigation_command,
+            PREFIX + "navigation", ROG_IMAGE, {"ROS_DOMAIN_ID": str(DOMAIN)},
+            [], navigation_command,
             {"aerohub.task": "rog-map-navigation-inputs"})
         start_map()
         screenshot(output, "initialized")
@@ -477,10 +433,9 @@ def run(args):
         consumer_command = (
             "source /opt/ros/humble/setup.bash && "
             "source /opt/px4_ws/install/setup.bash && "
-            "source /px4-overlay/install/setup.bash && "
             "source /root/aerostack2_ws/install/setup.bash && "
-            "source /workspace/install/setup.bash && "
-            "exec python3 /opt/aerohub/acceptance.py")
+            "source /opt/rog_map_ws/install/setup.bash && "
+            "exec python3 /opt/rog_map/runtime/acceptance.py")
         consumer = [
             "docker", "run", "--init", "--network", "host",
             "--name", PREFIX + "consumer",
@@ -488,10 +443,7 @@ def run(args):
             "--env", f"ROG_MAP_SCENARIO={args.scenario}",
             "--env", "ROG_MAP_RESULTS=/results",
             "--volume", f"{output}:/results:rw",
-            "--volume", f"{ROG_WORKSPACE}:/workspace:ro",
-            "--volume", f"{PX4_MSGS_WORKSPACE}:/px4-overlay:ro",
-            "--volume", f"{ACCEPTANCE}:/opt/aerohub/acceptance.py:ro",
-            "--entrypoint", "bash", ONBOARD, "-lc", consumer_command,
+            "--entrypoint", "bash", ROG_IMAGE, "-lc", consumer_command,
         ]
         with (output / "consumer-console.log").open("w") as stream:
             execute(consumer, stdout=stream, stderr=subprocess.STDOUT)

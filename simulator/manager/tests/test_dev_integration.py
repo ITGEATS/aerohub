@@ -59,6 +59,32 @@ class DevIntegrationTest(unittest.TestCase):
                 kill.assert_not_called()
             self.assertEqual(json.loads((root/'state.json').read_text())['phase'], 'stopped')
 
+    def test_old_airsim_entry_cannot_overwrite_projectairsim_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / 'state.json'
+            state.write_text(json.dumps({'backend': 'projectairsim', 'phase': 'ready'}))
+            original = state.read_bytes()
+            for action in ('status', 'stop', 'start'):
+                result = subprocess.run([sys.executable, str(ROOT/'simulator/airsim/manager/manager.py'),
+                                         action, '--run-dir', tmp], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('different simulator backend', result.stderr)
+                self.assertEqual(state.read_bytes(), original)
+
+    def test_projectairsim_cannot_replace_unstopped_legacy_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / 'state.json'
+            state.write_text(json.dumps({'phase': 'ready'}))
+            original = state.read_bytes()
+            argv = ['manager', 'start', '--profile', 'project.yaml', '--run-dir', tmp]
+            with patch.object(sys, 'argv', argv), patch.object(
+                    manager, 'load_profile', return_value={'backend': 'projectairsim'}), patch.object(
+                    manager, '_start_projectairsim') as start:
+                with self.assertRaisesRegex(RuntimeError, 'belongs to an AirSim session'):
+                    manager.main()
+                start.assert_not_called()
+            self.assertEqual(state.read_bytes(), original)
+
     def test_legacy_scene_profiles_dispatch_to_same_airsim_check(self):
         profiles = [ROOT/'simulator/airsim/config/nh.json',
                     *sorted((ROOT/'simulator/airsim/scenarios').glob('*/profile.json'))]

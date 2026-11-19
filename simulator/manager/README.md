@@ -11,6 +11,13 @@ YAML 可直接配置安装路径、场景、车辆与常用传感器参数；bri
 统一入口为 `simulator/simulator.sh`，通过配置的 `backend` 选择 `airsim` 或
 `projectairsim`。未填写 backend 的历史 profile 继续按 AirSim 处理。
 
+`deployment/` 中由部署脚本管理的本机场景统一调用
+`simulator/manager/manager.py` 的 `start/status/stop`，并传入各 Demo 已有的 profile
+与运行目录。AirSim 和 ProjectAirSim 各自使用已适配的后端配置，旧 AirSim
+JSON profile 可继续使用。Demo 的 PX4 启动、任务及验收仍由其部署脚本负责。
+配置选择的后端须提供该 Demo 使用的传感器、时钟、RPC 和飞控连接；新增后端配置时
+按 Demo 的依赖补齐仿真侧适配并验证。
+
 Manager 管理仿真进程、原生场景/settings、PX4 连接清单和仿真侧 adapter。
 `deployment/flight_board` 消费生成的 `runtime.json` 启动 PX4；AS2 的 Pixhawk
 platform、原生 Behavior 和控制器沿用现有部署。Manager 不提供运动控制接口。

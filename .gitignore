@@ -112,3 +112,8 @@ rosbag2_*/
 
 # Machine-specific simulator configurations
 /config/simulator/*.local.yaml
+
+# Cloud Inference local config and legacy secret filenames
+/config/inference.cloud.local.yaml
+/config/inference.cloud.secrets.env
+/config/.inference.cloud.*

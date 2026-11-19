@@ -1,0 +1,8 @@
+[project]
+name = "aerohub-vision-language-worker"
+version = "0.1.0"
+requires-python = ">=3.10,<3.11"
+dependencies = ["aerohub-inference-runtime", "pydantic==2.10.6", "pyyaml==6.0.3"]
+
+[tool.uv.sources]
+aerohub-inference-runtime = {path = "../../runtime"}

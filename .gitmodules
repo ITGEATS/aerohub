@@ -42,6 +42,9 @@
 [submodule "src/state_estimator/dpv_slam/upstream"]
 	path = src/basic_function/state_estimator/dpv_slam/upstream
 	url = https://github.com/princeton-vl/DPVO.git
+[submodule "src/tool/navigation/planner/spf/upstream"]
+	path = src/tool/navigation/planner/spf/upstream
+	url = https://github.com/Hu-chih-yao/see-point-fly
 [submodule "src/state_estimator/fast_livo2/ros2_upstream"]
 	path = src/basic_function/state_estimator/fast_livo2/ros2_upstream
 	url = https://github.com/SuperLDG/FASTLIVO2_ROS2.git
@@ -58,3 +61,24 @@
 [submodule "yopo_tracker"]
 	path = deployment/airsim/demos/target_tracking/reference/yopo_tracker
 	url = https://github.com/TJU-Aerial-Robotics/YOPO-Tracker.git
+
+[submodule "src/tool/navigation/planner/falcon/upstream"]
+	path = src/tool/navigation/planner/falcon/upstream
+	url = https://github.com/Air-Suck/FALCON.git
+	branch = aerohub-ros2
+[submodule "src/basic_function/state_estimator/d2_slam/upstream"]
+	path = src/basic_function/state_estimator/d2_slam/upstream
+	url = https://github.com/Air-Suck/D2SLAM.git
+	branch = feat/ros2-humble
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs
+	url = https://github.com/Air-Suck/swarm_msgs.git
+	branch = feat/ros2-humble
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver
+	url = https://github.com/HKUST-Swarm/ceres-solver.git
+	branch = D2SLAM
+[submodule "src/basic_function/state_estimator/d2_slam/dependencies/opengv"]
+	path = src/basic_function/state_estimator/d2_slam/dependencies/opengv
+	url = https://github.com/HKUST-Swarm/opengv.git
+	branch = master

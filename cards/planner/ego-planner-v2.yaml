@@ -1,0 +1,48 @@
+schema_version: "1.0"
+id: planner.ego-planner-v2
+version: "0.1.0"
+type: capability
+name: EGO-Planner-v2 local planning
+description: Rolling fifth-order trajectories from measured odometry and obstacle clouds, preserving absolute execution time and PVA through AS2 FollowTimedPath.
+implementation:
+  component_id: aerohub.planner.ego-planner-v2
+  manifest: src/tool/navigation/planner/ego_planner_v2/component.yaml
+  shared_runtime: per-vehicle-ego-planner-and-adapter
+  coupled_capabilities: []
+inputs:
+  - id: local_odometry
+    capability_type: state/local/odometry/3d
+  - id: obstacle_points
+    capability_type: perception/navigation/obstacle-points/3d
+  - id: peer_trajectories
+    capability_type: planning/trajectory/ego-v2-minco/3d
+outputs:
+  - id: timed_trajectory
+    capability_type: planning/trajectory/timed-segment/3d
+  - id: own_peer_trajectory
+    capability_type: planning/trajectory/ego-v2-minco/3d
+  - id: task_status
+    capability_type: task/ego-planner-v2/status
+  - id: failure
+    capability_type: planning/failure
+interfaces:
+  - id: goal
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_topic
+    schema: quadrotor_msgs/msg/GoalSet
+    parameter_schema: null
+  - id: cancel
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+hardware_requirements: []
+resource_access:
+  reads: [drone/self_state, navigation/obstacle_points, navigation/peer_trajectories, clock]
+  shared_writes: [navigation/peer_trajectories]
+  exclusive_writes: [drone/motion]

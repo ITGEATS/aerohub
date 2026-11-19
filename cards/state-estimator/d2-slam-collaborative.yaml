@@ -1,0 +1,63 @@
+schema_version: "1.0"
+id: state-estimator.d2-slam-collaborative
+version: "0.2.0"
+type: capability
+name: D2SLAM collaborative state estimate
+description: Provides each vehicle's canonical AS2 pose and twist by combining collaborative visual-inertial global correction with high-rate PX4 local odometry.
+
+implementation:
+  component_id: d2-slam
+  manifest: deployment/d2_slam/component.yaml
+  shared_runtime: d2-slam-per-vehicle
+  coupled_capabilities:
+    - perception.d2-slam-collaborative-landmarks
+
+inputs:
+  - id: rgb_image
+    capability_type: sensor/camera/rgb/image
+  - id: perspective_depth
+    capability_type: sensor/camera/depth/range-image
+  - id: inertial_measurement
+    capability_type: sensor/imu/inertial/6dof
+  - id: metric_local_odometry
+    capability_type: state/local/odometry/3d
+
+outputs:
+  - id: canonical_pose
+    capability_type: state/self/pose/3d
+  - id: canonical_twist
+    capability_type: state/self/twist/3d
+
+interfaces: []
+
+lifecycle:
+  management: shared_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/camera/rgb
+  - hardware_type: sensor/camera/depth
+  - hardware_type: sensor/imu/6dof
+  - hardware_type: flight-controller/px4
+
+resource_access:
+  reads:
+    - sensor/front-rgb
+    - sensor/front-depth
+    - sensor/imu
+    - vehicle/local-odometry
+    - swarm/peer-frames
+  shared_writes:
+    - swarm/collaboration
+  exclusive_writes:
+    - vehicle/self-state
+    - vehicle/tf
+
+demo:
+  representations:
+    - id: canonical_pose
+      stage: final
+      description: Canonical pose after collaborative global correction and PX4 local-state composition.
+      interface: {protocol: ros2_topic, schema: geometry_msgs/msg/PoseStamped}
+      renderer: pose_3d

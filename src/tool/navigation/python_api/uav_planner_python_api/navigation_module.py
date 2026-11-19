@@ -1,9 +1,10 @@
-"""AS2 Module for the planner-independent NavigateToPose Action.
+"""AS2 Module for the planner-independent navigation operations.
 
 The DroneInterface executor must be spinning. Blocking methods are intended for
 application threads, not callbacks of that executor.
 """
 import copy
+import math
 import time
 import threading
 
@@ -11,7 +12,7 @@ from action_msgs.msg import GoalStatus
 from as2_python_api.modules.module_base import ModuleBase
 from geometry_msgs.msg import PoseStamped
 from rclpy.action import ActionClient
-from uav_planner_interfaces.action import NavigateToPose
+from uav_planner_interfaces.action import NavigateToPose, NavigateToSemanticGoal
 from uav_planner_interfaces.srv import UpdateNavigationTarget
 
 
@@ -27,6 +28,8 @@ class NavigationModule(ModuleBase):
         self._issued_revision = self._target_revision = 0
         self._canceling = False
         self._goal = None
+        self._semantic_client = ActionClient(
+            drone, NavigateToSemanticGoal, 'navigate_to_semantic_goal')
         self._handle = None
         self._result_future = None
         self._feedback = None
@@ -73,6 +76,8 @@ class NavigationModule(ModuleBase):
         with self._submission_lock:
             active = self._result_future is not None and not self.done
             if active:
+                if self._goal is None:
+                    raise RuntimeError('Semantic navigation is already running')
                 self._check_policies(max_speed, position_tolerance, timeout,
                                      arrival_behavior, target_timeout)
                 if self._canceling:
@@ -88,8 +93,6 @@ class NavigationModule(ModuleBase):
                     raise ValueError('arrival_behavior must be complete or hold')
                 if behavior == 'hold' and wait:
                     raise ValueError('HOLD navigation requires wait=False; use wait_until_arrived()')
-                if not self._client.wait_for_server(timeout_sec=response_timeout):
-                    raise TimeoutError('navigate_to_pose server unavailable')
                 goal = NavigateToPose.Goal()
                 goal.target = copy.deepcopy(target)
                 goal.orientation_mode = orientation_mode
@@ -103,23 +106,55 @@ class NavigationModule(ModuleBase):
                     setattr(goal, 'use_' + field, value is not None)
                     if value is not None:
                         setattr(goal, field, float(value))
-                self._feedback = None
-                future = self._client.send_goal_async(goal, feedback_callback=self._on_feedback)
-                try:
-                    handle = self._wait(future, response_timeout)
-                except TimeoutError:
-                    future.add_done_callback(self._cancel_late_goal)
-                    raise
-                if not handle.accepted:
-                    raise RuntimeError('Navigation goal rejected (busy or invalid)')
-                self._handle, self._goal = handle, goal
+                self._start_goal(self._client, goal, response_timeout, 'navigate_to_pose')
+                self._goal = goal
                 self._issued_revision = self._target_revision = 1
-                self._canceling = False
-                self._result_future = handle.get_result_async()
             task_timeout = self._goal.timeout if self._goal.use_timeout else 300.
         if wait:
             return self.wait_to_result(task_timeout + 15.)
         return True  # Destination accepted, not necessarily planned/executed yet.
+
+    @property
+    def semantic_ready(self):
+        return self._semantic_client.server_is_ready()
+
+    def to_semantic_goal(self, description, timeout, wait=True, response_timeout=10.0):
+        """Navigate using a spatial description and a finite wall-clock timeout."""
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError('description must be non-empty')
+        timeout = float(timeout)
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError('timeout must be finite and positive')
+        goal = NavigateToSemanticGoal.Goal()
+        goal.description = description
+        goal.timeout = timeout
+        with self._submission_lock:
+            if self._result_future is not None and not self.done:
+                raise RuntimeError('Navigation is already running')
+            if self.done and not self.result.stop_confirmed:
+                raise RuntimeError('Previous navigation stop is unconfirmed')
+            self._start_goal(self._semantic_client, goal, response_timeout,
+                             'navigate_to_semantic_goal')
+            self._goal = None
+        if wait:
+            return self.wait_to_result(timeout + 15.)
+        return True
+
+    def _start_goal(self, client, goal, response_timeout, endpoint):
+        if not client.wait_for_server(timeout_sec=response_timeout):
+            raise TimeoutError(endpoint + ' server unavailable')
+        self._feedback = None
+        future = client.send_goal_async(goal, feedback_callback=self._on_feedback)
+        try:
+            handle = self._wait(future, response_timeout)
+        except TimeoutError:
+            future.add_done_callback(self._cancel_late_goal)
+            raise
+        if not handle.accepted:
+            raise RuntimeError('Navigation goal rejected (busy or invalid)')
+        self._handle = handle
+        self._canceling = False
+        self._result_future = handle.get_result_async()
 
     def _check_policies(self, max_speed, position_tolerance, timeout,
                         arrival_behavior, target_timeout):
@@ -158,23 +193,30 @@ class NavigationModule(ModuleBase):
 
     def wait_until_arrived(self, timeout=315.):
         """Wait for the current destination, leaving a HOLD session active."""
-        if self._result_future is None:
-            raise RuntimeError('No navigation task')
-        revision = self._target_revision
+        with self._submission_lock:
+            if self._result_future is None:
+                raise RuntimeError('No navigation task')
+            if self._goal is None:
+                raise RuntimeError('Arrival waiting requires a pose navigation task')
+            handle = self._handle
+            revision = self._target_revision
         deadline = time.monotonic() + timeout
         while True:
-            feedback = self._feedback
-            if feedback is not None and feedback.target_revision == revision and feedback.arrived:
-                return True
-            if self.done:
-                return bool(self.result.success and self._target_revision == revision)
-            if self._target_revision != revision:
-                raise RuntimeError('Destination changed while waiting for arrival')
+            with self._submission_lock:
+                if self._handle is not handle:
+                    raise RuntimeError('Navigation task changed while waiting for arrival')
+                if self._target_revision != revision:
+                    raise RuntimeError('Destination changed while waiting for arrival')
+                feedback = self._feedback
+                if feedback is not None and feedback.target_revision == revision and feedback.arrived:
+                    return True
+                if self.done:
+                    return bool(self.result.success)
+                if time.monotonic() >= deadline:
+                    self.cancel()
+                    raise TimeoutError('Navigation arrival timeout')
             if not self._drone.context.ok():
                 raise RuntimeError('ROS context stopped')
-            if time.monotonic() >= deadline:
-                self.cancel()
-                raise TimeoutError('Navigation arrival timeout')
             time.sleep(.01)
 
     @staticmethod
@@ -230,3 +272,4 @@ class NavigationModule(ModuleBase):
     def destroy(self):
         self._client.destroy()
         self._drone.destroy_client(self._updates)
+        self._semantic_client.destroy()

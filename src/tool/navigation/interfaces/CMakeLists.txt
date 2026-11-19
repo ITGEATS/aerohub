@@ -11,6 +11,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/FollowTimedPath.action"
   "action/NavigateToPose.action"
+  "action/NavigateToSemanticGoal.action"
   "msg/TimedPath.msg"
   "msg/BehaviorResult.msg"
   "msg/FleetSetpoint.msg"

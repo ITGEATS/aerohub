@@ -16,6 +16,10 @@
     "yopo": {
       "directory": "src/basic_function/inference/models/yopo",
       "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"
+    },
+    "spf": {
+      "directory": "src/basic_function/inference/models/vision_language",
+      "description": "SPF logical inference model; currently implemented by the Cloud alternative, remote model privately configured"
     }
   }
 }

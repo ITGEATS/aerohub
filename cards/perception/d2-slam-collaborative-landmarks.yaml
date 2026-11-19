@@ -1,0 +1,55 @@
+schema_version: "1.0"
+id: perception.d2-slam-collaborative-landmarks
+version: "0.2.0"
+type: capability
+name: D2SLAM collaborative sparse landmarks
+description: Provides initialized sparse visual landmarks maintained by the shared multi-vehicle estimator; it does not provide free space or collision geometry.
+
+implementation:
+  component_id: d2-slam
+  manifest: deployment/d2_slam/component.yaml
+  shared_runtime: d2-slam-per-vehicle
+  coupled_capabilities:
+    - state-estimator.d2-slam-collaborative
+
+inputs:
+  - id: rgb_image
+    capability_type: sensor/camera/rgb/image
+  - id: perspective_depth
+    capability_type: sensor/camera/depth/range-image
+  - id: inertial_measurement
+    capability_type: sensor/imu/inertial/6dof
+
+outputs:
+  - id: collaborative_landmarks
+    capability_type: perception/map/collaborative-sparse-landmarks/3d
+
+interfaces: []
+
+lifecycle:
+  management: shared_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/camera/rgb
+  - hardware_type: sensor/camera/depth
+  - hardware_type: sensor/imu/6dof
+
+resource_access:
+  reads:
+    - sensor/front-rgb
+    - sensor/front-depth
+    - sensor/imu
+    - swarm/peer-frames
+  shared_writes:
+    - swarm/collaboration
+  exclusive_writes: []
+
+demo:
+  representations:
+    - id: collaborative_landmarks
+      stage: intermediate
+      description: Sparse initialized visual landmarks from the collaborative estimator.
+      interface: {protocol: ros2_topic, schema: sensor_msgs/msg/PointCloud2}
+      renderer: point_cloud_3d

@@ -1,0 +1,113 @@
+{
+  "passed": true,
+  "passed_checks": 13,
+  "total_checks": 13,
+  "checks": {
+    "basic_independent_audit": true,
+    "fault_independent_audit": true,
+    "ground_observation": true,
+    "board_archive_hash": true,
+    "drone0_actual_native_peer_consumption": true,
+    "drone0_safe_stop": true,
+    "drone0_owned_nodes_exit_as_expected": true,
+    "drone1_actual_native_peer_consumption": true,
+    "drone1_safe_stop": true,
+    "drone1_owned_nodes_exit_as_expected": true,
+    "pc_thread_owned": true,
+    "pc_participants_unique": true,
+    "live_moving_fleet_camera": true
+  },
+  "metrics": {
+    "drone0_native_peer_accepts": [
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 1,
+        "start": 1794580643.112001
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 2,
+        "start": 1794580644.1320229
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 3,
+        "start": 1794580645.1670449
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 4,
+        "start": 1794580646.1900666
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 5,
+        "start": 1794580647.2130885
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 6,
+        "start": 1794580648.2481105
+      },
+      {
+        "self": 0,
+        "peer": 1,
+        "traj": 7,
+        "start": 1794580649.2771325
+      }
+    ],
+    "drone1_native_peer_accepts": [
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 1,
+        "start": 1794580643.1720023
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 2,
+        "start": 1794580644.2100244
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 3,
+        "start": 1794580645.2330463
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 4,
+        "start": 1794580646.2590683
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 5,
+        "start": 1794580647.2970903
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 6,
+        "start": 1794580648.311112
+      },
+      {
+        "self": 1,
+        "peer": 0,
+        "traj": 7,
+        "start": 1794580649.337134
+      }
+    ],
+    "camera_centroid_excursion_m": 2.3411670831674023,
+    "camera_actual_sample_span_s": 133.66679167747498
+  },
+  "scope": "Mixed fault flight, native peer consumption, live moving camera and owned node cleanup"
+}

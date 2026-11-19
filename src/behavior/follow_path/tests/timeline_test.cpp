@@ -31,6 +31,14 @@ int main() {
   auto next=p; next.revision=2; next.start=11; next.generated=10;
   next.points[0].p[0]=1; next.points[1].p[0]=3;
   timeline.update(next,10.2,0.01,0.01);
+  // Tiny representation/sampling noise at the physical limit is accepted,
+  // while a materially larger discontinuity is still rejected.
+  Timeline epsilon_timeline; epsilon_timeline.start(p,9.5);
+  auto epsilon_next=next; epsilon_next.points[0].v[0]=1.0105;
+  epsilon_timeline.update(epsilon_next,10.2,0.01,0.01);
+  Timeline outside_timeline; outside_timeline.start(p,9.5);
+  auto outside_next=next; outside_next.points[0].v[0]=1.012;
+  rejects([&]{outside_timeline.update(outside_next,10.2,0.01,0.01);});
   timeline.advance(10.9); assert(timeline.active.revision==1);
   timeline.advance(11); assert(timeline.active.revision==2);
   rejects([&]{timeline.update(next,10.5,0.01,0.01);});

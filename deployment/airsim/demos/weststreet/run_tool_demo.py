@@ -20,6 +20,22 @@ from simulator.projectairsim.extension_client import ProjectAirSimExtensionClien
 from simulator.projectairsim.display_session import views_from_scene
 
 
+def check_navigation_overlay(workspace, build_command):
+    package = 'uav_planner_interfaces'
+    source = ROOT / 'src/tool/navigation/interfaces'
+    install = workspace / 'install'
+    installed = install / 'share' / package
+    if not installed.is_dir():
+        installed = install / package / 'share' / package
+    for directory, suffix in (('action', '.action'), ('msg', '.msg'), ('srv', '.srv')):
+        for definition in sorted((source / directory).glob('*' + suffix)):
+            generated = installed / directory / definition.name
+            if not generated.is_file() or generated.read_bytes() != definition.read_bytes():
+                raise RuntimeError(
+                    f'Navigation overlay {workspace} needs a rebuild ({directory}/{definition.name}); '
+                    f'run {build_command}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -62,6 +78,15 @@ def main():
         parser.error('viewer-wait must be between 0 and 300 seconds')
     if args.target_yaw and args.continuous_yaw:
         parser.error('Select one yaw policy')
+    workspaces = ROOT / 'log/weststreet-demo'
+    nav_workspace = workspaces / 'super-workspace'
+    client_workspace = workspaces / 'client-workspace'
+    check_navigation_overlay(
+        nav_workspace, 'SUPER_APP_IMAGE=uav/apps-super-forest:onboard-v0.1.1 bash '
+        'deployment/airsim/demos/super_forest/build_navigation_overlay.sh '
+        'log/weststreet-demo/super-workspace')
+    check_navigation_overlay(
+        client_workspace, 'bash deployment/airsim/demos/weststreet/build_demo_overlay.sh')
     out = args.output.absolute()
     out.mkdir(parents=True, exist_ok=False)
     if args.component_overlay:
@@ -162,8 +187,8 @@ def main():
                         '--instance',str(INSTANCE),'vehicle_status','-n','1'])
     def base_docker(role, image, command, extra=()):
         mounts = {ROOT:'/repo', out:'/evidence',
-            ROOT/'log/weststreet-demo/super-workspace':'/nav',
-            ROOT/'log/weststreet-demo/client-workspace':'/clients',
+            nav_workspace:'/nav',
+            client_workspace:'/clients',
             ROOT/'log/system-tool/workspace':'/system',
             ROOT/'log/object-detection-query/workspace':'/query',
             ROOT/'log/target-tracking-follow/workspace':'/tracking',
@@ -189,7 +214,7 @@ def main():
     onboard_setup = ('source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && '
         'source /root/aerostack2_ws/install/setup.bash && source /opt/uav_execution_ws/install/setup.bash && ')
     tool_setup = (onboard_setup+'source /query/install/setup.bash && source /tracking/install/setup.bash && '
-        'source /system/install/setup.bash && source /perception/install/setup.bash && '
+        'source /system/install/setup.bash && source /perception/install/setup.bash && source /nav/install/local_setup.bash && '
         'export PYTHONPATH=/query/python_deps:/repo${PYTHONPATH:+:$PYTHONPATH} && ')
     super_setup = (onboard_setup+'source /opt/super_ws/install/setup.bash && source /opt/super_app_ws/install/setup.bash && '
         'source /nav/install/setup.bash && export PYTHONPATH=/nav/python_deps${PYTHONPATH:+:$PYTHONPATH} && ')

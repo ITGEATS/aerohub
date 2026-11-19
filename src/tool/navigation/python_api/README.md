@@ -1,7 +1,7 @@
 # AS2 Navigation Module
 
-公共 Python 调用层使用 `NavigateToPose` Action 与 `UpdateNavigationTarget` Service，
-不依赖具体 Planner。SUPER 与 YOPO 的服务端位于各自 `ros2_adapter/`。
+公共 Python 调用层使用共享的 `NavigateToPose`、`NavigateToSemanticGoal` Action 与
+`UpdateNavigationTarget` Service。服务端由对应 Planner 实现，各 Planner 声明支持的操作。
 
 ## 加载与调用
 
@@ -200,3 +200,24 @@ SUPER托管NavigateToPose已接入 `uav_motion_resource`，与System Tool起降�
 停止未确认或进程退出后保留占用记录。本次仅修改SUPER入口；YOPO与其他历史
 控制入口尚未接入，前述“没有跨进程控制权仲裁”仍适用于这些未覆盖入口。
 当前改动尚未完成SUPER接口回归及飞行验收，不提升已有验证等级。
+
+## Semantic navigation operation
+
+Navigation exposes multiple operations; planner alternatives need not implement all of them.
+`to_pose` uses `NavigateToPose`; `to_semantic_goal` uses the separate shared
+`NavigateToSemanticGoal` Action at `/<UAV>/navigate_to_semantic_goal`.
+`ready` continues to mean pose-operation availability; `semantic_ready` checks
+semantic-operation availability. No automatic fallback between operations is performed.
+
+```python
+drone.navigation.to_semantic_goal("approach the orange ball", timeout=60.0, wait=False)
+# Later: navigation.feedback / done / result; navigation.cancel() confirms stopping.
+```
+
+`description` must be non-empty and `timeout` finite and positive (monotonic seconds).
+The current SPF alternative has **no arrival detector**: budget exhaustion yields
+`TIMEOUT`, `success=false`, after stopping; it never claims successful attainment.
+`wait=True` therefore returns False on a confirmed timeout; inspect `result.code`,
+`result.reason` and `result.stop_confirmed` to distinguish timeout/cancel/failure.
+An unsupported operation has no available server and fails explicitly.
+Rebuild/source `uav_planner_interfaces` and this package together when adopting the new Action.

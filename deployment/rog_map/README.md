@@ -1,95 +1,47 @@
 # ROG-Map deployment
 
-ROG-Map runs as an independent compute-side Perception capability. It reuses
-the project-fixed `onboard_computer:v0.1.0` image and an external overlay; no
-ROG-Map-specific Docker image is created. PX4 remains the image-embedded SITL
-from `flight_board:v0.1.0`.
+ROG-Map, its native ROS 2 Humble Adapter/interfaces, navigation inputs, AS2
+integration, sensor adapter, and acceptance programs are delivered in one
+self-contained image based on `onboard_computer:v0.1.1`. Runtime source,
+workspace, build/install overlay, and ROS 1 mounts are not supported.
 
-## Roles
-
-| Role | Runtime | Processes and interfaces |
-| --- | --- | --- |
-| Simulator | visible AirSim host process | scene and LiDAR measurements |
-| Flight board | `flight_board:v0.1.0` | image-embedded PX4 SITL, clock and sensor bridge |
-| Compute | `onboard_computer:v0.1.0` plus external overlay | `navigation_inputs`, ROG-Map core and Adapter |
-| Workstation | fixed ROS environment | query consumer, scoring and evidence collection |
-
-## Build
-
-From the feature worktree on a Linux host:
+## Build and run
 
 ```bash
-ROG_MAP_CLEAN_BUILD=1 bash deployment/rog_map/prepare_workspace.sh
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+ROG_MAP_IMAGE=aerohub/rog-map:ros2-humble \
+  bash deployment/rog_map/prepare_workspace.sh
+
+ROS_DOMAIN_ID=174 ROG_MAP_NAMESPACE=drone0 \
+  bash deployment/rog_map/run.sh
 ```
 
-The script copies the repository source inputs into
-`log/workspaces/rog_map/src`, builds them sequentially in the fixed image, runs
-their tests, and records the image and source state. Build/install/log remain
-outside the image.
+The standalone command starts the image without mounts. The map consumes the
+AirSim point cloud under the vehicle namespace and provides robot-centered 3D
+occupancy plus inflated collision queries for the navigation consumer. Its
+occupancy semantics are not interchangeable with raw point sets or neural
+implicit maps.
 
-## Run
-
-Start the existing AirSim + PX4 SITL chain in visible mode first. The required
-environment is:
+## Visible AirSim acceptance
 
 ```bash
-export DISPLAY=:3
+export DISPLAY=:1
 export AIRSIM_RENDER_MODE=windowed
+
+python3 deployment/rog_map/run_airsim.py run --scenario normal
+python3 deployment/rog_map/run_airsim.py run --scenario sensor_fault
+python3 deployment/rog_map/run_airsim.py run --scenario algorithm_fault
+
+python3 deployment/rog_map/run_airsim.py status
+python3 deployment/rog_map/run_airsim.py stop
 ```
 
-Start `as2_navigation_inputs` with its existing `drone0` configuration, then
-start the map in a separate terminal:
-
-```bash
-ROS_DOMAIN_ID=<same-domain> bash deployment/rog_map/run.sh
-```
-
-The map becomes ready only after it receives a fresh registered cloud and the
-LiDAR pose at the same measurement stamp. Query services return `ready=false`
-when input is stale. A backward ROS clock jump invalidates the map epoch; stop
-and restart the component instead of reusing the old map.
-
-Functional interfaces under `/<namespace>/map/` are `query_voxel` and
-`check_line`. `occupied`, `inflated_occupied` and `esdf_slice` are rolling
-point snapshots for inspection and RViz, not interchangeable generic map
-formats.
-
-## Stop and recovery
-
-The foreground runtime stops with `Ctrl-C`. If an orchestrator owns it, stop
-the exact `aerohub-rog-map-<namespace>` container and wait for removal. Never
-kill processes by a generic ROG-Map name because another planner may embed its
-own map. Restart creates an empty map epoch; consumers must wait for fresh
-status before querying.
-
-## Acceptance
-
-Build the two overlays before running the acceptance matrix. Set
-`AIRSIM_BINARY` to the locally installed AirSim 1.8.1 executable; do not put a
-machine-specific path in shared configuration.
-
-```bash
-ROG_MAP_CLEAN_BUILD=1 bash deployment/rog_map/prepare_workspace.sh
-
-export DISPLAY=:3
-export AIRSIM_RENDER_MODE=windowed
-export AIRSIM_BINARY=/path/to/AirSimNH
-
-python3 deployment/rog_map/run_airsim.py run \
-  --scenario normal --output log/airsim/rog-map/normal
-python3 deployment/rog_map/run_airsim.py run \
-  --scenario sensor_fault --output log/airsim/rog-map/sensor-fault
-python3 deployment/rog_map/run_airsim.py run \
-  --scenario algorithm_fault --output log/airsim/rog-map/algorithm-fault
-```
-
-Each output directory is immutable: use a fresh directory for every retry.
-The runner owns only its named AirSim process and containers, records the
-visible window and source/image manifests, and verifies that its containers
-and ports are released during cleanup.
-
-The accepted 2026-11-14 evidence is indexed in
-`skill/temp/rog_map/README.md`. The reproduced scope is visible AirSim 1.8.1,
-the image-embedded PX4 SITL, real AirSim LiDAR, AS2-controlled motion and an
-independent query consumer. It does not include a physical flight or a generic
-persistent-map interchange format.
+The runner uses PX4 from `flight_board:v0.1.0` and the ROG-Map component image
+for compute processes. Only generated scenario/evidence output is mounted.
+Process survival is only a smoke result; reproduction requires real AirSim
+point consumption, stable occupancy, a successful downstream query/planning
+consumer, failure recovery, and complete evidence for the declared matrix.
+That matrix passed on image
+`sha256:8801b77bad61fc194ad1bab9700db3b15da711da982748da339b5e13c92d89aa`;
+`component.yaml` lists the accepted evidence. Physical-board and real-flight
+deployment remain unvalidated.

@@ -323,6 +323,9 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         path = directory / 'state.json'
         state = json.loads(path.read_text()) if path.exists() else {}
+        if state.get('backend', 'airsim') != 'airsim' and (
+                args.action != 'start' or state.get('phase') != 'stopped'):
+            raise RuntimeError('run directory belongs to a different simulator backend; use simulator/manager/manager.py')
         if args.action == 'status':
             state['alive'] = host_alive(state)
             state['overhead_tracker_alive'] = auxiliary_alive(

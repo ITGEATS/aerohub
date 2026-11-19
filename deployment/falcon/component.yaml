@@ -1,0 +1,86 @@
+schema_version: "0.1"
+id: aerohub.tool.falcon
+version: "0.1.0"
+source:
+  upstream: src/tool/navigation/planner/falcon/upstream
+  upstream_baseline: 312eb4d32c6c7af1a482f94a0a204aa2bb150cca
+  fork: https://github.com/Air-Suck/FALCON.git
+  fork_branch: aerohub-ros2
+  fork_revision: b447c1b660ab2305c023a38121fb4feeea44e47b
+  integration: src/tool/navigation/planner/falcon/ros2_adapter
+  license: unresolved-upstream-ros1-noetic-branch-has-no-root-license-and-manifests-say-TODO
+provides:
+  - navigation/falcon-exploration
+cards:
+  - cards/planner/falcon.yaml
+roles:
+  simulator:
+    - AirSim
+  flight_controller:
+    - image-embedded-PX4-SITL
+  compute:
+    - falcon_ros2
+    - uav_falcon_adapter
+    - AS2
+    - FollowTimedPath
+  workstation:
+    - ROS-task-and-acceptance-client
+runtime:
+  platform: linux-x86_64
+  build_image: onboard_computer:v0.1.0
+  execution_image: onboard_computer:v0.1.0
+  flight_image: flight_board:v0.1.0
+  dependencies:
+    - ROS-2-Humble
+    - Eigen3
+    - PCL
+    - OpenCV
+    - NLopt-2.7.1
+    - google-glog
+    - libdw
+    - uav_planner_interfaces
+    - uav_follow_path_execution
+  build: bash deployment/falcon/build.sh
+  check: bash deployment/falcon/check.sh
+  launch: python3 deployment/falcon/run.py
+  overlay: log/falcon/install
+  workstation_overlay: log/falcon/workstation/install
+  clock: ROS-clock-from-AirSim
+  namespace: drone0
+  readiness: fresh-timestamp-paired-depth-and-odometry-map-frontier-and-FollowTimedPath-ready
+  stop: adapter-stop-service-plus-FollowTimedPath-stop-confirmation
+  rollback: stop-confirm-land-and-disarm-then-restore-locked-parent-and-fork-revisions
+interfaces:
+  inputs:
+    axial_depth: /drone0/sensor_measurements/FrontCamera/depth_planar/image
+    local_odometry: /drone0/sensor_measurements/odom
+  operations:
+    enable: /drone0/falcon/enable
+    trigger: /move_base_simple/goal
+    execution: /drone0/follow_timed_path
+  status: /drone0/falcon/adapter/state
+resources:
+  reads:
+    - authority-local-odometry
+    - calibrated-axial-depth
+  writes:
+    - FollowTimedPath-session
+  coupling: planner-map-and-execution-adapter-share-one-task-generation-and-must-not-restart-independently-in-flight
+  conflicts:
+    - other-motion-behaviors
+    - duplicate-FALCON-runtime
+validation:
+  stage: reproduced
+  scope: visible-AirSim-image-embedded-PX4-SITL-real-depth-and-odometry-FALCON-exploration-FollowTimedPath-motion-normal-and-required-fault-cases
+  evidence:
+    - log/falcon/e2e-normal-20261116-display1-r34/result.json
+    - log/falcon/e2e-depth-loss-20261116-display1-r1/result.json
+    - log/falcon/e2e-planner-exit-20261116-display1-r4/result.json
+  required_cases:
+    - normal-complete-exploration
+    - depth-stream-loss
+    - planner-exit-and-trajectory-expiry
+  limitations:
+    - no-RoboPi
+    - no-real-flight
+    - upstream-license-unresolved

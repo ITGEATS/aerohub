@@ -79,9 +79,10 @@ class Drone:
         self.calls.append('track')
         assert query == 'person' and follow is False
         now = time.monotonic()
-        self.target = Obj(valid=True, status='tracked', reason='', session_id='test', capture_id=1,
+        self.target = Obj(valid=True, status='tracked', reason='', session_id='test', generation=1, capture_id=1,
             observation_stamp=stamp(now), valid_until=stamp(now+1),
-            header=Obj(frame_id='drone0/odom', stamp=stamp(now)), position=Obj(x=10.,y=0.,z=1.))
+            header=Obj(frame_id='drone0/odom', stamp=stamp(now)), position=Obj(x=10.,y=0.,z=1.),
+            velocity=Obj(x=0.,y=0.,z=0.))
         feedback(Obj(feedback=Obj(state=self.target)))
         return Future(Handle())
     def to_point(self, *point, **kwargs):
@@ -112,7 +113,8 @@ class DemoTests(unittest.TestCase):
             output = Path(folder)/'evidence'
             with patch.dict(sys.modules, {'rclpy':ros, 'as2_python_api':ModuleType('as2_python_api'),
                     'as2_python_api.drone_interface_base':api}), patch.object(sys, 'argv',
-                    ['demo.py','--output',str(output),'--duration','.06','--update-period','.02']):
+                    ['demo.py','--output',str(output),'--duration','.15','--update-period','.02',
+                     '--observation-grace','.04']):
                 try:
                     demo.main()
                 except SystemExit as exc:
@@ -130,7 +132,7 @@ class DemoTests(unittest.TestCase):
     def test_lost_target_cancels_and_lands(self):
         result, calls = self.run_demo(lose=True)
         self.assertFalse(result['success'])
-        self.assertIn('unavailable', result['error'])
+        self.assertIn('No fresh observation', result['error'])
         self.assertLess(calls.index('cancel_navigation'), calls.index('land'))
 
     def test_unconfirmed_navigation_does_not_start_competing_land(self):

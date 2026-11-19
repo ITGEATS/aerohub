@@ -28,7 +28,7 @@ def run(command,**kwargs):return subprocess.run(list(map(str,command)),check=Tru
 
 
 def manager(action,out):
-    return [sys.executable,str(ROOT/'simulator/airsim/manager/manager.py'),action,
+    return [sys.executable,str(ROOT/'simulator/manager/manager.py'),action,
             '--profile',str(out/'profile.json'),'--run-dir',str(out/'scene')]
 
 
@@ -126,7 +126,9 @@ def main():
             execution=BoardExecution(out)
             print(execution.link.board(execution.env+'python3 manage_runtime.py status || true'))
         subprocess.run(manager('status',out),check=False);run(['docker','ps','--filter','name='+PREFIX]);return
-    lock=(ROOT/'log/airsim/super-execution.lock').open('w')
+    lock_path = ROOT/'log/airsim/super-execution.lock'
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = lock_path.open('w')
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     stat=Path('/proc/self/stat').read_text();ticks=stat[stat.rfind(')')+2:].split()[19]
     (out/'coordinator.json').write_text(json.dumps({'pid':os.getpid(),'ticks':ticks,'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'execution_location':args.execution_location})+'\n')

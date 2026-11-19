@@ -1,0 +1,5 @@
+<library path="d2_slam_plugin">
+  <class type="d2_slam::Plugin" base_class_type="as2_state_estimator_plugin_base::StateEstimatorBase">
+    <description>D2SLAM global correction fused with high-rate local odometry.</description>
+  </class>
+</library>

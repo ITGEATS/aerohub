@@ -255,6 +255,8 @@ def main() -> int:
     args = parser.parse_args()
     # Recovery uses the saved session even if the original profile moved or broke.
     recovery = args.action in ("status", "stop")
+    if args.action in ("check", "start", "attach") and args.profile is None:
+        raise ValueError(f"{args.action} requires --profile")
     profile = load_profile(args.profile, args.binary) if args.profile and not recovery else None
     if args.render_mode:
         os.environ["AIRSIM_RENDER_MODE"] = args.render_mode
@@ -304,6 +306,8 @@ def main() -> int:
         if args.action == "stop":
             _terminate(state, run_dir)
             return 0
+        if state and state.get("backend", "airsim") != backend and state.get("phase") != "stopped":
+            raise RuntimeError("run directory belongs to an AirSim session; stop it with the unified manager before switching backends")
         if _alive(state) or any(_process_alive(p) for p in state.get("auxiliaries", [])):
             raise RuntimeError("this run directory has a live session; stop it before starting or attaching")
         print(json.dumps(_start_projectairsim(profile, run_dir, args.timeout, attach=args.action == "attach"), indent=2))

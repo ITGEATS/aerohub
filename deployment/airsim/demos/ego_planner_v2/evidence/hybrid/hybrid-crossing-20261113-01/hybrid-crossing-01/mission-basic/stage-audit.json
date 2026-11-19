@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "passed_checks": 24,
+  "total_checks": 24,
+  "checks": {
+    "client_success": true,
+    "no_recovery": true,
+    "both_disarmed": true,
+    "runtime_clock": true,
+    "drone0_native_actions": true,
+    "drone0_arm_offboard_acks": true,
+    "drone0_disarmed_boundaries": true,
+    "drone0_hover": true,
+    "drone0_airborne_control": true,
+    "drone0_envelope": true,
+    "drone0_scene_landing": true,
+    "drone0_physics_landing": true,
+    "drone0_downstream": true,
+    "drone1_native_actions": true,
+    "drone1_arm_offboard_acks": true,
+    "drone1_disarmed_boundaries": true,
+    "drone1_hover": true,
+    "drone1_airborne_control": true,
+    "drone1_envelope": true,
+    "drone1_scene_landing": true,
+    "drone1_physics_landing": true,
+    "drone1_downstream": true,
+    "odom_separation": true,
+    "scene_separation": true
+  },
+  "metrics": {
+    "max_clock_bound_s": 0.48511624336242676,
+    "minimum_odom_separation_m": 3.996440165223435,
+    "minimum_scene_separation_m": 3.9937995368304
+  },
+  "scope": "Independent mixed-flight raw data; native peer acceptance and lifecycle require session audit"
+}

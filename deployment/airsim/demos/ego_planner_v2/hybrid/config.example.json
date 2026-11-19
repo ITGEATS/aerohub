@@ -1,0 +1,16 @@
+{
+  "candidate": "/data/aerohub/validation/ego-v2-pr1",
+  "domain": 98,
+  "pc_ip": "192.0.2.1",
+  "board_ip": "192.0.2.2",
+  "airsim_host": "192.0.2.1",
+  "hdc": "hdc",
+  "target": "REPLACE_WITH_CONNECTED_TARGET",
+  "dds_transport": "udp_mapped",
+  "vehicle": "drone0",
+  "mission_stage": "short",
+  "mission_participant": 18,
+  "allow_clock_sync": false,
+  "clock_sync_margin": 0.5,
+  "diagnose_cloud": false
+}

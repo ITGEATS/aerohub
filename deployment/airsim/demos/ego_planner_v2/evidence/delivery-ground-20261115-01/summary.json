@@ -1,0 +1,34 @@
+{
+  "passed": true,
+  "commit": "dbf13f2995b6487e8152e3a10abcd5a1b12b358b",
+  "session": "delivery-ground-20261115-01",
+  "checks": 78,
+  "total": 78,
+  "metrics": {
+    "drone0_longest_joint_ready_s": 52.69152045249939,
+    "drone0_type_probe_received": 499,
+    "drone1_longest_joint_ready_s": 47.96813702583313,
+    "drone1_type_probe_received": 500,
+    "camera_max_position_error_m": 9.834766387939453e-07
+  },
+  "board_candidate": "/data/aerohub/validation/ego-v2-lifecycle2-20261113",
+  "images": {
+    "ghcr.io/popc0rn7/aerohub/onboard-computer@sha256:964048afd46a9d394aa771d801d48b57de8a2b2665979b1ba6f2b5e273f9adb9": "sha256:964048afd46a9d394aa771d801d48b57de8a2b2665979b1ba6f2b5e273f9adb9",
+    "ghcr.io/popc0rn7/aerohub/flight-board@sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843": "sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843"
+  },
+  "board_install": {
+    "files": 8075,
+    "mismatch": [],
+    "manifest_sha256": "417a512a003060df6345178d57e84e864a0e72bb891268350f432d44d41431d6"
+  },
+  "flight": false,
+  "recompiled": false,
+  "pc_build": "existing external EGO workspace; 124 source-manifest entries matched delivery",
+  "scope": "current delivery entry ground regression using preserved historical board binaries; no new flight or dependency build",
+  "raw_archive": "ego-delivery-ground-20261115/delivery-ground-20261115-01",
+  "limitations": [
+    "Current AS2/Pixhawk gitlinks were not cross-compiled in this regression.",
+    "Workstation osrf switch remains pending.",
+    "Ground MINCO probes are not native planning trajectory exchange."
+  ]
+}

@@ -73,6 +73,24 @@ capability_types:
       axes: optical_x_right_y_down_z_forward
       timestamp: measurement_time
 
+  - id: sensor/camera/depth/range-image
+    name: Perspective depth range image
+    description: Per-pixel Euclidean range along each camera ray, distinct from axial optical-axis depth.
+    transport:
+      protocol: ros2_topic
+      schema: sensor_msgs/msg/Image
+      qos:
+        reliability: best_effort
+        durability: volatile
+        history: keep_last
+        depth: 5
+    semantics:
+      unit_system: encoding_dependent
+      units: {32FC1: m, 16UC1: mm}
+      coordinate_frame: camera_optical_frame
+      axes: optical_x_right_y_down_z_forward
+      timestamp: measurement_time
+
   - id: sensor/camera/depth/camera-info
     name: Depth camera calibration
     description: Camera intrinsics and image geometry corresponding to the axial depth stream.
@@ -216,6 +234,24 @@ capability_types:
       coordinate_frame: dpv_slam_map
       axes: frame_defined
       timestamp: latest_accepted_image_time
+
+  - id: perception/map/collaborative-sparse-landmarks/3d
+    name: Collaborative sparse visual landmarks
+    description: Sparse initialized landmarks exchanged and optimized by a multi-vehicle visual estimator; not dense geometry, free space, or a collision map.
+    transport:
+      protocol: ros2_topic
+      schema: sensor_msgs/msg/PointCloud2
+      qos:
+        reliability: best_effort
+        durability: volatile
+        history: keep_last
+        depth: 5
+    semantics:
+      unit_system: SI
+      units: {x: m, y: m, z: m}
+      coordinate_frame: collaborative_estimator_world
+      axes: frame_defined
+      timestamp: latest_estimator_update_time
 
   - id: perception/map/neural-point-anchors/3d
     name: Neural-point anchors
@@ -432,3 +468,87 @@ capability_types:
       coordinate_frame: fixed_navigation_frame
       axes: ENU
       timestamp: latest_measurement_included
+
+  - id: planning/trajectory/timed-segment/3d
+    name: Timed fleet trajectory segment
+    description: Absolute-epoch trajectory segments with per-vehicle sampled position, velocity and acceleration; valid_from plus each point time_from_start determines execution time.
+    transport:
+      protocol: ros2_topic
+      schema: uav_planner_interfaces/msg/TimedTrajectorySegment
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s, acceleration: m/s^2, yaw: rad, time: s}
+      coordinate_frame: configured_common_navigation_frame
+      axes: ENU
+      timestamp: generated_at_and_absolute_valid_from
+
+  - id: planning/trajectory/ego-v2-minco/3d
+    name: EGO v2 MINCO peer trajectory
+    description: Fifth-order MINCO boundary PVA, inner positions, segment durations and clearance with stable vehicle and trajectory IDs. Publisher history is 10; the native receiver retains 100 samples.
+    transport:
+      protocol: ros2_topic
+      schema: traj_utils/msg/MINCOTraj
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s, acceleration: m/s^2, duration: s, clearance: m}
+      coordinate_frame: configured_common_navigation_frame
+      axes: ENU
+      timestamp: absolute_ROS_start_time
+
+  - id: task/ego-planner-v2/status
+    name: EGO adapter task status
+    description: EGO adapter JSON status with task state, revisions and stop confirmation; the payload contract is defined by the adapter, not a generic text-health equivalence.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
+  - id: planning/failure
+    name: Planner failure event
+    description: Planner failure carrying task_id, reason and detail; no embedded timestamp or generic lifecycle status.
+    transport:
+      protocol: ros2_topic
+      schema: uav_planner_interfaces/msg/PlannerFailure
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
+  - id: inference/vision-language/text
+    name: Vision-language generated text
+    description: Generic model text bound to the actual vehicle camera image, not a navigation decision.
+    transport:
+      protocol: ros2_action
+      schema: uav_inference_interfaces/action/InferVisionLanguage
+    semantics:
+      unit_system: textual
+      units: {}
+      coordinate_frame: original_camera_optical_frame
+      timestamp: image_acquisition_time

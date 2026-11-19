@@ -1,0 +1,82 @@
+schema_version: 0.1
+id: d2-slam
+version: fork-d9264eb-aerohub-0.2.0
+description: Three-vehicle collaborative visual-inertial state estimation and sparse landmark mapping
+source:
+  repository: https://github.com/Air-Suck/D2SLAM.git
+  commit: d9264eb4bb1a6973759d82c8651381cacc3bbaaa
+  upstream_repository: https://github.com/HKUST-Aerial-Robotics/D2SLAM.git
+  upstream_commit: 4c33871083e4ae97b97973eb5bd88dc6735359d7
+  submodule_path: src/basic_function/state_estimator/d2_slam/upstream
+  upstream_modified: forked
+  license: LGPL-3.0
+dependencies:
+  swarm_msgs:
+    repository: https://github.com/Air-Suck/swarm_msgs.git
+    commit: 4b1b5aa2d6281a6b16d6d692a81f305d5f700b28
+    submodule_path: src/basic_function/state_estimator/d2_slam/dependencies/swarm_msgs
+capabilities:
+  - state-estimator.d2-slam-collaborative
+  - perception.d2-slam-collaborative-landmarks
+cards:
+  - cards/state-estimator/d2-slam-collaborative.yaml
+  - cards/perception/d2-slam-collaborative-landmarks.yaml
+shared_process_group: d2-slam-per-vehicle
+environment:
+  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.1]
+  runtime_image: aerohub/d2-slam:ros2-humble-native
+  architecture: linux/amd64
+  image_build: deployment/d2_slam/prepare_workspace.sh
+  topology: deployment/swarm/configs/d2_slam.yaml
+  prohibited_runtime: ROS 1 runtime, catkin workspace, and host source/build overlays
+runtime:
+  roles:
+    simulator: visible AirSim host process
+    flight_board: three image-embedded PX4 SITL instances and AirSim clock
+    compute: one native ROS 2 D2SLAM process group per vehicle; AS2 plugin when selected
+    workstation: mission, truth scoring, fault injection and evidence collection
+  topology: three independent pc_simulation compute containers
+  namespaces: [drone0, drone1, drone2]
+  clock: AirSim /clock
+  input:
+    rgb: /droneN/sensor_measurements/FrontCamera/rgb/image
+    depth: /droneN/sensor_measurements/FrontCamera/depth_perspective/image
+    imu: /droneN/sensor_measurements/imu/data
+    local_odometry: /droneN/sensor_measurements/odom
+  output_state: /droneN/d2_slam/odometry
+  native_state_source: /droneN/imu_propagation
+  optimized_keyframe_state: /droneN/odometry
+  output_map: /droneN/d2_slam/landmarks
+  collaboration_evidence: /droneN/d2_slam/collaboration
+requirements:
+  gpu: false
+  compute_backend: onnxruntime-cpu with three intra-op threads per vehicle in the accepted three-vehicle topology
+  sensors: calibrated RGB camera, perspective range depth and six-axis IMU per vehicle
+  platform: visible AirSim 1.8.1 plus image-embedded PX4 SITL
+  calibration: body-to-camera transform must match AirSim camera pose
+lifecycle:
+  startup: AirSim; three PX4 instances; clock and sensors; three D2SLAM processes; AS2 host; mission
+  readiness: fresh independent sensors, D2VINS, odometry, landmarks and both remote peers
+  stop: remove state authority before stopping the shared estimator; then land/disarm and stop owned resources
+  failure: freeze the last accepted global correction while fresh PX4 local state supports controlled landing
+  recovery: restart only while motion is stopped; restart creates a new collaborative map epoch
+authority:
+  state_and_tf: exactly one selected AS2 State Estimator provider per vehicle
+  composition: D2SLAM map-to-odom correction plus PX4 odom-to-base pose and body twist
+  shadow_gate: deployment/d2_slam/validation.yaml
+validation:
+  stage: reproduced
+  gate: deployment/d2_slam/validation.yaml
+  scope: Native ROS 2 Humble three-vehicle visible AirSim + PX4 SITL, self-contained CPU inference image, collaboration, sparse landmarks, AS2 authority and the declared fault matrix passed.
+  image: sha256:baf21bd2cc05ee01a28dabc63ccede00512a9b88f6b62a669bfaf94769f530fd
+  evidence:
+    - log/d2-slam/ground-imu-propagation-final-20261118/result.json
+    - log/d2-slam/airsim-shadow-imu-propagation-final-20261118/result.json
+    - log/d2-slam/airsim-authority-imu-propagation-final-20261118/result.json
+    - log/d2-slam/airsim-sensor-fault-imu-propagation-final-20261118/result.json
+    - log/d2-slam/airsim-algorithm-fault-imu-propagation-final-20261118/result.json
+    - log/d2-slam/airsim-communication-fault-imu-propagation-final-20261118/result.json
+  limitations:
+    - Sparse landmarks are not a dense map, occupancy map or collision representation.
+    - The accepted topology is three PC-simulated compute containers; hybrid physical-board deployment is not validated.
+    - Failure of PX4 local odometry is outside the validated degradation path.

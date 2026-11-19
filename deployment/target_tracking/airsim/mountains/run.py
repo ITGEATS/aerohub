@@ -193,7 +193,7 @@ def main():
             *common,*env,'--entrypoint','bash',image,'-lc',command],check=True)
         owned.append(name)
     def manager(action):
-        return [sys.executable,str(ROOT/'simulator/airsim/manager/manager.py'),action,
+        return [sys.executable,str(ROOT/'simulator/manager/manager.py'),action,
                 '--profile',str(output/'profile.json'),'--run-dir',str(output/'scene')]
     try:
         scene_started=True

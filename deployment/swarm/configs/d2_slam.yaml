@@ -1,0 +1,54 @@
+schema_version: 1
+
+deployment:
+  stage: pc_simulation
+
+fleet:
+  vehicle_count: 3
+  coordinator_vehicle_index: 1
+  name_prefix: drone
+  airsim_name_prefix: Drone
+  initial_spacing_m: 4.0
+
+nodes:
+  onboard_computer:
+    image: aerohub/d2-slam:ros2-humble-native
+    launch_command:
+      - bash
+      - deployment/d2_slam/run_compute.sh
+      - --vehicle
+      - "{vehicle}"
+      - --vehicle-index
+      - "{vehicle_index}"
+      - --main-id
+      - "1"
+      - --output
+      - "{output}/compute/{vehicle}"
+      - --without-as2-plugin
+
+coordination:
+  mode: decentralized
+
+ground_station:
+  required: false
+  placement: pc
+
+airsim:
+  base_settings: ../../../simulator/airsim/scenarios/d2_slam/settings.json
+  rpc_port: 42471
+  ports:
+    tcp_base: 4680
+    control_local_base: 14840
+    control_remote_base: 14980
+    px4_instance_base: 40
+    px4_system_id_base: 41
+    xrce_agent_base: 8901
+  camera:
+    name: swarm_overhead
+    altitude_m: 25
+    fov_degrees: 90
+    update_hz: 5
+
+validation:
+  startup_timeout_s: 90
+  smoke_duration_s: 60

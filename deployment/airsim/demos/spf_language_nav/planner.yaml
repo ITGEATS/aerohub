@@ -1,0 +1,15 @@
+/drone0/spf_planner:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    model_name: spf
+    camera_info_topic: sensor_measurements/FrontCamera/rgb/camera_info
+    base_velocity: 1.0
+    base_yaw_rate: 30.0
+    min_command_duration: 2.0
+    adaptive_mode: false
+    vlm_timeout_s: 45.0
+    max_observation_age_s: 1.0
+    max_consecutive_vlm_failures: 6
+    vlm_retry_backoff_s: 5.0
+    min_altitude_m: 1.2
