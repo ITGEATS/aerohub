@@ -40,11 +40,13 @@ description: |
   the action result; unit 53 passed + new-contract DDS lifecycle 6/6);
   2026-11-19 round: fault1 re-verified PASSED (run-20261119f2 - stopped
   inference container, 3x NO_SERVER -> FAULT llm_failures, zero goals, clean
-  airborne convergence); cancel1 re-verification 未通过 (c8/c9/c10 in-flight
-  cancelled_stop_gate_timeout - platform hover z limit cycle vs the locked
-  10 s stop gate; the contract's STOP_UNCONFIRMED path behaved per spec, no
-  gate relaxation, retry pending a quieter EKF phase or the PX4 tuning
-  ticket); recorded residual: the formal1 pass is attempt-dependent (the
+  airborne convergence); cancel1 re-verification 未通过 (four in-flight
+  cancelled_stop_gate_timeout runs c8/c9/c10/c11 - the fourth after a full
+  host reboot, which ruled out transient driver state: the blocker is the
+  systematic EKF hover z limit cycle of the flight_board v0.1.1
+  configuration vs the locked 10 s stop gate; the contract's
+  STOP_UNCONFIRMED path behaved per spec every time, no gate relaxation,
+  retry requires the team-level PX4 tuning ticket); recorded residual: the formal1 pass is attempt-dependent (the
   known wall-crossing decision family - provider VLM randomness + Blocks
   corridor geometry, not a toolification regression - failed 3 of 4 flying
   attempts); see validation.json toolification_20261118 and
