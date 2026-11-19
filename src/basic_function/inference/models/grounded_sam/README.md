@@ -101,8 +101,8 @@ GS_DEVICE=0 .venv/Scripts/python.exe -m uvicorn serve:app --host 127.0.0.1 --por
 - `POST http://127.0.0.1:8100/models/grounded_sam/greedy_mask_predict`
   请求 `{"image_b64": BGR PNG/JPEG base64, "text_prompt": str, "box_threshold": 0.3, "text_threshold": 0.25}`
   响应 `{"mask_b64": 单通道PNG(0/255) base64, "seg_success": bool, "phrases": [str]}`。
-  字段名与 CityNav legacy 客户端（`src/tool/navigation/planner/citynav/legacy_stub/run_legacy.py`
-  `GroundedSamClient`）一致，不可改。
+  字段名与 CityNav planner 客户端（`src/tool/navigation/planner/citynav/ros2_adapter/uav_citynav_planner/grounding_client.py`）
+  一致，不可改（阶段 1 legacy 冒烟桩已随 Tool 化交付移除，历史见 Git 提交 8f84f3c）。
 - `seg_success=false` 时 `mask_b64` 为空串（客户端仅在成功时解码）；
   内部保持上游“小数组 + False”失败形态。
 - `GET /health/live`、`GET /health/ready`（含 model_id/model_version/device/processing）。
