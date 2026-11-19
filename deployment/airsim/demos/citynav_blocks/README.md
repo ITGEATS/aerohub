@@ -207,8 +207,16 @@ action result `SUCCEEDED + landmark_sequence_complete_semantic_only_no_positiona
 碰撞 FAIL）与系统性归因见 [validation.json](validation.json)
 `toolification_20261118` 节——穿墙分支为供应商侧 VLM 决策随机性 + Blocks
 走廊几何（已知 run f/expand3 族），**非 Tool 化回归**，且通过依赖尝试
-（4 次飞行尝试 3 次落穿墙分支）已如实记录为残余风险。门槛未放宽；
-cancel1/fault1 新契约重验列为未完成项（stuck2 路径未变，引用旧证据加注）。
+（4 次飞行尝试 3 次落穿墙分支）已如实记录为残余风险。门槛未放宽。
+**cancel1/fault1 新契约重验（2026-11-19 轮，`cancel1_fault1_new_contract_20261119`
+节）**：fault1 **通过**（run-20261119f2：inference 容器停机注入 → 3×NO_SERVER
+→ FAULT detail=llm_failures，零 goal 发出、悬停 2.54 m 收口、
+Land/disarm/碰撞 0 全 PASS）；cancel1 **未通过**——c8/c9/c10 三次干净飞行后
+空中取消均触发 10 s 停止门宽限超时（悬停 z 极限环使 |v|<0.2 m/s 静窗 <1 s；
+契约的 STOP_UNCONFIRMED 路径每次都按规范工作），阻塞在平台层（PX4 调参
+团队工单），门槛不放宽、待更静 EKF 相位重试。本轮另证实：mission 前用真实
+帧预热 grounding（gs_warm.py，~2-4 s）可消除冷启动显存扩容坠机族。
+stuck2 路径未变，引用旧证据加注。
 
 ## 已知限制
 

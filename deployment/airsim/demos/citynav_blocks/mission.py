@@ -539,9 +539,13 @@ def main():
                     else 'FAIL')
                 (args.output / 'fault-injection.json').write_text(json.dumps(
                     {'fault': 'llm_unreachable_persistent',
-                     'injection': 'proxy base_url set to a dead endpoint in '
-                                  '<output>/planner.yaml before restart-compute; '
-                                  'every citynav/llm query returns error_code=http',
+                     'injection': 'Tool-ified contract: the inference container '
+                                  'was stopped (docker stop) right after session '
+                                  'start and never restarted, so every '
+                                  'InferVisionLanguageFrames request returns '
+                                  'NO_SERVER to the planner (pre-Tool-ification '
+                                  'runs injected a dead proxy base_url in '
+                                  '<output>/planner.yaml instead)',
                      'wall': time.time(),
                      'landmark_extract_failures': len(mission.failure_statuses),
                      'failure_statuses': mission.failure_statuses},

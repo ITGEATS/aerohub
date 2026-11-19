@@ -38,11 +38,17 @@ description: |
   cloud-LLM path) formal1 was RE-VERIFIED PASSED under the new contract
   (run-20261118tool12, 12/12 gates, D25 SUCCEEDED reason verified live in
   the action result; unit 53 passed + new-contract DDS lifecycle 6/6);
-  cancel1/fault1 new-contract re-runs remain open and the recorded residual
-  is that the pass is attempt-dependent (the known wall-crossing decision
-  family - provider VLM randomness + Blocks corridor geometry, not a
-  toolification regression - failed 3 of 4 flying attempts); see
-  validation.json toolification_20261118 for the full attempt history;
+  2026-11-19 round: fault1 re-verified PASSED (run-20261119f2 - stopped
+  inference container, 3x NO_SERVER -> FAULT llm_failures, zero goals, clean
+  airborne convergence); cancel1 re-verification 未通过 (c8/c9/c10 in-flight
+  cancelled_stop_gate_timeout - platform hover z limit cycle vs the locked
+  10 s stop gate; the contract's STOP_UNCONFIRMED path behaved per spec, no
+  gate relaxation, retry pending a quieter EKF phase or the PX4 tuning
+  ticket); recorded residual: the formal1 pass is attempt-dependent (the
+  known wall-crossing decision family - provider VLM randomness + Blocks
+  corridor geometry, not a toolification regression - failed 3 of 4 flying
+  attempts); see validation.json toolification_20261118 and
+  cancel1_fault1_new_contract_20261119 for the full attempt histories;
   M-1 proxy/SDK same-frame agreement PASSED under the revised criterion
   (user ruling 2026-11-18 addendum-2; original >=90% gate result 70% vs
   SDK self-control 80% retained on record). CROSS-TASK MEMORY REUSE IS
