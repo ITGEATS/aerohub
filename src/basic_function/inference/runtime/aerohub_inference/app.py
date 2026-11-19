@@ -9,7 +9,10 @@ from fastapi import FastAPI, HTTPException
 from starlette.concurrency import run_in_threadpool
 
 
-def create_app(factory, request_type, response_type):
+def create_app(factory, request_type, response_type, path="/infer",
+               method="infer", extra_routes=()):
+    """extra_routes: iterable of (path, request_type, response_type, method)
+    served by the same predictor instance and busy slot (e.g. /infer_frames)."""
     @asynccontextmanager
     async def lifespan(app):
         app.state.predictor = await run_in_threadpool(factory)
@@ -36,7 +39,7 @@ def create_app(factory, request_type, response_type):
             raise HTTPException(503, "model is not ready")
         return dict(app.state.predictor.metadata, busy=app.state.busy)
 
-    async def infer(body):
+    async def infer(body, predictor_method_name):
         if not app.state.ready:
             raise HTTPException(503, "model is not ready")
         # No await between checking and acquiring: this runs on one event loop.
@@ -46,8 +49,9 @@ def create_app(factory, request_type, response_type):
 
         async def execute():
             try:
+                predictor_method = getattr(app.state.predictor, predictor_method_name)
                 return await run_in_threadpool(
-                    partial(app.state.predictor.infer, body.model_dump())
+                    partial(predictor_method, body.model_dump())
                 )
             except ValueError as error:
                 raise HTTPException(422, str(error)) from error
@@ -62,6 +66,13 @@ def create_app(factory, request_type, response_type):
         task.add_done_callback(lambda result: result.exception() if not result.cancelled() else None)
         return await asyncio.shield(task)
 
-    infer.__annotations__["body"] = request_type
-    app.post("/infer", response_model=response_type)(infer)
+    def register(route, input_type, output_type, predictor_method_name):
+        async def handler(body):
+            return await infer(body, predictor_method_name)
+        handler.__annotations__["body"] = input_type
+        app.post(route, response_model=output_type)(handler)
+
+    register(path, request_type, response_type, method)
+    for route in extra_routes:
+        register(*route)
     return app

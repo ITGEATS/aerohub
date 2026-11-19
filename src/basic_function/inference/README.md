@@ -1,5 +1,9 @@
 # Inference Robotic Function
 
+## TODO
+
+- 支持独立 Demo 跨 DDS domain 共享一个 VLM worker。当前 SPF 和 CityNav 共用 `vlm` 绑定及启动入口，每次部署可同时提供单图和多图 Action；两个 Demo 分别启动时仍各有一个实例。后续需明确共享实例的连接、健康检查、启停归属以及并发请求的处理方式。
+
 YOLO26n-seg is available as an isolated segmentation worker and typed ROS service:
 see [model preparation and validation](models/yolo26n_seg/README.md). Its separate
 [Object Detection Tool](../../tool/object_detection/README.md) adds registered
@@ -169,10 +173,10 @@ RGB 图像采集 header；不解释导航点、语义深度或运动。SPF 是�
 cp config/inference.cloud.example.yaml config/inference.cloud.local.yaml
 ```
 
-配置使用 `models.<model_name>.<engine>`，例如 `models.spf.cloud` 中填写
-`base_url/model/api_key`。对外调用 `model_name="spf"`，内部 `model` 可为 GLM 等供应商
+配置使用 `models.<model_name>.<engine>`，例如 `models.vlm.cloud` 中填写
+`base_url/model/api_key`。对外调用 `model_name="vlm"`，内部 `model` 可为 GLM 等供应商
 模型；更换供应商不改变逻辑身份。缺省的引擎不支持，环境变量也不会自动创建声明。
-一个引擎直接选用；多个引擎必须配置 `active_engines.spf: cloud`，选择失败不回退。
+一个引擎直接选用；多个引擎必须配置 `active_engines.vlm: cloud`，选择失败不回退。
 当前 SPF 只有 Cloud 实现，不能只加 CUDA/Houmo 配置就声称本地已支持。
 
 每个条目可用 `api_key_env`、`base_url_env`、`model_env` 引用环境变量，被引用的值

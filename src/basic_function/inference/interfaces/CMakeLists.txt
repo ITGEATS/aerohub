@@ -8,6 +8,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/InferVisionLanguage.action"
+  "action/InferVisionLanguageFrames.action"
   "msg/YopoCandidate.msg"
   "msg/Detection.msg"
   "msg/DetectionFrame.msg"
@@ -15,6 +16,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/InferDiffphys.srv"
   "srv/InferDetections.srv"
   "srv/InferGroundingDino.srv"
+  "srv/InferGroundedSam.srv"
+  "srv/InferClipScores.srv"
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs action_msgs)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()

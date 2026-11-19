@@ -82,3 +82,6 @@
 	path = src/basic_function/state_estimator/d2_slam/dependencies/opengv
 	url = https://github.com/HKUST-Swarm/opengv.git
 	branch = master
+[submodule "src/tool/navigation/planner/citynav/upstream"]
+	path = src/tool/navigation/planner/citynav/upstream
+	url = https://github.com/EmbodiedCity/CityNavAgent.code

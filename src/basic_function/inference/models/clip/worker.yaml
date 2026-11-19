@@ -1,0 +1,2 @@
+model: artifacts/clip-vit-large-patch14
+device: '0'

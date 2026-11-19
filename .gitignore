@@ -100,6 +100,7 @@ rosbag2_*/
 .venv
 /artifacts/
 /src/basic_function/inference/models/*/artifacts
+/src/basic_function/inference/models/*/weights/
 /deployment/dpv_slam/models/
 /deployment/dpv_slam/wheelhouse/
 /config/inference.local.yaml

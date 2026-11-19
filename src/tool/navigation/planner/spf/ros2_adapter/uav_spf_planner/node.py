@@ -61,7 +61,7 @@ class SpfPlannerNode(Node):
         self.declare_parameter("base_yaw_rate", 30.0)
         self.declare_parameter("min_command_duration", 2.0)
         self.declare_parameter("adaptive_mode", False)
-        self.declare_parameter("model_name", "spf")
+        self.declare_parameter("model_name", "vlm")
         self.declare_parameter("vlm_timeout_s", 30.0)
         self.declare_parameter("max_observation_age_s", 1.0)
         self.declare_parameter("max_consecutive_vlm_failures", 3)

@@ -1,0 +1,56 @@
+schema_version: "1.0"
+id: inference.grounded_sam
+version: "0.1.0"
+type: capability
+name: Grounded-SAM open-vocabulary segmentation inference
+description: |
+  Serves the upstream greedy_mask_predict semantics verbatim (caption
+  lowercased and dot-terminated, box_threshold 0.3 / text_threshold 0.25
+  filtering, phrase decoding, soft-contain best-phrase box matching, SAM
+  multi-box mask union; failure returns seg_success=false without crashing).
+  The real contract is plain HTTP, not a ROS interface: POST
+  /models/grounded_sam/greedy_mask_predict with {image_b64 (BGR PNG/JPEG
+  base64), text_prompt, box_threshold, text_threshold} returns {mask_b64
+  (single-channel 0/255 PNG base64), seg_success, phrases}; busy=429,
+  invalid=422; GET /health/live and /health/ready. Backend replaced per D17:
+  HF transformers GroundingDINO with default weights locally converted from
+  the upstream groundingdino_swint_ogc checkpoint (SwinT-OGC, same source)
+  plus official segment_anything vit_h on torch cu128; the upstream custom
+  CUDA-op build cannot run on this host. Host precondition GS_EMPTY_CACHE=1
+  (default): torch.cuda.empty_cache() after warmup and after every inference
+  keeps reserved VRAM ~3.7 GB so co-resident UE4 Blocks survives WDDM
+  eviction on the 8 GB GPU; the cost is a ~78 s first inference after idle,
+  so callers must budget service_timeout_s>=120. Validation boundary (claim
+  level for this component: GPU algorithm test passed, not flight acceptance):
+  real RTX 5060 load/forward warmup and real-frame HTTP segmentation verified
+  (orange ball/building true, absent class false; swin-ogc vs base per-prompt
+  mask areas recorded); NOT covered: numerical parity with the original CUDA
+  operators (infeasible on this host), any ROS/AS2 facade (none exists),
+  AirVLN-scale accuracy claims.
+
+implementation:
+  component_id: aerohub.inference.grounded_sam
+  manifest: null
+  shared_runtime: grounded-sam-fastapi-worker
+  coupled_capabilities: []
+
+inputs: []
+outputs: []
+
+interfaces: []
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+
+resource_access:
+  reads:
+    - model/grounded-sam-weights
+  shared_writes:
+    - compute/gpu
+  exclusive_writes:
+    - inference/grounded-sam-worker

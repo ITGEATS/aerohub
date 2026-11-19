@@ -1,0 +1,35 @@
+# CityNavBlocks planner parameters (four-part topology, compute role).
+# Tool 化改造（2026-11-18）：原 /drone0/citynav_llm_proxy 节随私有代理删除；
+# 云 LLM 走共享 Inference Function（llm_model_name 逻辑名，供应商绑定在
+# config/inference.cloud.local.yaml + inference 容器），相机命名统一在
+# view_cameras（City* 五目阵，与 settings.json/inference 侧一致）。
+#
+# Worker addresses are configured in inference.yaml, not in the planner.
+
+/drone0/citynav_planner:
+  ros__parameters:
+    use_sim_time: true
+    vehicle_namespace: drone0
+    view_cameras: ["CityLeft", "CitySlightlyLeft", "CityFront",
+                   "CitySlightlyRight", "CityRight"]
+    # view_yaws_deg keeps the package default [90,45,0,-45,-90] (ROS ENU
+    # counter-clockwise), which matches the AirSim Yaw -90..+90 array order.
+    base_velocity: 1.0
+    base_yaw_rate: 30.0
+    min_altitude_m: 1.2
+    max_result_age_s: 90.0
+    view_freshness_s: 2.0
+    # Shared Inference Function logical model name (frames variant).
+    llm_model_name: vlm
+    # Cross-task memory exploit window (deployment-level, D4; the shared
+    # NavigateToSemanticGoal contract carries no such field).
+    use_memory: true
+    # GS_EMPTY_CACHE service mode: the first inference after each idle period
+    # re-expands the torch caching allocator (measured 78.6 s cold, 3-5 s
+    # warm, run-20261118b probe log/citynav/pc-e2e/gs_probe.py), far above
+    # the 30 s default -> timeout then busy-429 x3 -> FAULT. Budget widened
+    # at the config layer (package defaults untouched).
+    service_timeout_s: 120.0
+    retry_backoff_s: 20.0
+    # Cross-task memory graph (D4); /evidence is the run output directory.
+    memory_graph_path: /evidence/citynav_memory.json

@@ -1,0 +1,27 @@
+{
+  "dino": {
+    "repo": "IDEA-Research/grounding-dino-base",
+    "revision": "main",
+    "endpoints": ["https://hf-mirror.com", "https://huggingface.co"],
+    "model_sha256": "5548f844c928c4b6f411fa8cbcc2bfa8dbbba437cb1d513975519f93c2a9ed21",
+    "note": "Hugging Face port of GroundingDINO (Swin-B backbone per config.json); replaces the upstream SwinT-OGC CUDA build which cannot run on this host. Downloaded into artifacts/grounding-dino-base"
+  },
+  "dino_swin_ogc": {
+    "directory": "artifacts/grounding-dino-swin-ogc",
+    "source": "local conversion of weights/groundingdino_swint_ogc.pth via convert_checkpoint.py (official transformers key mapping, grounding-dino-tiny variant, Swin-T embed_dim 96 depths [2,2,6,2])",
+    "model_sha256": "1a2412ef99bd74bcd3c2a246fa1e48581f8889a1300c9051974741314fc042f3",
+    "status": "default"
+  },
+  "sam": {
+    "filename": "sam_vit_h_4b8939.pth",
+    "bytes": 2564550879,
+    "sha256": "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e",
+    "source": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
+  },
+  "swint_reference": {
+    "filename": "groundingdino_swint_ogc.pth",
+    "bytes": 693997677,
+    "sha256": "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799",
+    "status": "unused-backup"
+  }
+}

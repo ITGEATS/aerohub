@@ -28,3 +28,7 @@ hardware_types:
   - id: flight-controller/px4
     name: PX4 flight controller
     description: A physical or SITL PX4 flight controller connected through the project's AS2 platform integration.
+
+  - id: network/cloud-api
+    name: Cloud API network access
+    description: Outbound HTTPS access from the deployment host to a configured cloud model API endpoint.

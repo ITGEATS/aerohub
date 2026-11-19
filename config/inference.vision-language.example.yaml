@@ -1,4 +1,4 @@
 inference:
-  models: [spf]
-# Set URL/model/key in ignored config/inference.cloud.local.yaml (models.spf.cloud).
+  models: [vlm]
+# Set URL/model/key in ignored config/inference.cloud.local.yaml (models.vlm.cloud).
 # No keys belong in this example or in planner configuration.

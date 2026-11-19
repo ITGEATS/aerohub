@@ -147,7 +147,7 @@ Function 的相机缓存与 Action 按 namespace 隔离；多机部署及资源�
 ## Cloud Function 配置与验证
 
 复制 `config/inference.cloud.example.yaml` 为被忽略的 `config/inference.cloud.local.yaml`，
-声明 `models.spf.cloud` 并填写 base_url/model/api_key，可用 api_key_env 引用环境变量；
-SPF 始终调用逻辑 model_name=`spf`。多引擎通过 active_engines.spf 显式选择，缺省不支持。
+声明 `models.vlm.cloud` 并填写 base_url/model/api_key，可用 api_key_env 引用环境变量；
+SPF 默认调用逻辑 model_name=`vlm`。多引擎通过 active_engines.vlm 显式选择，缺省不支持。
 环境与部署细节见 [Vision-language Function](../../../../basic_function/inference/models/vision_language/README.md)，
 验证边界见 [Cloud 迁移验证](../../../../../deployment/airsim/demos/spf_language_nav/cloud_inference_validation.md)。

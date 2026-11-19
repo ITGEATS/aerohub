@@ -1,0 +1,9 @@
+string[] images_b64
+string[] texts
+float64 timeout
+---
+bool success
+string error_code
+string message
+# Row major: image count by text count.
+float64[] similarity

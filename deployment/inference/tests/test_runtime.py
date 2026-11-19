@@ -13,6 +13,29 @@ class Payload(BaseModel):
 
 
 class RuntimeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_routes_share_predictor_with_fixed_dispatch(self):
+        instances = []
+
+        class Predictor:
+            def __init__(self):
+                instances.append(self)
+
+            def infer(self, payload):
+                return payload
+
+            def infer_frames(self, payload):
+                return {'value': payload['value'] + 1}
+
+        app = create_app(Predictor, Payload, Payload, extra_routes=(
+            ('/infer_frames', Payload, Payload, 'infer_frames'),))
+        routes = {route.path: route for route in app.routes}
+        async with app.router.lifespan_context(app):
+            self.assertEqual(await routes['/infer'].endpoint(Payload(value=1)), {'value': 1})
+            self.assertEqual(await routes['/infer_frames'].endpoint(Payload(value=1)), {'value': 2})
+            self.assertEqual(len(instances), 1)
+            for path in ('/infer', '/infer_frames'):
+                self.assertEqual(routes[path].dependant.query_params, [])
+
     async def test_cancelled_caller_keeps_worker_busy_until_execution_stops(self):
         entered, release = threading.Event(), threading.Event()
 
