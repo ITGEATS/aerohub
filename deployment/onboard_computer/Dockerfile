@@ -3,32 +3,36 @@ ARG BASE_IMAGE=onboard_computer_dependencies:humble-px4-1.18
 FROM ${BASE_IMAGE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG DEBIAN_FRONTEND=noninteractive
-ARG IMAGE_VERSION=v0.1.1
+ARG IMAGE_VERSION=v0.1.2
 ARG SOURCE_REVISION=unknown
 ARG UBUNTU_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
 ARG UBUNTU_SECURITY_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
 ARG ROS_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu
 LABEL org.opencontainers.image.version=$IMAGE_VERSION \
       org.opencontainers.image.revision=$SOURCE_REVISION \
-      org.opencontainers.image.source="https://github.com/Air-Suck/aerohub"
+      org.opencontainers.image.source="https://github.com/Air-Suck/aerohub" \
+      io.aerohub.role="compute-base"
 ENV ROS_DISTRO=humble \
     AEROSTACK2_WORKSPACE=/root/aerostack2_ws \
     AEROSTACK2_PATH=/root/aerostack2_ws/src/aerostack2 \
     ROS_DOMAIN_ID=81 \
     FASTDDS_BUILTIN_TRANSPORTS=UDPv4
-RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print0 \
+RUN find -L /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -print0 \
     | xargs -0 sed -i \
       -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
       -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_SECURITY_MIRROR}|g" \
-      -e "s|http://packages.ros.org/ros2/ubuntu|${ROS_APT_MIRROR}|g"
+      -e "s|http://packages.ros.org/ros2/ubuntu|${ROS_APT_MIRROR}|g" \
+      -e 's/^Types: deb deb-src$/Types: deb/'
 RUN printf '%s\n' \
       'Acquire::Retries "10";' \
       'Acquire::http::Timeout "60";' \
       'Acquire::https::Timeout "60";' \
       > /etc/apt/apt.conf.d/80-aerohub-network
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends --no-upgrade \
     build-essential cmake git patch python3-colcon-common-extensions \
-    python3-rosdep python3-vcstool python3-yaml \
+    python3-msgpack python3-vcstool python3-yaml \
+    && apt-get install -y --no-install-recommends \
+    python3-rosdep=0.27.0-1 python3-rosdep-modules=0.27.0-1 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /root/aerostack2_ws/src
 COPY as2/aerostack2/ aerostack2/
@@ -42,11 +46,11 @@ RUN source /opt/ros/humble/setup.bash \
     && python3 -c 'from px4_msgs.msg import VehicleStatus; assert VehicleStatus.MESSAGE_VERSION == 4' \
     && colcon list --packages-up-to as2_platform_pixhawk as2_state_estimator \
        as2_motion_controller as2_behaviors_motion as2_navigation_inputs --paths-only > /tmp/as2-paths \
-    && apt-get update \
-    && (test -e /etc/ros/rosdep/sources.list.d/20-default.list || rosdep init) \
-    && rosdep update --rosdistro humble
+    && test -s /root/.ros/rosdep/sources.cache/index \
+    && rosdep resolve geographic_msgs --rosdistro humble >/dev/null
 RUN source /opt/ros/humble/setup.bash \
     && source /opt/px4_ws/install/setup.bash \
+    && apt-get update \
     && rosdep install --from-paths $(cat /tmp/as2-paths) --ignore-src \
        --rosdistro humble -t build -t build_export -t buildtool -t buildtool_export -t exec -y \
     && rm -rf /var/lib/apt/lists/*

@@ -1,4 +1,4 @@
-ARG ONBOARD_SOURCE_IMAGE=onboard_computer:v0.1.1
+ARG ONBOARD_SOURCE_IMAGE=onboard_computer:v0.1.2
 ARG WORKSTATION_BASE_IMAGE=osrf/ros:humble-desktop-full-jammy
 
 FROM ${ONBOARD_SOURCE_IMAGE} AS as2_source

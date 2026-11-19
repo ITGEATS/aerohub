@@ -27,7 +27,7 @@ roles:
     - ROS-task-and-acceptance-client
 runtime:
   platform: linux-x86_64
-  compute_build_base: onboard_computer:v0.1.1
+  compute_build_base: onboard_computer:v0.1.2
   workstation_build_base: osrf/ros:humble-desktop-full-jammy
   compute_image: aerohub/falcon:ros2-humble
   workstation_image: aerohub/falcon-workstation:ros2-humble

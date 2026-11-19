@@ -1,7 +1,7 @@
 # FALCON deployment
 
 FALCON is delivered as two self-contained images. The compute image
-`aerohub/falcon:ros2-humble` is built from `onboard_computer:v0.1.1` and
+`aerohub/falcon:ros2-humble` is built from `onboard_computer:v0.1.2` and
 contains the locked native ROS 2 Humble FALCON Fork, AeroHub adapter, planner
 interfaces, FollowTimedPath extension and AS2 launch runtime. The task client
 image `aerohub/falcon-workstation:ros2-humble` is built from

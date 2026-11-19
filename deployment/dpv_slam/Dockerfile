@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1.7
-ARG BASE_IMAGE=onboard_computer:v0.1.1
+ARG BASE_IMAGE=onboard_computer:v0.1.2
 FROM ${BASE_IMAGE} AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -47,8 +46,6 @@ RUN source /opt/ros/humble/setup.bash \
 FROM ${BASE_IMAGE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 LABEL org.opencontainers.image.title="AeroHub DPV-SLAM native ROS 2 runtime"
-RUN apt-get update && apt-get install -y --no-install-recommends python3-msgpack \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/dpv/python/ /opt/dpv/python/
 COPY --from=builder /opt/dpv/cuda/ /opt/dpv/cuda/
 COPY --from=builder /opt/dpv/upstream/ /opt/dpv/upstream/

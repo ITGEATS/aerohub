@@ -2,13 +2,13 @@
 
 ROG-Map, its native ROS 2 Humble Adapter/interfaces, navigation inputs, AS2
 integration, sensor adapter, and acceptance programs are delivered in one
-self-contained image based on `onboard_computer:v0.1.1`. Runtime source,
+self-contained image based on `onboard_computer:v0.1.2`. Runtime source,
 workspace, build/install overlay, and ROS 1 mounts are not supported.
 
 ## Build and run
 
 ```bash
-ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
 ROG_MAP_IMAGE=aerohub/rog-map:ros2-humble \
   bash deployment/rog_map/prepare_workspace.sh
 

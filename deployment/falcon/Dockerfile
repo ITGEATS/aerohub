@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=onboard_computer:v0.1.1
+ARG BASE_IMAGE=onboard_computer:v0.1.2
 FROM ${BASE_IMAGE} AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -38,7 +38,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libnlopt-cxx0=2.7.1-3build1 \
       libgoogle-glog0v5=0.5.0+really0.4.0-2 \
       libdw1=0.186-1ubuntu0.1 \
-      python3-msgpack \
     && rm -rf /var/lib/apt/lists/*
 
 ARG FALCON_SOURCE_DIGEST=unknown

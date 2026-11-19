@@ -36,11 +36,11 @@ Build the PX4-1.18-compatible onboard base first, then the algorithm image:
 
 ```bash
 HTTP_PROXY=<robot1-proxy> HTTPS_PROXY=<robot1-proxy> \
-  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
   bash deployment/onboard_computer/build.sh
 
 HTTP_PROXY=<robot1-proxy> HTTPS_PROXY=<robot1-proxy> \
-  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.1 \
+  ONBOARD_COMPUTER_IMAGE=onboard_computer:v0.1.2 \
   D2_SLAM_IMAGE=aerohub/d2-slam:ros2-humble-native \
   bash deployment/d2_slam/prepare_workspace.sh
 ```
@@ -54,7 +54,9 @@ The accepted RGB-D profile uses `onnxruntime-cpu`; it assigns three ONNX
 intra-op threads to each vehicle so three estimators fit robot1's physical CPU
 budget without cross-instance oversubscription. A CUDA device is not an
 algorithm requirement for this profile (AirSim rendering still uses the host
-GPU).
+GPU). ONNX Runtime 1.18.1 is extracted from Microsoft's official
+`Microsoft.ML.OnnxRuntime` NuGet package and verified by the SHA-256 locked in
+the Dockerfile; this avoids relying on the removed GitHub release asset.
 
 ## Run and validate
 

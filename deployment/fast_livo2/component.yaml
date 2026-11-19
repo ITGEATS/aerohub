@@ -16,7 +16,7 @@ cards:
   - cards/perception/fast-livo2-registered-points.yaml
 shared_process_group: fast-livo2
 environment:
-  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.1]
+  required_shared_images: [flight_board:v0.1.0, onboard_computer:v0.1.2]
   runtime_image: aerohub/fast-livo2:ros2-humble
   image_build: deployment/fast_livo2/prepare_workspace.sh
   prohibited_runtime: host source/build overlays, ROS 1 runtime and repository PX4 source

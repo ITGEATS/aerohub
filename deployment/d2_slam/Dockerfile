@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=onboard_computer:v0.1.1
+ARG BASE_IMAGE=onboard_computer:v0.1.2
 FROM ${BASE_IMAGE} AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -6,7 +6,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG D2_BUILD_JOBS=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl libopenblas-dev ninja-build \
+    ca-certificates curl libopenblas-dev ninja-build unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/d2_sources
@@ -39,12 +39,21 @@ RUN curl --fail --location --retry 10 --retry-all-errors --retry-delay 2 \
     && cmake --install build-faiss
 
 RUN curl --fail --location --retry 10 --retry-all-errors --retry-delay 2 \
-      --output onnxruntime-linux-x64-1.18.1.tgz \
-      https://github.com/microsoft/onnxruntime/releases/download/v1.18.1/onnxruntime-linux-x64-1.18.1.tgz \
-    && echo "a0994512ec1e1debc00c18bfc7a5f16249f6ebd6a6128ff2034464cc380ea211  onnxruntime-linux-x64-1.18.1.tgz" \
+      --output microsoft.ml.onnxruntime.1.18.1.nupkg \
+      https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.18.1/microsoft.ml.onnxruntime.1.18.1.nupkg \
+    && echo "e1fdeb5359407c948569905b4eb76af50b8bdb38b2bd3f2ad6516fe4a7186d6a  microsoft.ml.onnxruntime.1.18.1.nupkg" \
       | sha256sum --check --status \
-    && tar -xzf onnxruntime-linux-x64-1.18.1.tgz -C /opt \
-    && mv /opt/onnxruntime-linux-x64-1.18.1 /opt/onnxruntime
+    && mkdir -p /opt/onnxruntime/include /opt/onnxruntime/lib \
+      /opt/onnxruntime/share/licenses \
+    && unzip -q microsoft.ml.onnxruntime.1.18.1.nupkg \
+      'build/native/include/*' \
+      'runtimes/linux-x64/native/libonnxruntime.so' \
+      LICENSE ThirdPartyNotices.txt -d onnxruntime-nuget \
+    && cp -a onnxruntime-nuget/build/native/include/. /opt/onnxruntime/include/ \
+    && cp onnxruntime-nuget/runtimes/linux-x64/native/libonnxruntime.so \
+      /opt/onnxruntime/lib/ \
+    && cp onnxruntime-nuget/LICENSE onnxruntime-nuget/ThirdPartyNotices.txt \
+      /opt/onnxruntime/share/licenses/
 
 COPY src/basic_function/state_estimator/d2_slam/dependencies/ceres_solver/ ceres/
 COPY src/basic_function/state_estimator/d2_slam/dependencies/opengv/ opengv/
@@ -97,7 +106,7 @@ LABEL org.opencontainers.image.title="AeroHub D2SLAM native ROS 2 runtime" \
       org.opencontainers.image.description="Self-contained ROS 2 Humble D2SLAM runtime"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libopenblas0 python3-msgpack \
+      libopenblas0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/d2-deps/ /opt/d2-deps/

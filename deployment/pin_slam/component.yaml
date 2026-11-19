@@ -16,7 +16,7 @@ cards:
   - cards/perception/pin-slam-neural-points.yaml
 shared_process_group: pin-slam-gpu
 environment:
-  shared_image: onboard_computer:v0.1.1
+  shared_image: onboard_computer:v0.1.2
   runtime_image: aerohub/pin-slam:ros2-humble
   architectures: [linux/amd64]
   image_build: deployment/pin_slam/prepare_workspace.sh
