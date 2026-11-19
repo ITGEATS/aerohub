@@ -53,7 +53,7 @@ Takeoff、GoTo、Land 均返回成功；实测起飞高度 2.947m，前飞目标
 `run.py --perception-only` 使用真实前视 RGB + planar depth，算力板容器运行
 YOLO ROS Adapter 和 DetectSnapshot，主机独立 CUDA worker 使用已有 YOLO26n-seg。
 无人机保持 disarmed；人物暂停采样后短暂跑步，再通过统一客户端暂停。
-在上面的完整运行命令中增加 `--perception-only`，使用新的输出目录。
+在上面的完整运行命令中增加 `--perception-only --query-workspace /path/to/query-workspace`，使用新的输出目录。
 
 默认 `--range-method depth` 保留现有掩码深度算法及所有同步和深度范围限制。
 切换尺寸先验时显式增加 `--range-method height --target-height 1.7`；1.7 m 是本例
@@ -152,10 +152,11 @@ Tracking 识别 person → 一个 Navigation HOLD 会话，每0.25s更新跟随�
 当前 `follow=False`；保持接管yaw。不能把Tracking的 `follow=True` 原地朝向
 会话与本demo导航同时运行，两者争用同一运动资源。转弯后持续看人仍有缺口。
 
-构建任务客户端（固定镜像、独立工作区、无网络、不发起飞行）：
+构建任务客户端（固定镜像、独立工作区、无网络、不发起飞行）。
+`WESTSTREET_CLIENT_WORKSPACE` 指向运行配置中的 `client_workspace`。
 
 ```bash
-bash deployment/airsim/demos/weststreet/build_demo_overlay.sh
+bash deployment/airsim/demos/weststreet/build_demo_overlay.sh "$WESTSTREET_CLIENT_WORKSPACE"
 ```
 
 运行前须在算力侧部署匹配版本 System、SUPER Navigation Action、Tracking、
@@ -195,7 +196,9 @@ Tracking 三个模块成功，未发送运动请求。AS2客户端依赖的Pydan
 
 ### 真实四方 Tool 联合入口
 
-`run_tool_demo.py` 是宿主部署/场景fixture，`demo.py` 仍只调用公开Tools：
+`run_tool_demo.py` 是宿主部署/场景 fixture，`demo.py` 仍只调用公开 Tools。
+先按 [运行配置](README-before-plaza.md#启动) 指定基础场景与已安装工作区，
+然后运行以下命令。
 
 ```bash
 python3 deployment/airsim/demos/weststreet/run_tool_demo.py \

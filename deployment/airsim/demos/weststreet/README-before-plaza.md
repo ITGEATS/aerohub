@@ -11,21 +11,32 @@ Tracking 原1秒预测期、YOLO阈值均未修改。原始副本保存在
 `log/weststreet-before-plaza/restoration/demo_before_plaza.original.py`，
 原始及当前哈希记录于 `before_plaza_checkpoint.json`。
 
-Navigation Adapter 从历史成功轮恢复到
-`log/weststreet-before-plaza/runtime/` 专用 overlay；执行器另有定位时钟排序修复：
+Navigation Adapter 从历史成功轮恢复到专用 overlay（运行配置中的
+`acceptance_workspace`）。执行器另有定位时钟排序修复：
 超前时间戳先缓存，待ROS时钟追上再采用，保留原0.5秒过期门限。
-启动脚本校验专用源码和二进制哈希。主线 Navigation、Behavior 源码及共享
-install 未回退；请勿清理这个专用 runtime 目录。
+启动脚本校验专用源码和二进制哈希。保留完整专用工作区，包括
+`restored-source.json`、`src/` 和 `install/`。
 
 历史证据：`log/weststreet-demo/live-tangent-pv-lead1s-recovery1s-65s-01/`。
 
 ## 启动
 
-在仓库根目录运行：
+将 [runtime.example.json](runtime.example.json) 复制为同目录下的 `runtime.local.json`，
+再填入本工作树使用的路径。启动脚本默认读取它，Git 忽略该本机文件。
+`--runtime-config` 可选择同一 Demo 的其他部署配置。相对路径以配置文件为基准，支持 `~`。
+配置引用长期工作区和已安装的 overlay。旧工作区曾放在 `log/` 时，先在固定位置重新构建
+或验证迁移后的安装目录，保留原工作区直到新路径通过检查。基础 profile 及其引用的场景、
+机器人配置、SDK、bridge overlay 也要指向可长期使用的位置。任务输出仍可写入 `log/`。
 
 ```bash
+python3 deployment/airsim/demos/weststreet/launch_before_plaza.py --check-runtime
 python3 deployment/airsim/demos/weststreet/launch_before_plaza.py
 ```
+
+`--check-runtime` 核对部署输入、验收快照哈希和场景时钟，不启动模拟器或申请飞行。
+直接使用 `run_tool_demo.py` 时接受同一配置；只在需要历史验收快照时显式传
+`--component-overlay`。旧的 `run.py --perception-only` 使用 `--query-workspace`
+指定检测 overlay。
 
 启动入口默认加载 `WestStreetClosedLoop`。路线保留原起跑点及前段街区路线，末段沿错开的回程跑道转回起跑方向。地图和动画作为独立资产保存。用 `--legacy-route` 可加载原 65 秒飞行验收地图。下文的历史飞行结果均对应原路线。
 

@@ -13,7 +13,7 @@ def call(args,**kw):return subprocess.run(list(map(str,args)),check=True,**kw)
 def capture(args):return call(args,capture_output=True,text=True).stdout
 
 def prepare(a,out):
- profile=json.loads(a.base_profile.read_text());scene_path=Path(profile['scene_config'])
+ profile=json.loads(a.base_profile.read_text());scene_path=a.base_profile.parent/profile['scene_config']
  scene=json.loads(scene_path.read_text());robot=json.loads((scene_path.parent/scene['actors'][0]['robot-config']).read_text())
  if robot['controller']['type']!='px4-api':raise RuntimeError('Base must be the existing verified PX4 scene')
  scene['id']='SceneWestStreetPx4';scene['actors']=[{'type':'robot','name':'Drone1','origin':{'xyz':'8 -45 -0.3','rpy-deg':'0 0 90'},'robot-config':'robot_px4.jsonc'}]
@@ -45,7 +45,9 @@ def prepare(a,out):
 def main():
  p=argparse.ArgumentParser(description=__doc__)
  for name in ['base-profile','ue-root','project','workstation-overlay','output']:p.add_argument('--'+name,type=Path,required=True)
+ p.add_argument('--query-workspace', type=Path, help='Detection overlay required for --perception-only')
  p.add_argument('--ground-only',action='store_true');p.add_argument('--perception-only',action='store_true');p.add_argument('--range-method',choices=['depth','height'],default='depth');p.add_argument('--target-height',type=float);a=p.parse_args()
+ if a.perception_only and (a.query_workspace is None or not (a.query_workspace.expanduser()/'install/setup.bash').is_file()):p.error('--perception-only requires a built --query-workspace')
  if a.range_method=='height' and (not a.perception_only or a.target_height is None or a.target_height<=0):p.error('height mode requires --perception-only and explicit positive --target-height')
  for name in ['base_profile','ue_root','project','workstation_overlay','output']:setattr(a,name,getattr(a,name).absolute())
  out=a.output;out.mkdir(parents=True,exist_ok=False);runtime=out/'simulator';runtime.mkdir()
@@ -97,7 +99,7 @@ def main():
    except subprocess.CalledProcessError:pass
    time.sleep(2)
   else:raise RuntimeError('PX4 did not pass preflight; no arming requested')
-  call(docker_base(names['onboard'])+['-e','AS2_EXECUTION_BACKEND=follow_path','-e','AS2_FLEET_FILE=/evidence/fleet.yaml','-v',str(ROOT/'deployment/airsim/as2/run.py')+':/opt/onboard_computer/run.py:ro','-v',str(ROOT/'log/object-detection-query/workspace')+':/query-work:ro','--entrypoint','bash','onboard_computer:v0.1.1','-lc','source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && source /root/aerostack2_ws/install/setup.bash && source /opt/uav_execution_ws/install/setup.bash && exec python3 /opt/onboard_computer/run.py']);started.append('onboard')
+  call(docker_base(names['onboard'])+['-e','AS2_EXECUTION_BACKEND=follow_path','-e','AS2_FLEET_FILE=/evidence/fleet.yaml','-v',str(ROOT/'deployment/airsim/as2/run.py')+':/opt/onboard_computer/run.py:ro',*(['-v',str(a.query_workspace.expanduser().absolute())+':/query-work:ro'] if a.perception_only else []),'--entrypoint','bash','onboard_computer:v0.1.1','-lc','source /opt/ros/humble/setup.bash && source /opt/px4_ws/install/setup.bash && source /root/aerostack2_ws/install/setup.bash && source /opt/uav_execution_ws/install/setup.bash && exec python3 /opt/onboard_computer/run.py']);started.append('onboard')
   if a.perception_only:
    truth_log=(out/'truth-recorder.log').open('w')
    truth=subprocess.Popen([json.loads((out/'profile.json').read_text())['client_python'],str(ROOT/'deployment/airsim/demos/weststreet/range_truth.py'),'--record',str(out/'truth.jsonl')],stdout=truth_log,stderr=subprocess.STDOUT)

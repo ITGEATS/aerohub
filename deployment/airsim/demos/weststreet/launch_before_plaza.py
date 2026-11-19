@@ -12,6 +12,8 @@ import socket
 import subprocess
 import sys
 
+from runtime_config import DEFAULT_RUNTIME_CONFIG, load_runtime
+
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[3]
 ACTIVE=ROOT/'log/weststreet-before-plaza/active.json'
@@ -27,7 +29,7 @@ def owned_process(state):
         return False
 
 
-def check_sources():
+def check_sources(runtime):
     checkpoint=json.loads((HERE/'before_plaza_checkpoint.json').read_text())
     for name,expected in checkpoint['sha256'].items():
         if hashlib.sha256((HERE/name).read_bytes()).hexdigest()!=expected:
@@ -35,7 +37,6 @@ def check_sources():
     config=ROOT/'src/basic_function/inference/models/yolo26n_seg/worker.yaml'
     if not re.search(r'^confidence:\s*0\.35\s*$',config.read_text(),re.M):
         raise RuntimeError('Acceptance requires YOLO confidence 0.35')
-    runtime=ROOT/'log/weststreet-before-plaza/runtime'
     manifest=json.loads((runtime/'restored-source.json').read_text())
     for name,expected in manifest['files'].items():
         path=runtime/'src/uav_super_adapter'/name
@@ -70,6 +71,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stop',action='store_true',help='Request safe stop of this launcher\'s active run')
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--runtime-config', type=Path, default=DEFAULT_RUNTIME_CONFIG,
+                        help='Host paths to the scene, UE project, and installed workspaces')
+    parser.add_argument('--check-runtime', action='store_true',
+                        help='Check runtime paths, checkpoint hashes, and scenario clock without starting')
     parser.add_argument('--legacy-route', action='store_true', help='Use the previously validated out-and-back route')
     parser.add_argument('--fps', type=int, choices=(30, 60), default=30, help='UE window frame rate cap')
     parser.add_argument('--viewer-wait',type=float,default=15.,help='Seconds to prepare screen recording after UE view is ready')
@@ -84,7 +89,20 @@ def main():
         print('Stop requested; wait for landing and cleanup in the launch terminal.');return 0
     if not 0<=args.viewer_wait<=300:
         parser.error('viewer-wait must be within [0,300]')
-    checkpoint=check_sources()
+    try:
+        inputs = load_runtime(args.runtime_config, require_acceptance=True)
+        checkpoint = check_sources(inputs['acceptance_workspace'])
+        profile = json.loads(inputs['base_profile'].read_text())
+        scene_path = inputs['base_profile'].parent / profile['scene_config']
+        scene = json.loads(scene_path.read_text())
+        clock = scene.get('clock', {})
+        if clock.get('step-ns') != 3000000 or clock.get('real-time-update-rate') != 3000000:
+            raise RuntimeError('Acceptance requires original 3ms/3ms simulation clock')
+    except (OSError, ValueError, KeyError, RuntimeError) as error:
+        parser.error(str(error))
+    if args.check_runtime:
+        print('WestStreet runtime paths, checkpoint hashes and clock verified.')
+        return 0
     if ACTIVE.exists() and owned_process(json.loads(ACTIVE.read_text())):
         raise RuntimeError('A before-plaza run is already active; use --stop first')
     # Never replace another task's simulator or worker.
@@ -97,11 +115,6 @@ def main():
             if kind==socket.SOCK_STREAM:sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
             try:sock.bind(('127.0.0.1',port))
             except OSError as error:raise RuntimeError(f'Port {port} is in use; existing runtime was left untouched')from error
-    base=ROOT/'log/projectairsim/package-course-wmm/profile.json'
-    profile=json.loads(base.read_text());scene=json.loads(Path(profile['scene_config']).read_text())
-    clock=scene.get('clock',{})
-    if clock.get('step-ns')!=3000000 or clock.get('real-time-update-rate')!=3000000:
-        raise RuntimeError('Acceptance requires original 3ms/3ms simulation clock')
     stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     output=(args.output or ROOT/'log/weststreet-before-plaza'/stamp).absolute()
     if output.exists():raise RuntimeError('Evidence output already exists: '+str(output))
@@ -110,7 +123,8 @@ def main():
     metadata=output.with_name(output.name+'-launcher.json')
     route = 'WestStreetShiftRight2mLate4m' if args.legacy_route else 'WestStreetClosedLoop'
     command=[sys.executable,str(HERE/'run_tool_demo.py'),'--mission-file','demo_before_plaza.py',
-        '--component-overlay',str(ROOT/'log/weststreet-before-plaza/runtime'),
+        '--runtime-config',str(args.runtime_config.expanduser().resolve()),
+        '--component-overlay',str(inputs['acceptance_workspace']),
         '--output',str(output),'--duration','0','--tangent-follow','--tangent-lead','1',
         '--continuous-yaw','--recovery-window','1','--native-audit','--image-storage','png',
         '--ue-map','/Game/Aerohub/'+route,'--yolo-window','--observe-runner',

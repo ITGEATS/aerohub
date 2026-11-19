@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import signal
 import shutil
+import shlex
 import socket
 import subprocess
 import sys
@@ -16,6 +17,7 @@ import time
 from urllib.request import build_opener, ProxyHandler
 
 from run import prepare, ROOT, DOMAIN, INSTANCE, SYSTEM
+from runtime_config import DEFAULT_RUNTIME_CONFIG, load_runtime
 from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
 from simulator.projectairsim.display_session import views_from_scene
 
@@ -39,6 +41,8 @@ def check_navigation_overlay(workspace, build_command):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--runtime-config', type=Path, default=DEFAULT_RUNTIME_CONFIG,
+                        help='Host paths to the scene, UE project, and installed workspaces')
     parser.add_argument('--ue-map',choices=['/Game/Aerohub/WestStreetCircuit','/Game/Aerohub/WestStreetSmoothTurn','/Game/Aerohub/WestStreetShiftRight2m', '/Game/Aerohub/WestStreetShiftRight2mLate4m','/Game/Aerohub/WestStreetClosedLoop'],default='/Game/Aerohub/WestStreetShiftRight2mLate4m',help='Current tracking baseline: 4m turns, 2.75m/s; other maps require explicit selection')
     parser.add_argument('--mission-file',choices=['demo.py','demo_before_plaza.py'],default='demo_before_plaza.py')
     parser.add_argument('--component-overlay',type=Path,help='Optional isolated component overlay; leaves shared installs untouched')
@@ -78,15 +82,19 @@ def main():
         parser.error('viewer-wait must be between 0 and 300 seconds')
     if args.target_yaw and args.continuous_yaw:
         parser.error('Select one yaw policy')
-    workspaces = ROOT / 'log/weststreet-demo'
-    nav_workspace = workspaces / 'super-workspace'
-    client_workspace = workspaces / 'client-workspace'
-    check_navigation_overlay(
-        nav_workspace, 'SUPER_APP_IMAGE=uav/apps-super-forest:onboard-v0.1.1 bash '
-        'deployment/airsim/demos/super_forest/build_navigation_overlay.sh '
-        'log/weststreet-demo/super-workspace')
-    check_navigation_overlay(
-        client_workspace, 'bash deployment/airsim/demos/weststreet/build_demo_overlay.sh')
+    try:
+        runtime_inputs = load_runtime(args.runtime_config)
+        nav_workspace = runtime_inputs['navigation_workspace']
+        client_workspace = runtime_inputs['client_workspace']
+        check_navigation_overlay(
+            nav_workspace, 'SUPER_APP_IMAGE=uav/apps-super-forest:onboard-v0.1.1 bash '
+            'deployment/airsim/demos/super_forest/build_navigation_overlay.sh '
+            + shlex.quote(str(nav_workspace)))
+        check_navigation_overlay(
+            client_workspace, 'bash deployment/airsim/demos/weststreet/build_demo_overlay.sh '
+            + shlex.quote(str(client_workspace)))
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.error(str(error))
     out = args.output.absolute()
     out.mkdir(parents=True, exist_ok=False)
     if args.component_overlay:
@@ -95,9 +103,9 @@ def main():
             raise RuntimeError('Component overlay has not been built')
         source_manifest=args.component_overlay/'restored-source.json'
         if source_manifest.exists():shutil.copyfile(source_manifest,out/'component-source.json')
-    args.base_profile = ROOT/'log/projectairsim/package-course-wmm/profile.json'
-    args.ue_root = Path('/home/wqy/UE_installed_build')
-    args.project = args.ue_root/'WestStreet/PAirSim.uproject'
+    args.base_profile = runtime_inputs['base_profile']
+    args.ue_root = runtime_inputs['ue_root']
+    args.project = runtime_inputs['project']
     args.perception_only = True
     env = prepare(args, out)
     profile_path = out/'profile.json'
@@ -134,7 +142,7 @@ def main():
     if args.native_audit:
         profile['adapter']['environment']['PROJECTAIRSIM_TOPIC_RELAY_PORT']='20189'
     profile['adapter']['environment']['AEROHUB_VISION_TIMING']='1'
-    profile['adapter']['environment']['PROJECTAIRSIM_TRACKING_OVERLAY']=str(ROOT/'log/target-tracking-follow/workspace')
+    profile['adapter']['environment']['PROJECTAIRSIM_TRACKING_OVERLAY']=str(runtime_inputs['tracking_workspace'])
     profile_path.write_text(json.dumps(profile, indent=2))
     runtime = out/'simulator'
     runtime.mkdir()
@@ -186,21 +194,25 @@ def main():
         return capture(['docker','exec',names['px4'],'/opt/px4-gazebo/bin/px4-listener',
                         '--instance',str(INSTANCE),'vehicle_status','-n','1'])
     def base_docker(role, image, command, extra=()):
-        mounts = {ROOT:'/repo', out:'/evidence',
-            nav_workspace:'/nav',
-            client_workspace:'/clients',
-            ROOT/'log/system-tool/workspace':'/system',
-            ROOT/'log/object-detection-query/workspace':'/query',
-            ROOT/'log/target-tracking-follow/workspace':'/tracking',
-            ROOT/'log/weststreet-demo/perception-workspace':'/perception',
-            ROOT/'log/projectairsim/weststreet-framework/workstation':'/work'}
-        if args.component_overlay:mounts[args.component_overlay]='/acceptance'
+        mounts = {
+            '/repo': ROOT,
+            '/evidence': out,
+            '/nav': runtime_inputs['navigation_workspace'],
+            '/clients': runtime_inputs['client_workspace'],
+            '/system': runtime_inputs['system_workspace'],
+            '/query': runtime_inputs['query_workspace'],
+            '/tracking': runtime_inputs['tracking_workspace'],
+            '/perception': runtime_inputs['perception_workspace'],
+            '/work': runtime_inputs['workstation_workspace'],
+        }
+        if args.component_overlay:
+            mounts['/acceptance'] = args.component_overlay
         cmd = ['docker','run','-d','--init','--network','host','--ipc','host',
             '--name',names[role],'--label','aerohub.task=weststreet-tool-demo',
             '-e',f'ROS_DOMAIN_ID={DOMAIN}','-e','ROS_LOCALHOST_ONLY=0',
             '-e','PYTHONDONTWRITEBYTECODE=1','-e','AEROHUB_MOTION_LOCK_DIR=/evidence/motion',
             '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/repo/deployment/airsim/config/dds/fastdds_udp.xml']
-        for host, target in mounts.items():
+        for target, host in mounts.items():
             cmd += ['-v',str(host)+':'+target+('' if target=='/evidence' else ':ro')]
         cmd += list(extra)+['--entrypoint','bash',image,'-lc',command]
         run(cmd)
