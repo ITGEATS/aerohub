@@ -24,7 +24,7 @@ Blocks 经 Windows interop 启停而非 manager.py；**每次实验 Blocks 必�
 ```bash
 cd <仓库目录>
 cp config/inference.cloud.example.yaml config/inference.cloud.local.yaml
-# 编辑 models.spf.cloud 的 base_url/model/api_key；或配置 api_key_env
+# 编辑 models.vlm.cloud 的 base_url/model/api_key；或配置 api_key_env
 python3 deployment/airsim/demos/spf_language_nav/run.py prepare --output log/spf/pc-e2e/sitl-01
 python3 deployment/airsim/demos/spf_language_nav/run.py start   --output log/spf/pc-e2e/sitl-01
 python3 deployment/airsim/demos/spf_language_nav/run.py mission --output log/spf/pc-e2e/sitl-01 \
@@ -53,7 +53,7 @@ Linux 复用共享 AirSim manager 与启动 relay；通过资源配置或 `SPF_A
 
 SPF 只配置 `model_name`，prompt 与点/深度解析留在 Tool；图像编码、模型路由、云端
 认证和协议进入 Inference Function。直接在被忽略的
-`config/inference.cloud.local.yaml` 声明 `models.spf.cloud`，填写 `base_url/model/api_key`，
+`config/inference.cloud.local.yaml` 声明 `models.vlm.cloud`，填写 `base_url/model/api_key`，
 或通过该条目的 `api_key_env` 等字段引用环境变量。对外模型名固定为逻辑 `spf`。
 只声明一个引擎时直接使用；多个时填写 `active_engines.spf`。缺少声明或选择不明确会失败，
 不会自动启用 Cloud，也不会将供应商模型名当作逻辑模型名。不强制文件权限、

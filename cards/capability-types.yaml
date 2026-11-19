@@ -577,42 +577,6 @@ capability_types:
       axes: none
       timestamp: event_sim_time
 
-  - id: task/citynav/llm-query
-    name: CityNav LLM proxy query
-    description: JSON request with request_id, op (viewpoint|landmark|caption), instruction, landmark/traversed/next fields, per-view request image stamps and max_age_s; prompts and images are built by the workstation proxy, never sent by the planner.
-    transport:
-      protocol: ros2_topic
-      schema: std_msgs/msg/String
-      qos:
-        reliability: reliable
-        durability: volatile
-        history: keep_last
-        depth: 10
-    semantics:
-      unit_system: none
-      units: {}
-      coordinate_frame: none
-      axes: none
-      timestamp: publication_time
-
-  - id: task/citynav/llm-result
-    name: CityNav LLM proxy result
-    description: JSON response with request_id, op, ok, raw model text, error_code (ok|stale|timeout|http|parse|busy) and latency_s.
-    transport:
-      protocol: ros2_topic
-      schema: std_msgs/msg/String
-      qos:
-        reliability: reliable
-        durability: volatile
-        history: keep_last
-        depth: 10
-    semantics:
-      unit_system: none
-      units: {}
-      coordinate_frame: none
-      axes: none
-      timestamp: publication_time
-
   - id: inference/vision-language/text
     name: Vision-language generated text
     description: Generic model text bound to the actual vehicle camera image, not a navigation decision.

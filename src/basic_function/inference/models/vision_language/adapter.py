@@ -10,7 +10,7 @@ from aerohub_inference.backends.cloud import CloudError
 
 def read_bindings(path, model_names=None):
     catalog = read_model_catalog(path)
-    names = ['spf'] if model_names is None else model_names
+    names = ['vlm'] if model_names is None else model_names
     bindings = {name: select_model(catalog, name) for name in names}
     # Engine declarations are not implementations: there is no local SPF VLM yet.
     if any(binding['engine'] != 'cloud' for binding in bindings.values()):
@@ -22,7 +22,7 @@ class Predictor:
     def __init__(self):
         default = Path(__file__).resolve().parents[5] / 'config/inference.cloud.local.yaml'
         path = os.environ.get('INFERENCE_MODEL_CONFIG', str(default))
-        names = os.environ.get('INFERENCE_MODEL_NAMES', 'spf').split(',')
+        names = os.environ.get('INFERENCE_MODEL_NAMES', 'vlm').split(',')
         self.engines = {}
         try:
             for name, binding in read_bindings(path, names).items():

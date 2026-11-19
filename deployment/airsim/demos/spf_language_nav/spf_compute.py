@@ -18,7 +18,7 @@ def main():
         ['python3', str(ROOT / 'deployment/airsim/as2/run.py')],
         ['ros2', 'run', 'uav_spf_planner', 'spf_planner', '--ros-args',
          '-r', '__ns:=/drone0', '--params-file', str(APP / 'planner.yaml'),
-         '-p', 'model_name:=' + os.environ.get('SPF_MODEL_NAME', 'spf')],
+         '-p', 'model_name:=' + os.environ.get('SPF_MODEL_NAME', 'vlm')],
     ]
     children = []
     stopping = False

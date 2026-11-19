@@ -16,8 +16,6 @@ APP = Path(__file__).resolve().parent
 REPO = APP.parents[3]
 PLANNER_NODE = REPO / ('src/tool/navigation/planner/citynav/ros2_adapter/'
                        'uav_citynav_planner/node.py')
-PROXY_NODE = REPO / ('src/tool/navigation/planner/citynav/llm_proxy/'
-                     'uav_citynav_llm_proxy/node.py')
 CITY_CAMS = ['CityLeft', 'CitySlightlyLeft', 'CityFront',
              'CitySlightlyRight', 'CityRight']
 
@@ -44,7 +42,6 @@ def test_settings_five_eye_array():
 def test_planner_yaml_matches_declared_parameters():
     params = yaml.safe_load((APP / 'planner.yaml').read_text())
     planner = params['/drone0/citynav_planner']['ros__parameters']
-    proxy = params['/drone0/citynav_llm_proxy']['ros__parameters']
 
     declared = set(re.findall(r'declare_parameter\("([^"]+)"',
                               PLANNER_NODE.read_text(encoding='utf-8')))
@@ -52,42 +49,27 @@ def test_planner_yaml_matches_declared_parameters():
     unknown = set(planner) - declared
     assert not unknown, 'planner.yaml sets parameters the node does not declare: %s' % unknown
 
-    declared_proxy = set(re.findall(r'declare_parameter\("([^"]+)"',
-                                    PROXY_NODE.read_text(encoding='utf-8')))
-    declared_proxy |= {'use_sim_time'}
-    unknown = set(proxy) - declared_proxy
-    assert not unknown, 'planner.yaml sets parameters the proxy does not declare: %s' % unknown
-
-
 def test_camera_names_unified_across_roles():
-    # Known package-default divergence (planner LeftCamera* vs proxy City*):
-    # the Demo must pin BOTH sides to the same City* names.
     params = yaml.safe_load((APP / 'planner.yaml').read_text())
     planner = params['/drone0/citynav_planner']['ros__parameters']
-    proxy = params['/drone0/citynav_llm_proxy']['ros__parameters']
     assert list(planner['view_cameras']) == CITY_CAMS
-    mapping = dict(item.split('=', 1) for item in proxy['cameras'])
-    assert list(mapping.values()) == CITY_CAMS
-    assert list(mapping) == ['left', 'slightly_left', 'front',
-                             'slightly_right', 'right']
 
 
 def test_locked_contract_values():
     params = yaml.safe_load((APP / 'planner.yaml').read_text())
     planner = params['/drone0/citynav_planner']['ros__parameters']
-    proxy = params['/drone0/citynav_llm_proxy']['ros__parameters']
     assert planner['base_velocity'] == 1.0
     assert planner['base_yaw_rate'] == 30.0
     assert planner['min_altitude_m'] == 1.2
     assert planner['max_result_age_s'] == 90.0      # D21
     assert planner['view_freshness_s'] == 2.0
-    assert '/models/grounded_sam/greedy_mask_predict' in planner['grounding_url']
-    assert '/models/clip/score' in planner['clip_url']
-    assert '__HOST__' in planner['grounding_url'], 'run.py rewrites this token'
+    assert planner['llm_model_name'] == 'vlm'
+    assert 'grounding_url' not in planner and 'clip_url' not in planner
+    inference = yaml.safe_load((APP / 'inference.yaml').read_text())
+    workers = inference['/drone0/image_text_inference']['ros__parameters']
+    assert workers['grounded_sam_endpoint'] == 'http://__HOST__:8100'
+    assert workers['clip_endpoint'] == 'http://__HOST__:8101'
     assert planner['memory_graph_path'] == '/evidence/citynav_memory.json'
-    assert proxy['model'] == 'glm-4v-flash'
-    assert proxy['base_url'] == 'https://open.bigmodel.cn/api/paas/v4'
-    assert proxy['cache_dir'] == '', 'formal1 requires the cache disabled (M-1)'
 
 
 def test_controller_yaml_is_pid_speed_controller_tuning():

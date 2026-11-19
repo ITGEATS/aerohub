@@ -1,24 +1,15 @@
-"""grounded_sam Inference 服务客户端（纯 stdlib：urllib + zlib PNG 编解码）。
-
-服务契约（src/basic_function/inference/models/grounded_sam/README.md，字段名
-锁定不可改）：POST /models/grounded_sam/greedy_mask_predict，请求
-{"image_b64": BGR PNG/JPEG base64, "text_prompt": str, "box_threshold": 0.3,
-"text_threshold": 0.25} → {"mask_b64": 单通道 PNG(0/255) base64,
-"seg_success": bool, "phrases": [str]}。seg_success=false 时 mask_b64 为空串。
+"""Grounded SAM ROS client and dependency-free PNG codec.
 
 容器禁 cv2/PIL：PNG 编码用纯 Python zlib writer（非交织、filter-0 扫描线），
 mask 解码支持 8-bit 灰度非交织 PNG（filter 0-4 反滤波）。ROS rgb8 输入按服务
 BGR 语义交换通道（与 legacy 客户端 cv2 行为一致）。
 
 greedy_mask_predict 返回形态对齐上游 vlm 对象：(mask uint8 HxW | None,
-seg_success bool)；HTTP/解码层错误抛 ClientError（node 计连续失败→FAULT），
+seg_success bool)；推理/解码层错误抛 ClientError（node 计连续失败→FAULT），
 seg_success=false 不是错误（上游"小数组+False"语义）。
 """
 import base64
-import json
 import struct
-import urllib.error
-import urllib.request
 import zlib
 
 import numpy as np
@@ -124,30 +115,24 @@ def rgb_to_bgr_png_b64(rgb: np.ndarray) -> str:
 
 
 class GroundingClient:
-    def __init__(self, url: str, timeout_s: float = 30.0,
+    def __init__(self, node, timeout_s: float = 30.0,
                  box_threshold: float = 0.3, text_threshold: float = 0.25):
-        self.url = url
+        from uav_inference_interfaces.srv import InferGroundedSam
+
+        self.request_type = InferGroundedSam.Request
+        self.client = node.create_client(InferGroundedSam, 'inference/grounded_sam/infer')
         self.timeout_s = timeout_s
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
 
     def greedy_mask_predict(self, rgb: np.ndarray, text_prompt: str):
-        payload = json.dumps({
-            "image_b64": rgb_to_bgr_png_b64(rgb),
-            "text_prompt": text_prompt,
-            "box_threshold": self.box_threshold,
-            "text_threshold": self.text_threshold,
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            self.url, data=payload,
-            headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                out = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            raise ClientError(f"grounding service failure: {exc}") from exc
-        seg_success = bool(out.get("seg_success", False))
-        if seg_success and out.get("mask_b64"):
-            mask = decode_png_gray(base64.b64decode(out["mask_b64"]))
+        from .inference_client import call_inference
+
+        request = self.request_type(image_b64=rgb_to_bgr_png_b64(rgb),
+                                    text_prompt=text_prompt, box_threshold=self.box_threshold,
+                                    text_threshold=self.text_threshold, timeout=self.timeout_s)
+        out = call_inference(self.client, request, self.timeout_s)
+        if out.seg_success and out.mask_b64:
+            mask = decode_png_gray(base64.b64decode(out.mask_b64))
             return mask, True
         return None, False

@@ -19,6 +19,11 @@ def main():
         ['python3', '-m', 'uav_inference.vision_language_node', '--ros-args',
          '-r', '__ns:=/' + namespace, '--params-file', parameters],
     ]
+    for module in ('vision_language_frames_node', 'image_text_node'):
+        if module == 'image_text_node' and os.environ.get('INFERENCE_IMAGE_TEXT') != '1':
+            continue
+        commands.append(['python3', '-m', 'uav_inference.' + module, '--ros-args',
+                         '-r', '__ns:=/' + namespace, '--params-file', parameters])
     children = []
     stopping = False
 

@@ -3,7 +3,7 @@
 `src/tool/navigation/planner/citynav/ros2_adapter/`，ament_python 包，运行于
 onboard-computer 容器。依赖闭包 = rclpy + numpy/scipy + stdlib（容器 v0.1.1
 py3.10 实测无 networkx，底层图用包内最小实现，见 D24）；
-**禁 torch/cv2/sklearn**：grounding 与 CLIP 推理走 Inference HTTP 服务（阶段 4 /
+**禁 torch/cv2/sklearn**：grounding 与 CLIP 推理走 Inference ROS 服务（阶段 4 /
 并行任务），PNG 编解码用纯 Python zlib writer，统计滤波用 scipy cKDTree 重写
 （与 sklearn `NearestNeighbors(n_neighbors=k).kneighbors` 语义等价：k 近邻含
 自身、逐点 mean、全局 mean/std、阈值 `mean + multiplier·std`；低维精确 kNN
@@ -31,8 +31,8 @@ py3.10 实测无 networkx，底层图用包内最小实现，见 D24）；
 alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵相机名，
 顺序对应 left/slightly_left/front/slightly_right/right，默认
 `LeftCamera,SlightLeftCamera,FrontCamera,SlightRightCamera,RightCamera`）、
-`view_yaws_deg`（ROS 逆时针约定，默认 `90,45,0,-45,-90`）、`grounding_url`、
-`clip_url`、`memory_graph_path`（默认 `citynav_memory.json`，跨任务复用 D4）。
+`view_yaws_deg`（ROS 逆时针约定，默认 `90,45,0,-45,-90`）及
+`memory_graph_path`（默认 `citynav_memory.json`，跨任务复用 D4）。Worker 地址仅由 Inference 配置。
 
 ## LLM 话题 JSON 契约（历史，已被 D26 共享 Inference Action 取代）
 
@@ -157,11 +157,9 @@ alpha=0.6, merge_radius=20.0, max_steps=60`；另有 `view_cameras`（五目阵�
   随请求显式提供，不再由代理按 `view_stamps` 自取缓存。语义解析
   （landmark/viewpoint JSON、is_found）全部保留在本 planner——Inference 层只
   返回模型原始文本，符合"算法留在 Planner 层"边界。模型选择经 planner 部署
-  参数 `llm_model_name`（逻辑模型名，默认 `citynav`）交给 Inference 运行时解析。
-- **D27（grounding/CLIP 仍宿主 HTTP，Tool 化轮已知偏离）**：grounded_sam
-  (:8100) 与 clip (:8101) 仍按宿主 HTTP 直连消费，未走 ROS 2 Inference
-  Action 面。原因：两服务由并行主任务维护、契约已锁定（字段名逐字），本轮
-  Tool 化范围=任务入口与云 LLM；接入共享 Inference 面列为后续项。
+  参数 `llm_model_name`（逻辑模型名，默认 `vlm`）交给 Inference 运行时解析。
+- **D27（本地推理接入）**：Planner 通过 ROS 服务调用 Grounded SAM 和 CLIP，
+  由 Inference 转发到现有宿主 worker；历史验证轮次使用直接 HTTP，不能作为新接线的运行证据。
 
 ## M2 容器内验证与 DDS 生命周期（2026-11-18 缺口补齐轮闭环）
 

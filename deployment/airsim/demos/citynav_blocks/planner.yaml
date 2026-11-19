@@ -4,9 +4,7 @@
 # config/inference.cloud.local.yaml + inference 容器），相机命名统一在
 # view_cameras（City* 五目阵，与 settings.json/inference 侧一致）。
 #
-# NOTE: run.py rewrites the __HOST__ token below to the measured host address
-# (host.docker.internal or the NAT gateway IPv4) when it generates
-# <output>/planner.yaml; the compute container loads the generated copy.
+# Worker addresses are configured in inference.yaml, not in the planner.
 
 /drone0/citynav_planner:
   ros__parameters:
@@ -22,12 +20,10 @@
     max_result_age_s: 90.0
     view_freshness_s: 2.0
     # Shared Inference Function logical model name (frames variant).
-    llm_model_name: citynav
+    llm_model_name: vlm
     # Cross-task memory exploit window (deployment-level, D4; the shared
     # NavigateToSemanticGoal contract carries no such field).
     use_memory: true
-    grounding_url: http://__HOST__:8100/models/grounded_sam/greedy_mask_predict
-    clip_url: http://__HOST__:8101/models/clip/score
     # GS_EMPTY_CACHE service mode: the first inference after each idle period
     # re-expands the torch caching allocator (measured 78.6 s cold, 3-5 s
     # warm, run-20261118b probe log/citynav/pc-e2e/gs_probe.py), far above

@@ -221,8 +221,8 @@ def main():
     parser.add_argument('--expect-stuck', action='store_true',
                         help='M6 stuck1 case: the grounding service was made '
                              'to always answer seg_success=false (stub on the '
-                             'host, grounding_url repointed in <output>/ '
-                             'planner.yaml + restart-compute) with a 5-'
+                             'host, grounded_sam_endpoint repointed in '
+                             '<output>/inference.yaml + restart-compute) with a 5-'
                              'landmark instruction, so every cycle plans zero '
                              'displacement. Gates: FAULT with detail=stuck '
                              'from the upgraded progress criterion, >=4 zero-'
@@ -521,9 +521,9 @@ def main():
                     'PASS' if revision == 0 and accepted_goals == 0 else 'FAIL')
                 (args.output / 'fault-injection.json').write_text(json.dumps(
                     {'fault': 'grounding_always_empty_persistent',
-                     'injection': 'grounding_url repointed to the host stub '
+                     'injection': 'grounded_sam_endpoint repointed to the host stub '
                                   '(validation/grounding_stub.py, always '
-                                  'seg_success=false) in <output>/planner.yaml '
+                                  'seg_success=false) in <output>/inference.yaml '
                                   '+ restart-compute; 5-landmark instruction '
                                   'so task completion cannot precede the '
                                   '4-cycle window',

@@ -5,3 +5,7 @@
   ros__parameters:
     use_sim_time: true
     endpoint: http://127.0.0.1:8013
+/drone0/image_text_inference:
+  ros__parameters:
+    grounded_sam_endpoint: http://__HOST__:8100
+    clip_endpoint: http://__HOST__:8101

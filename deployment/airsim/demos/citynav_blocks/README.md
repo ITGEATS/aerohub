@@ -3,7 +3,7 @@
 算法组件：`src/tool/navigation/planner/citynav/`（契约与状态见其 README 与
 `log/citynav/contract/result-20261117.md`）。迁移方案为本地工作文档
 （`.trae/documents/`，不随仓库分发）；接口、偏离与验收边界以本 README、
-planner/proxy 包 README 和 [validation.json](validation.json) 为准。
+Planner README 和 [validation.json](validation.json) 为准。
 
 ## 拓扑（四方，Windows 宿主 + Docker Desktop 适配）
 
@@ -13,7 +13,7 @@ planner/proxy 包 README 和 [validation.json](validation.json) 为准。
 | 飞控板 | Docker Desktop：flight-board v0.1.1 `vehicle` 容器（PX4 SITL + Agent，传感器关闭）+ `clock` 容器 |
 | 传感器桥 | flight-board 镜像独立 `sensor` 容器：City* 五目阵 10 路图像（5×rgb + 5×depth_planar，256×256@5Hz）+ camera_info + 静态 TF |
 | 算力板 | onboard-computer v0.1.1 `compute` 容器（AS2 + FollowTimedPath + `uav_citynav_planner`，任务入口 = 共享 `NavigateToSemanticGoal` Action `to_semantic_goal`） |
-| Inference | onboard-computer v0.1.1 `inference` 容器（Tool 化改造 2026-11-18：共享 Inference Function `uav_inference` 的 `InferVisionLanguageFrames` ActionServer + uv 隔离云 worker，逻辑模型名 `citynav` → glm-4v-flash，出公网调用在此层；替代已删除的私有 `proxy`/`uav_citynav_llm_proxy` 容器） |
+| Inference | onboard-computer v0.1.1 `inference` 容器：提供 VLM 单图和多图 Action，共用逻辑模型 `vlm` 和一个云 worker；通过 ROS 服务代理 Grounded SAM 与 CLIP 宿主 worker。 |
 | 工作站 | `mission.py` 一次性容器（osrf/ros humble，经 Action 调用算力板 Tool 函数）+ `--observe` 时的 observer 容器 |
 | 推理服务 | Windows 宿主 GPU：grounded_sam :8100 / clip :8101（主任务维护，本 Demo 只消费并健康检查，不停止） |
 
@@ -25,10 +25,9 @@ planner/proxy 包 README 和 [validation.json](validation.json) 为准。
 - 容器访问 Windows 宿主（Blocks RPC/TCP、GPU 服务）的地址由 `start` 时的
   `host_probe.py` 实测选定（host.docker.internal 或 vEthernet IPv4，需同时
   打通 RPC TCP 与两服务 /health/ready），写入 `topology.json`；
-- planner 参数文件中的 `__HOST__` 占位符由 run.py 替换后生成
-  `<output>/planner.yaml`，compute 加载该生成副本（Tool 化改造后云 LLM 不再
-  经 planner.yaml 代理节配置，供应商绑定在 gitignored 的
-  `config/inference.cloud.local.yaml`）；
+- `run.py` 只在 `<output>/inference.yaml` 中填入宿主 worker 地址。Planner 通过
+  ROS 调用 Inference，不持有 worker URL；云 VLM 与 SPF 共用 `models.vlm.cloud`
+  配置和 `deployment/inference/vision_language_run.py` 启动入口；
 - 起点偏离：任务书起点 (-10,-10,-8) 为 AirSim NED（z 负=上）。空中投放会在
   解锁前自由落体碰地，故按 SPF 已验证模式落地为**地面 teleport (-10,-10) +
   原生起飞 1.5 m**；评分目标 OrangeBall NED (34.25,33.10,-3.68) 换算为 odom
@@ -49,13 +48,10 @@ python deployment/airsim/demos/citynav_blocks/run.py mission --output log/cityna
 python deployment/airsim/demos/citynav_blocks/run.py stop    --output log/citynav/pc-e2e/run-XXXX
 ```
 
-本机前提（个人配置不入库，贡献指导 6.2）：运行会话需先设置两个环境变量——
-`CITYNAV_BLOCKS_PATH`（指向本机 Blocks `WindowsNoEditor` 目录）与
-`OPENAI_API_KEY`（智谱 key，从私有存储导出；供应商绑定在 gitignored 的
-`config/inference.cloud.local.yaml`，经 `docker -e` 注入 inference 容器的云
-worker，不落库；2026-11-19 起不再读取历史 `legacy_stub/.env`）。GPU 推理服务
-由主任务在宿主运行，`start` 的 host_probe 与 `health` 会检查其可达性；
-本 Demo 不启动也不停止它们。
+运行会话需设置 `CITYNAV_BLOCKS_PATH`，指向本机 Blocks `WindowsNoEditor` 目录。
+云模型、地址和凭据从本地 `config/inference.cloud.local.yaml` 的 `models.vlm.cloud`
+取得；配置引用的环境变量按名称转发，不从 legacy stub 读取。GPU 推理服务仍在宿主运行，
+`start` 的 host_probe 与 `health` 会检查其可达性；本 Demo 不启动也不停止它们。
 
 预留开关（本轮不启用）：`--cancel-after N`（goal 后 N 秒注入 `citynav/cancel`）、
 `--use-memory 0|1`（goal payload 记忆开关，跨任务 exploit 复用轮使用）。

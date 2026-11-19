@@ -1,42 +1,26 @@
-"""CLIP 评分服务客户端（纯 stdlib HTTP；服务由并行任务建设，契约固定）。
-
-契约（任务规格锁定）：POST /models/clip/score，请求
-{"images_b64": [...], "texts": [...]} → {"similarity": [[...]],
-"model_version": str}，similarity[i][j]=第 i 图对第 j 文本的余弦相似度。
-服务端 schema 限制单次 images/texts 各 ≤16，本客户端按 16 图分块串行请求。
-
-用途：exploit 路径节点图 ×剩余 landmark 评分（memory.py
-nodes_landmarks_similarity 的注入回调；D19/D23 见包 README）。
-"""
-import json
-import urllib.error
-import urllib.request
-
+"""CLIP ROS client for scoring memory images against landmark text."""
 from .grounding_client import ClientError
+from .inference_client import call_inference
 
 MAX_IMAGES_PER_REQUEST = 16
 
 
 class ClipScoreClient:
-    def __init__(self, url: str, timeout_s: float = 30.0):
-        self.url = url
+    def __init__(self, node, timeout_s: float = 30.0):
+        from uav_inference_interfaces.srv import InferClipScores
+
+        self.request_type = InferClipScores.Request
+        self.client = node.create_client(InferClipScores, 'inference/clip/score')
         self.timeout_s = timeout_s
 
     def _post(self, images_b64, texts):
-        payload = json.dumps({"images_b64": list(images_b64),
-                              "texts": list(texts)}).encode("utf-8")
-        req = urllib.request.Request(
-            self.url, data=payload,
-            headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                out = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            raise ClientError(f"clip service failure: {exc}") from exc
-        sim = out.get("similarity")
-        if not isinstance(sim, list) or len(sim) != len(images_b64):
+        request = self.request_type(images_b64=list(images_b64), texts=list(texts),
+                                    timeout=self.timeout_s)
+        sim = list(call_inference(self.client, request, self.timeout_s).similarity)
+        width = len(texts)
+        if not width or len(sim) != len(images_b64) * width:
             raise ClientError("clip service bad similarity shape")
-        return sim
+        return [sim[i:i + width] for i in range(0, len(sim), width)]
 
     def score(self, images_b64, texts):
         """→ similarity 矩阵（list[list[float]]，行序与 images_b64 一致）。"""

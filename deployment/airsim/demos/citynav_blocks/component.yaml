@@ -26,7 +26,7 @@ runtime:
                  cloud-LLM(glm-4v-flash via shared Inference Function)]
   build: 'run.py prepare (colcon overlay into log/citynav/pc-e2e/ros_ws; shared images untouched, per AGENTS overlay policy)'
   launch: deployment/airsim/demos/citynav_blocks/run.py
-  configuration: deployment/airsim/demos/citynav_blocks/planner.yaml (run.py rewrites __HOST__ into <output>/planner.yaml)
+  configuration: deployment/airsim/demos/citynav_blocks/planner.yaml (host worker addresses are rendered separately into <output>/inference.yaml)
   camera_rate_hz: 5.0
   sensors: deployment/airsim/demos/citynav_blocks/settings.json (City* five-eye array, ImageType 0+1, 256x256, FOV 90; ImageType 2 forbidden by contract)
   inference: 'GPU services run on the Windows host (0.0.0.0:8100/8101); containers reach them via the address chosen by host_probe.py (host.docker.internal or vEthernet IPv4), recorded in topology.json'

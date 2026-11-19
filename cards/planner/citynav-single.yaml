@@ -22,9 +22,8 @@ description: |
   (InferVisionLanguageFrames action; cloud glm-4v-flash behind it, provider
   binding and credentials outside this Tool - Tool-ified 2026-11-18, the
   private workstation llm_proxy package and citynav/llm topics were removed
-  and upstream prompts moved verbatim into the planner package), the host
-  grounded_sam (:8100) and clip (:8101) HTTP inference services (declared
-  deviation D27: still direct host HTTP, not the ROS 2 Inference surface),
+  and upstream prompts moved verbatim into the planner package), Grounded SAM
+  and CLIP via ROS 2 Inference services that forward to the host workers,
   and the flight_board sensor/clock bridge; cancel enters STOPPING, stops the
   Behavior and confirms speed<0.2 m/s for 1 s before STOPPED.
   Shared runtime: the planner node is co-located with the AS2 state

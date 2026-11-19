@@ -1,8 +1,9 @@
-"""PNG 纯 Python 编解码与 grounding/clip HTTP 客户端单测（无网络：
-monkeypatch urlopen）。"""
+"""PNG codecs and planner behavior at the Inference ROS client interface."""
 import base64
-import json
 import struct
+import sys
+from concurrent.futures import Future
+from types import SimpleNamespace
 import zlib
 
 import numpy as np
@@ -14,17 +15,24 @@ from uav_citynav_planner.grounding_client import (ClientError, decode_png_gray,
                                                   encode_png)
 
 
-def _fake_response(payload: dict):
-    class Resp:
-        def __enter__(self):
-            return self
+@pytest.fixture
+def inference_node(monkeypatch):
+    service = SimpleNamespace(Request=SimpleNamespace)
+    monkeypatch.setitem(sys.modules, 'uav_inference_interfaces.srv',
+                        SimpleNamespace(InferGroundedSam=service, InferClipScores=service))
+    calls = []
+    replies = []
 
-        def __exit__(self, *a):
-            return False
+    def create_client(_, name):
+        def call_async(request):
+            calls.append((name, request))
+            future = Future()
+            future.set_result(replies.pop(0))
+            return future
 
-        def read(self):
-            return json.dumps(payload).encode("utf-8")
-    return Resp()
+        return SimpleNamespace(service_is_ready=lambda: True, call_async=call_async)
+
+    return SimpleNamespace(create_client=create_client), calls, replies
 
 
 def test_png_gray_roundtrip():
@@ -71,58 +79,41 @@ def test_decode_png_sub_filter():
     assert np.array_equal(decode_png_gray(png), original)
 
 
-def test_grounding_client_success_and_fail(monkeypatch):
+def test_grounding_client_success_and_fail(inference_node):
+    node, calls, replies = inference_node
     mask = np.zeros((8, 8), np.uint8)
     mask[2:5, 3:6] = 255
-    calls = {}
-
-    def fake_urlopen(req, timeout=None):
-        calls["body"] = json.loads(req.data.decode("utf-8"))
-        calls["url"] = req.full_url
-        return _fake_response({"mask_b64": base64.b64encode(
-            encode_png(mask)).decode("ascii"),
-            "seg_success": True, "phrases": ["building"]})
-    monkeypatch.setattr(gc.urllib.request, "urlopen", fake_urlopen)
-    client = gc.GroundingClient("http://x/models/grounded_sam/greedy_mask_predict")
+    replies.extend([SimpleNamespace(success=True, seg_success=True,
+                                    mask_b64=base64.b64encode(encode_png(mask)).decode()),
+                    SimpleNamespace(success=True, seg_success=False, mask_b64='')])
+    client = gc.GroundingClient(node)
     rgb = np.zeros((8, 8, 3), np.uint8)
     rgb[:, :, 2] = 200  # blue-ish in RGB
     m, ok = client.greedy_mask_predict(rgb, "building")
     assert ok and np.array_equal(m, mask)
-    assert calls["url"].endswith("/greedy_mask_predict")
-    body = calls["body"]
-    assert body["text_prompt"] == "building"
-    assert body["box_threshold"] == 0.3 and body["text_threshold"] == 0.25
-    assert body["image_b64"]  # RGB→BGR 交换后的 PNG base64
-
-    def fake_fail(req, timeout=None):
-        return _fake_response({"mask_b64": "", "seg_success": False})
-    monkeypatch.setattr(gc.urllib.request, "urlopen", fake_fail)
+    name, request = calls[0]
+    assert name == 'inference/grounded_sam/infer'
+    assert request.text_prompt == 'building'
+    assert request.box_threshold == 0.3 and request.text_threshold == 0.25
+    assert request.image_b64
     m, ok = client.greedy_mask_predict(rgb, "helicopter")
     assert not ok and m is None
 
 
-def test_grounding_client_http_error_raises(monkeypatch):
-    def boom(req, timeout=None):
-        raise OSError("connection refused")
-    monkeypatch.setattr(gc.urllib.request, "urlopen", boom)
-    client = gc.GroundingClient("http://x")
-    with pytest.raises(ClientError):
+def test_grounding_client_worker_error_raises(inference_node):
+    node, _, replies = inference_node
+    replies.append(SimpleNamespace(success=False, error_code='NOT_READY', message='offline'))
+    client = gc.GroundingClient(node)
+    with pytest.raises(ClientError, match='NOT_READY'):
         client.greedy_mask_predict(np.zeros((2, 2, 3), np.uint8), "t")
 
 
-def test_clip_client_chunks_16(monkeypatch):
-    requests = []
-
-    def fake_urlopen(req, timeout=None):
-        body = json.loads(req.data.decode("utf-8"))
-        requests.append(body)
-        n = len(body["images_b64"])
-        return _fake_response({"similarity": [[0.1] * len(body["texts"])
-                                              for _ in range(n)],
-                               "model_version": "clip-vit-large-patch14"})
-    monkeypatch.setattr(cc.urllib.request, "urlopen", fake_urlopen)
-    client = cc.ClipScoreClient("http://y/models/clip/score")
+def test_clip_client_chunks_16(inference_node):
+    node, calls, replies = inference_node
+    replies.extend(SimpleNamespace(success=True, similarity=[0.1, 0.2] * n) for n in (16, 4))
+    client = cc.ClipScoreClient(node)
     images = [f"img{i}" for i in range(20)]
     sim = client.score(images, ["a photo of x", "a photo of y"])
-    assert [len(r["images_b64"]) for r in requests] == [16, 4]
-    assert len(sim) == 20 and len(sim[0]) == 2
+    assert [name for name, _ in calls] == ['inference/clip/score'] * 2
+    assert [r.images_b64 for _, r in calls] == [images[:16], images[16:]]
+    assert sim == [[0.1, 0.2]] * 20

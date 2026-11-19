@@ -39,7 +39,7 @@ def create_app(factory, request_type, response_type, path="/infer",
             raise HTTPException(503, "model is not ready")
         return dict(app.state.predictor.metadata, busy=app.state.busy)
 
-    async def infer(body, _method=method):
+    async def infer(body, predictor_method_name):
         if not app.state.ready:
             raise HTTPException(503, "model is not ready")
         # No await between checking and acquiring: this runs on one event loop.
@@ -49,7 +49,7 @@ def create_app(factory, request_type, response_type, path="/infer",
 
         async def execute():
             try:
-                predictor_method = getattr(app.state.predictor, _method)
+                predictor_method = getattr(app.state.predictor, predictor_method_name)
                 return await run_in_threadpool(
                     partial(predictor_method, body.model_dump())
                 )
@@ -66,11 +66,13 @@ def create_app(factory, request_type, response_type, path="/infer",
         task.add_done_callback(lambda result: result.exception() if not result.cancelled() else None)
         return await asyncio.shield(task)
 
-    infer.__annotations__["body"] = request_type
-    app.post(path, response_model=response_type)(infer)
-    for extra_path, extra_request, extra_response, extra_method in extra_routes:
-        async def handler(body, _method=extra_method):
-            return await infer(body, _method=_method)
-        handler.__annotations__["body"] = extra_request
-        app.post(extra_path, response_model=extra_response)(handler)
+    def register(route, input_type, output_type, predictor_method_name):
+        async def handler(body):
+            return await infer(body, predictor_method_name)
+        handler.__annotations__["body"] = input_type
+        app.post(route, response_model=output_type)(handler)
+
+    register(path, request_type, response_type, method)
+    for route in extra_routes:
+        register(*route)
     return app

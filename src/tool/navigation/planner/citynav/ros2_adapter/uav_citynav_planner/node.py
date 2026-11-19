@@ -103,11 +103,8 @@ class CityNavPlannerNode(Node):
         self.declare_parameter("handoff_lead_s", 0.5)
         # Tool 化：逻辑模型名交给共享 Inference Function；use_memory 从任务
         # 参数降为部署参数（共享 NavigateToSemanticGoal 契约无此字段）。
-        self.declare_parameter("llm_model_name", "citynav")
+        self.declare_parameter("llm_model_name", "vlm")
         self.declare_parameter("use_memory", True)
-        self.declare_parameter("grounding_url",
-                               "http://127.0.0.1:8100/models/grounded_sam/greedy_mask_predict")
-        self.declare_parameter("clip_url", "http://127.0.0.1:8101/models/clip/score")
         self.declare_parameter("memory_graph_path", "citynav_memory.json")
 
         ns = self.get_parameter("vehicle_namespace").value
@@ -189,9 +186,9 @@ class CityNavPlannerNode(Node):
         self._llm = LlmFramesClient(
             self, self.get_parameter("llm_model_name").value,
             self.get_parameter("max_result_age_s").value)
-        self._grounding = GroundingClient(self.get_parameter("grounding_url").value,
+        self._grounding = GroundingClient(self,
                                           timeout_s=self._cfg["service_timeout_s"])
-        self._clip = ClipScoreClient(self.get_parameter("clip_url").value,
+        self._clip = ClipScoreClient(self,
                                      timeout_s=self._cfg["service_timeout_s"])
 
         self._worker = threading.Thread(target=self._work_loop, daemon=True)

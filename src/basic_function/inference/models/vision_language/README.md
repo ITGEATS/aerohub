@@ -28,7 +28,7 @@ act on; the provider message shape is the upstream one (per-frame
 when `system_prompt` is non-empty). No navigation semantics (landmark/viewpoint
 JSON, is_found parsing) live here — the Function returns raw model text. HTTP
 surface: `/infer_frames` on the same uv-isolated worker
-(`INFERENCE_MODEL_NAMES` registers the logical entries, e.g. `citynav`).
+(`INFERENCE_MODEL_NAMES` registers the logical entries, e.g. `vlm`).
 
 ## Configuration
 
@@ -40,21 +40,21 @@ The ignored file maps **logical model_name -> declared engines -> engine configu
 
 ```yaml
 models:
-  spf:
+  vlm:
     cloud:
       base_url: https://open.bigmodel.cn/api/paas/v4
       model: glm-4v-flash
       api_key: "your-api-key"
 ```
 
-Callers choose `model_name="spf"`; `glm-4v-flash` is a private provider model,
+Callers choose `model_name="vlm"`; `glm-4v-flash` is a private provider model,
 not the public identity. URL defaults to the example endpoint if omitted; the
 provider model defaults to the logical name. No omitted engine is supported.
 With one engine it is selected automatically. Multiple declarations require:
 
 ```yaml
 active_engines:
-  spf: cloud
+  vlm: cloud
 ```
 
 Selection never falls back on failure. A declaration is not an implementation:
@@ -72,9 +72,9 @@ Git/logs and restrict permissions where appropriate. Docker admins can read file
 and container environments. Old files are not rewritten or deleted. Restart after
 changes. `INFERENCE_MODEL_CONFIG` selects a different catalog if needed.
 
-The deployment loads the logical `spf` entry. The generic VLM worker can explicitly
+The deployment loads the logical `vlm` entry. The generic VLM worker can explicitly
 serve other logical entries of the same input/output contract through the internal
-`INFERENCE_MODEL_NAMES` comma-separated deployment setting (default: `spf`);
+`INFERENCE_MODEL_NAMES` comma-separated deployment setting (default: `vlm`);
 unrelated entries such as YOPO/CUDA are left to their own model adapters.
 
 ## Prepare and run
@@ -83,7 +83,7 @@ unrelated entries such as YOPO/CUDA are left to their own model adapters.
 `UV_PROJECT_ENVIRONMENT` may point to a deployment-specific external workspace.
 For ROS Humble, prepare using Python 3.10 in the same environment/path used to run it.
 The SPF deployment prepares its worker in the stable compute image, outside the image.
-The public setup selector registers logical ID `spf`; changing its remote provider
+The public setup selector registers logical ID `vlm`; changing its remote provider
 model does not change that ID or register another preparation entry.
 
 ```bash

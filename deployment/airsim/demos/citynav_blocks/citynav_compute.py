@@ -2,13 +2,11 @@
 
 Owns the compute-role children only: the shared AS2 execution chain
 (platform + state estimator + controller + motion behaviors with the
-FollowTimedPath backend) and the uav_citynav_planner node. The LLM proxy runs
-in the workstation container (it is the only role that reaches the public
-cloud API); task orchestration lives in mission.py.
+FollowTimedPath backend) and the uav_citynav_planner node. The separate
+Inference container handles cloud requests; task orchestration lives in mission.py.
 
 The planner params file is taken from CITYNAV_PLANNER_PARAMS (the run.py
-generated copy under /evidence, where __HOST__ has been replaced by the
-measured host address); it falls back to the repository planner.yaml.
+copy under /evidence); it falls back to the repository planner.yaml.
 """
 import os
 from pathlib import Path

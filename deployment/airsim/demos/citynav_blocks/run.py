@@ -11,8 +11,8 @@ WSL-based SPF run.py:
   - containers reach the Windows host (Blocks RPC/TCP + GPU inference
     services) through an address picked at start time by host_probe.py
     (host.docker.internal or a vEthernet IPv4; recorded in topology.json);
-  - the planner/proxy share one generated params file (<output>/planner.yaml)
-    where run.py replaces the __HOST__ token of the repository planner.yaml.
+  - planner and Inference load separate generated parameter files;
+    host worker addresses are rendered into <output>/inference.yaml.
 
 PX4 must be the first TCP client after each Blocks restart (single-client
 slot); every case therefore runs start -> mission -> stop with a fresh Blocks.
@@ -249,27 +249,10 @@ def pick_domain(output):
     (output / 'domain.json').write_text(json.dumps({'domain': available[0]}) + '\n')
 
 
-def api_key():
-    # Key source per the shared convention: the gitignored
-    # config/inference.cloud.local.yaml references api_key_env
-    # OPENAI_API_KEY, so the operator exports it in the session (from any
-    # private store). The historical legacy_stub/.env fallback was removed:
-    # active deployment entries must not depend on the stage-1 baseline
-    # directory (contrib guide 2.2/6.2).
-    key = os.environ.get('OPENAI_API_KEY', '').strip()
-    if key:
-        return key
-    raise RuntimeError(
-        'OPENAI_API_KEY is not set; export it in the session first '
-        '(PowerShell: $env:OPENAI_API_KEY = ...) or switch '
-        'config/inference.cloud.local.yaml to an inline api_key')
-
-
 def generate_planner_params(output, host):
-    """Repository planner.yaml with the __HOST__ token replaced by the
-    measured host address; the compute/proxy containers load this copy."""
-    text = (APP / 'planner.yaml').read_text().replace('__HOST__', host)
-    (output / 'planner.yaml').write_text(text)
+    (output / 'planner.yaml').write_text((APP / 'planner.yaml').read_text())
+    (output / 'inference.yaml').write_text(
+        (APP / 'inference.yaml').read_text().replace('__HOST__', host))
 
 
 def launch_compute(output):
@@ -281,21 +264,21 @@ def launch_compute(output):
 
 
 def launch_inference(output):
-    """Shared Inference Function (frames variant) in the compute-role image.
+    import yaml
 
-    Tool 化改造：私有 uav_citynav_llm_proxy 已删除；云 LLM 走
-    InferVisionLanguageFrames → vision_language_frames ROS 节点 + uv 隔离
-    worker（逻辑模型名 citynav，供应商绑定在 config/inference.cloud.local.yaml，
-    gitignored）。与 SPF 的 launch_inference 同构（同一 worker 进程，
-    /infer_frames 路由）。"""
+    cloud = yaml.safe_load(Path(INFERENCE_CONFIG).read_text())['models']['vlm']['cloud']
+    environment = []
+    for field in ('base_url_env', 'model_env', 'api_key_env'):
+        key = cloud.get(field)
+        if key and key in os.environ:
+            environment += ['-e', key]
     launch(output, 'inference', ONBOARD, ['-lc',
            'source /opt/ros/humble/setup.bash && '
            'source ' + ROS_WS + '/install/setup.bash && '
-           'exec python3 /repo/deployment/inference/vision_language_frames_run.py'],
-           env=['-e', 'INFERENCE_MODEL_NAMES=citynav',
+           'exec python3 /repo/deployment/inference/vision_language_run.py'],
+           env=[*environment, '-e', 'INFERENCE_IMAGE_TEXT=1',
                 '-e', 'INFERENCE_MODEL_CONFIG=/run/inference/models.yaml',
-                '-e', 'OPENAI_API_KEY=' + api_key(),
-                '-e', 'INFERENCE_ROS_PARAMETERS=/repo/deployment/airsim/demos/citynav_blocks/inference.yaml',
+                '-e', 'INFERENCE_ROS_PARAMETERS=/evidence/inference.yaml',
                 '-e', 'VEHICLE_NAMESPACE=drone0'],
            mounts=['-v', CLOUD_ENV + ':/cloud-env:ro',
                    '-v', INFERENCE_CONFIG + ':/run/inference/models.yaml:ro'],
@@ -616,12 +599,13 @@ def main():
     parser.add_argument('--expect-fault', action='store_true',
                         help='mission action only: M6 fault1 gates (the LLM '
                              'path was made persistently unreachable via a '
-                             'dead proxy base_url in <output>/planner.yaml '
+                             'dead models.vlm.cloud.base_url in the local Inference config '
                              '+ restart-compute before running the case)')
     parser.add_argument('--expect-stuck', action='store_true',
                         help='mission action only: M6 stuck1 gates (grounding '
                              'repointed to the always-empty host stub in '
-                             '<output>/planner.yaml + restart-compute; run '
+                             '<output>/inference.yaml (grounded_sam_endpoint) '
+                             '+ restart-compute; run '
                              'with a >=4-landmark instruction)')
     parser.add_argument('--timeout', type=float, default=900.)
     parser.add_argument('--target', type=float, nargs=3, default=[34.25, 33.10, 3.68],

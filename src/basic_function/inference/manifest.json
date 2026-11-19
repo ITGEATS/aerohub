@@ -25,9 +25,9 @@
       "directory": "src/basic_function/inference/models/clip",
       "description": "CLIP ViT-L/14 image-text cosine similarity scoring for CityNav memory exploit node evaluation"
     },
-    "spf": {
+    "vlm": {
       "directory": "src/basic_function/inference/models/vision_language",
-      "description": "SPF logical inference model; currently implemented by the Cloud alternative, remote model privately configured"
+      "description": "Shared vision-language inference with a deployment-configured cloud binding"
     }
   }
 }
