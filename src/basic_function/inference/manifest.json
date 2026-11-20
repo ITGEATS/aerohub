@@ -17,6 +17,10 @@
       "directory": "src/basic_function/inference/models/yopo",
       "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"
     },
+    "aerovla": {
+      "directory": "src/basic_function/inference/models/aerovla",
+      "description": "AeroVLA openvla-7b+LoRA policy inference on RoboPi Houmo xh2 NPU (vision/prefill/decode HMM triple); images and prompt ids in, raw model text out"
+    },
     "spf": {
       "directory": "src/basic_function/inference/models/vision_language",
       "description": "SPF logical inference model; currently implemented by the Cloud alternative, remote model privately configured"
