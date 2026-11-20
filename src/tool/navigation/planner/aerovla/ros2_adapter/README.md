@@ -22,7 +22,10 @@ python3 -m uav_aerovla_planner.planner_node
 - 服务客户端：`~/cancel`（`std_srvs/Trigger`，停止并发布空轨迹）。
 - 参数：`service_name`（默认 `inference/aerovla/infer`）、`target_position`
   （double[3]，GT 目标——oracle 依赖，卡片如实声明）、`obj_desc`（string，
-  TravelUAV 目标描述）、`rate_hz`（默认 0.5，≈2 s 推理窗口）、`enabled`、
+  TravelUAV 目标描述）、`prompt_table`（string，预分词 prompt 表路径；板端无
+  `transformers`，正式运行必须提供，文件随 aerovla 组件部署到
+  `/data/aerohub/lib/aerovla/prompt_ids_blocks.json`，表内 `obj_desc` 与本参数
+  不一致时报错）、`rate_hz`（默认 0.5，≈2 s 推理窗口）、`enabled`、
   `vehicle_id`、`max_input_skew_s`（0.1，同拍检查）、`inference_timeout_s`、
   `valid_from_lead_s`（0.05）、`max_consecutive_failures`（3，连续失败暂停循环）。
 
@@ -36,5 +39,7 @@ python -m pytest tests -q
 ```
 
 依赖：`rclpy`、`sensor_msgs`、`geometry_msgs`、`std_msgs`、`std_srvs`、
-`uav_inference_interfaces`、`uav_planner_interfaces`、numpy、scipy；
-分词需 `transformers` 与 openvla-7b tokenizer（`AEROVLA_TOKENIZER_PATH` 可配）。
+`uav_inference_interfaces`、`uav_planner_interfaces`、numpy、scipy。
+input_ids 两条路径：`prompt_table` 预分词表（板端标准，表来自
+`log/aerovla/stage1` 验证约定，见 `deployment/airsim/config/aerovla/`），
+或 openvla-7b tokenizer（需 `transformers`，`AEROVLA_TOKENIZER_PATH` 可配）。

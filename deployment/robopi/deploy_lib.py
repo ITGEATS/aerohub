@@ -22,6 +22,7 @@ APPLICATIONS = {
     'catora': APP_PACKAGES,
     'swarm-formation': COMMON_PACKAGES | {'swarm_graph', 'traj_utils', 'plan_env', 'path_searching',
                                          'traj_opt', 'ego_planner', 'uav_swarm_formation_adapter', 'as2_navigation_inputs'},
+    'aerovla': {'uav_aerovla_planner'},
 }
 AS2_PACKAGES = {'uav_planner_interfaces', 'uav_follow_path_execution', 'as2_behavior', 'as2_behaviors_motion', 'as2_core', 'as2_motion_controller',
                 'as2_motion_reference_handlers', 'as2_msgs', 'as2_platform_pixhawk', 'as2_state_estimator',
@@ -198,6 +199,11 @@ def main():
             if (stage/app).exists():
                 text = (ROOT/'deployment/robopi/catora_env.sh').read_text().replace('/lib/catora/', '/lib/'+app+'/')
                 (stage/app/'env.sh').write_text(text)
+        if (stage/'aerovla').exists():
+            # Pre-tokenized prompt table (board has no transformers); node
+            # reads it through the prompt_table parameter.
+            shutil.copyfile(ROOT/'deployment/airsim/config/aerovla/prompt_ids_blocks.json',
+                            stage/'aerovla'/'prompt_ids_blocks.json')
         bundle = args.prepare_only or ROOT/'log/airsim/robopi-runtime/persistent-overlay.tar.gz'
         bundle.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(bundle, 'w:gz', format=tarfile.GNU_FORMAT) as archive:

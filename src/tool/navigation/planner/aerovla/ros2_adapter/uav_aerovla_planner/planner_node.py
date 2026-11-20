@@ -99,6 +99,10 @@ class AerovlaPlannerNode(Node):
         # (aerovla_wrapper_ui.py L46-76), not from onboard detection.
         self.target_position = param('target_position', [0.0, 0.0, 0.0])
         self.obj_desc = param('obj_desc', '')
+        # Input ids come from a pre-tokenized prompt table (board contract:
+        # no transformers on the board) when set; otherwise the openvla-7b
+        # tokenizer is used via prompts.prompt_token_ids.
+        prompt_table_path = param('prompt_table', '')
         rate_hz = param('rate_hz', 0.5)
         param('enabled', True)
         self.vehicle_id = param('vehicle_id', 'drone0')
@@ -114,6 +118,9 @@ class AerovlaPlannerNode(Node):
         if len(self.target_position) != 3 or not all(
                 math.isfinite(float(v)) for v in self.target_position):
             raise ValueError('target_position must be three finite doubles')
+        self.prompt_table = None
+        if prompt_table_path:
+            self.prompt_table = prompts.load_prompt_table(prompt_table_path)
 
         # Loop state.
         self.front = None
@@ -219,9 +226,13 @@ class AerovlaPlannerNode(Node):
         hint = policy.semantic_hint(ned_state['position'], ned_state['orientation'],
                                     enu_ned_vector(self.target_position))
         try:
-            input_ids = prompts.prompt_token_ids(hint, self.obj_desc)
+            if self.prompt_table is not None:
+                input_ids = prompts.table_prompt_ids(self.prompt_table, hint,
+                                                     self.obj_desc)
+            else:
+                input_ids = prompts.prompt_token_ids(hint, self.obj_desc)
         except Exception as error:
-            self.count_failure('TOKENIZER:' + str(error))
+            self.count_failure('PROMPT_IDS:' + str(error))
             return
         request = InferAeroVla.Request()
         request.request_id = '%s:%d:%s' % (self.task_id, self.step, uuid.uuid4().hex)

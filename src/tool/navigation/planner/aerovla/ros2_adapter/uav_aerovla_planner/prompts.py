@@ -16,6 +16,7 @@ fails the test, so the prompt cannot silently drift from the locked
 upstream contract.
 """
 
+import json
 import os
 
 # AST-LOCKED literal. Byte-identical to make_prompts.py L23 /
@@ -34,6 +35,13 @@ BOS_TOKEN_ID = 1
 # AEROVLA_TOKENIZER_PATH for host or relocated layouts.
 DEFAULT_TOKENIZER_PATH = "/data/local/workspace/openvla-7b"
 TOKENIZER_PATH_ENV = "AEROVLA_TOKENIZER_PATH"
+# Pre-tokenized prompt table (preferred on the board: the openvla-7b
+# tokenizer is not installed there). Upstream board contract: the assets
+# prompt_ids.json / prompt_ids_blocks.json tables are keyed by the 7 hint
+# literals and consumed verbatim by the deployed orchestrator; the ids in
+# log/aerovla/stage1/prompt_ids_blocks.json were generated with the
+# convention verified 8/8 EXACT and then ran a real episode (SUCCESS).
+PROMPT_TABLE_ENV = "AEROVLA_PROMPT_TABLE"
 
 
 def resolve_tokenizer_path(path=None):
@@ -69,3 +77,61 @@ def tokenize(text, tokenizer=None):
 
 def prompt_token_ids(hint, obj_desc, tokenizer=None):
     return tokenize(build_prompt_text(hint, obj_desc), tokenizer=tokenizer)
+
+
+def resolve_prompt_table_path(path=None):
+    """Env-configurable prompt table path without touching the filesystem."""
+    if path:
+        return path
+    return os.environ.get(PROMPT_TABLE_ENV)
+
+
+def load_prompt_table(path=None):
+    """Load a pre-tokenized prompt table.
+
+    Two accepted formats:
+
+    - wrapped (produced by the deployment tooling): ``{"obj_desc": <str>,
+      "prompts": {hint: [ids...]}}`` -- ``obj_desc`` is pinned so a node
+      configured with a different description fails LOUDLY instead of
+      silently feeding mismatched ids to the policy;
+    - bare upstream board format ``{hint: [ids...]}`` (e.g. the assets
+      prompt_ids.json) -- ``obj_desc`` is then unknown (``None``) and not
+      checked.
+    """
+    resolved = resolve_prompt_table_path(path)
+    if not resolved:
+        raise ValueError("prompt table path is empty; set the prompt_table "
+                         "parameter or " + PROMPT_TABLE_ENV)
+    with open(resolved, encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict) or not data:
+        raise ValueError("prompt table must be a non-empty object: " + str(resolved))
+    if "prompts" in data:
+        prompts_map = data["prompts"]
+        obj_desc = data.get("obj_desc")
+        if obj_desc is not None and not isinstance(obj_desc, str):
+            raise ValueError("prompt table obj_desc must be a string")
+    else:
+        prompts_map, obj_desc = data, None
+    if not isinstance(prompts_map, dict) or not prompts_map:
+        raise ValueError("prompt table has no hint entries: " + str(resolved))
+    table = {}
+    for hint, ids in prompts_map.items():
+        if not isinstance(ids, list) or not ids or \
+                any(type(v) is not int or v < 0 for v in ids):
+            raise ValueError("prompt table entry %r must be nonnegative int ids" % hint)
+        table[str(hint)] = ids
+    return {"obj_desc": obj_desc, "prompts": table}
+
+
+def table_prompt_ids(table, hint, obj_desc):
+    """Lookup ids for a hint; refuses a table pinned to another obj_desc."""
+    if table["obj_desc"] is not None and table["obj_desc"] != obj_desc:
+        raise ValueError("prompt table was generated for obj_desc %r, node "
+                         "is configured with %r" % (table["obj_desc"], obj_desc))
+    try:
+        return list(table["prompts"][hint])
+    except KeyError:
+        raise KeyError("prompt table has no entry for hint %r; available: %s"
+                       % (hint, sorted(table["prompts"]))) from None

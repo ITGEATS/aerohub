@@ -95,6 +95,58 @@ def test_tokenizer_path_resolution(monkeypatch):
     assert prompts.resolve_tokenizer_path("/explicit/path") == "/explicit/path"
 
 
+def test_prompt_table_wrapped_roundtrip(tmp_path):
+    """Wrapped table: obj_desc pinning + lookup by hint, verbatim ids."""
+    import json
+    path = tmp_path / "prompt_ids_blocks.json"
+    path.write_text(json.dumps({
+        "obj_desc": "The orange ball.",
+        "prompts": {"straight ahead ": [1, 5, 7], "to your left ": [1, 9]},
+    }), encoding="utf-8")
+    table = prompts.load_prompt_table(str(path))
+    assert table["obj_desc"] == "The orange ball."
+    assert prompts.table_prompt_ids(table, "straight ahead ",
+                                    "The orange ball.") == [1, 5, 7]
+    with pytest.raises(ValueError):
+        prompts.table_prompt_ids(table, "straight ahead ", "other desc")
+    with pytest.raises(KeyError):
+        prompts.table_prompt_ids(table, "behind you ", "The orange ball.")
+
+
+def test_prompt_table_bare_upstream_format(tmp_path):
+    """Bare {hint: ids} tables (assets prompt_ids.json) skip the obj_desc
+    check: obj_desc is unknown (None)."""
+    import json
+    path = tmp_path / "prompt_ids.json"
+    path.write_text(json.dumps({"forward-left ": [1, 3]}), encoding="utf-8")
+    table = prompts.load_prompt_table(str(path))
+    assert table["obj_desc"] is None
+    assert prompts.table_prompt_ids(table, "forward-left ", "anything") == [1, 3]
+
+
+def test_prompt_table_validation(tmp_path):
+    """Bad entries / empty table / empty path must fail loudly."""
+    import json
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"prompts": {"h": [1, "x"]}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        prompts.load_prompt_table(str(bad))
+    empty = tmp_path / "empty.json"
+    empty.write_text(json.dumps({}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        prompts.load_prompt_table(str(empty))
+    with pytest.raises(ValueError):
+        prompts.load_prompt_table("")
+
+
+def test_prompt_table_env_resolution(monkeypatch, tmp_path):
+    monkeypatch.delenv(prompts.PROMPT_TABLE_ENV, raising=False)
+    assert prompts.resolve_prompt_table_path() is None
+    monkeypatch.setenv(prompts.PROMPT_TABLE_ENV, "/tmp/table.json")
+    assert prompts.resolve_prompt_table_path() == "/tmp/table.json"
+    assert prompts.resolve_prompt_table_path("/explicit.json") == "/explicit.json"
+
+
 def test_policy_and_prompts_are_ros_free():
     """Constraint: ROS imports live only in planner_node.py. Checked on the
     TOP-LEVEL import list only, so prompts.load_tokenizer's deliberate lazy
