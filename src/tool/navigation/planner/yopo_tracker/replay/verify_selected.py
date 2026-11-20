@@ -156,6 +156,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--expect-empty', action='store_true', help='Real-model negative control')
     mode.add_argument('--fixture-heads', action='store_true', help='Synthetic positive tensors')
+    mode.add_argument('--service', action='store_true', help='Call the real isolated CUDA worker through ROS')
     args = parser.parse_args()
     if os.environ.get('ROS_LOCALHOST_ONLY') != '1':
         parser.error('Run in the isolated ROS fixture')
@@ -187,9 +188,15 @@ def main():
     spinner.start()
     tracker = None
     try:
-        tracker, digest = load_tracker(args.upstream)
-        tracker.timer_ctrl.cancel()
-        assert tracker.device == 'cuda', 'The replay baseline expects the real CUDA runtime'
+        if args.service:
+            from ros2_adapter.native.service_tracker import load_service_tracker
+            tracker, digest = load_service_tracker(args.upstream)
+            executor.add_node(tracker)
+            assert tracker.inference_client.wait_for_service(timeout_sec=10), 'Inference service unavailable'
+        else:
+            tracker, digest = load_tracker(args.upstream)
+            tracker.timer_ctrl.cancel()
+            assert tracker.device == 'cuda', 'The replay baseline expects the real CUDA runtime'
         if args.fixture_heads:
             use_fixture_heads(tracker)
         assert rig.action.wait_for_server(timeout_sec=5)
@@ -213,7 +220,8 @@ def main():
         if not args.expect_empty:
             assert canceled == (GoalStatus.STATUS_CANCELED, 2, True), canceled
         print(json.dumps(dict(result='pass', heads='fixture' if args.fixture_heads else 'native',
-                              model_device=tracker.device, weight_sha256=digest,
+                              inference='ROS worker' if args.service else 'local', model_device='cuda',
+                              weight_sha256=digest,
                               accepted=len(handoff.accepted), samples=samples, **counts)))
     finally:
         if tracker is not None:

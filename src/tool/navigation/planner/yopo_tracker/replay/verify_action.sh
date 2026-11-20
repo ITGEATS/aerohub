@@ -8,8 +8,12 @@ source /opt/yopo-tracker/install/local_setup.bash
 export ROS_LOCALHOST_ONLY=1
 
 cd "${TMPDIR:-/tmp}"
+packages=("$repo/src/tool/navigation/interfaces" "$repo/src/behavior/follow_path")
+if [[ "${1:-}" == --selected-service ]]; then
+  packages+=("$repo/src/basic_function/inference/interfaces" "$repo/src/basic_function/inference/ros2_adapter")
+fi
 colcon --log-base yopo-action-log build --base-paths \
-  "$repo/src/tool/navigation/interfaces" "$repo/src/behavior/follow_path" \
+  "${packages[@]}" \
   --build-base yopo-action-build --install-base yopo-action-install \
   --executor sequential --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
 source yopo-action-install/local_setup.bash
@@ -32,6 +36,36 @@ if [[ "${1:-}" == --selected-fixture ]]; then
 elif [[ "${1:-}" == --selected ]]; then
   shift
   /opt/vision/bin/python -u "$replay/verify_selected.py" /opt/yopo-tracker/upstream "$@"
+elif [[ "${1:-}" == --selected-service ]]; then
+  model="$repo/src/basic_function/inference/models/yopo_tracker"
+  runtime="$repo/src/basic_function/inference/runtime"
+  upstream=/opt/yopo-tracker/upstream
+  (
+    cd "$model"
+    export PYTHONPATH="$runtime:$PYTHONPATH" YOPO_TRACKER_UPSTREAM="$upstream"
+    export YOPO_TRACKER_WEIGHTS="$upstream/YOPO/saved/YOPO_1/epoch50.pth"
+    exec /opt/vision/bin/python -m uvicorn serve:app --host 127.0.0.1 --port 18082
+  ) &
+  worker=$!
+  python3 -m uav_inference.yopo_tracker_node --ros-args -r __ns:=/drone0 -p max_input_age_s:=0.0 &
+  facade=$!
+  trap 'kill "$worker" "$facade" "$behavior" 2>/dev/null || true; wait "$worker" "$facade" "$behavior" 2>/dev/null || true' EXIT
+  python3 - <<'PY'
+import time
+from urllib.error import URLError
+from urllib.request import urlopen
+
+deadline = time.monotonic() + 30
+while time.monotonic() < deadline:
+    try:
+        with urlopen('http://127.0.0.1:18082/health/ready', timeout=1):
+            break
+    except URLError:
+        time.sleep(.2)
+else:
+    raise SystemExit('YOPO-Tracker CUDA worker did not become ready')
+PY
+  /opt/vision/bin/python -u "$replay/verify_selected.py" "$upstream" "$2" --service
 elif [[ "${1:-}" == --live-handoff ]]; then
   export PYTHONPATH="$(dirname "$replay"):$PYTHONPATH"
   /opt/vision/bin/python -u "$replay/verify_live_handoff.py" -v

@@ -11,7 +11,7 @@ source:
 provides: [planner.yopo-tracker]
 cards: [cards/planner/yopo-tracker.yaml]
 roles:
-  compute: [YOPO-Tracker, ROS-2-adapter, AS2, FollowTimedPath]
+  compute: [YOPO-Tracker-planner, Inference-ROS-adapter, isolated-CUDA-worker, AS2, FollowTimedPath]
   workstation: [ROS-task-client, Takeoff-Land-client]
   simulator: [AirSim, RGB-D-bridge, simulation-clock]
   flight_controller: [PX4-SITL]
@@ -19,10 +19,11 @@ runtime:
   platform: linux-x86_64-NVIDIA
   base_image: ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.0
   flight_board_image: ghcr.io/popc0rn7/aerohub/flight-board:v0.1.0
-  dependencies: [ROS-2-Humble, as2_msgs, uav_planner_interfaces, uav_follow_path_execution, quadrotor_msgs, AirSim, PX4-SITL]
+  dependencies: [ROS-2-Humble, as2_msgs, uav_planner_interfaces, uav_follow_path_execution, uav_inference_interfaces, quadrotor_msgs, AirSim, PX4-SITL]
   build: deployment/yopo_tracker_humble/build.py
   entrypoint: deployment/yopo_tracker_humble/entrypoint.sh
   launch: src/tool/navigation/planner/yopo_tracker/ros2_adapter/bridge/live_node.py
+  worker: deployment/inference/start_yopo_tracker.sh
   configuration: src/tool/navigation/planner/yopo_tracker/ros2_adapter/README.md
   sitl_brake_calibration: deployment/yopo_tracker_humble/brake-calibration.sitl.json
   camera_profile: 'FrontCamera, rectified 320x192 RGB8 and 32FC1 axial depth, RELIABLE depth 1'
@@ -35,7 +36,8 @@ runtime:
     start_tracking: {address: /yopo_tracker_live/start, schema: std_srvs/srv/Trigger}
     stop_tracking: {address: /yopo_tracker_live/stop, schema: std_srvs/srv/Trigger}
     events: {address: /yopo_tracker_live/status, schema: std_msgs/msg/String}
-  readiness: native model initialized, matching RGB-D calibration and TF, fresh synchronized vehicle state, airborne hover and FollowTimedPath ready
+    inference: {address: /drone0/inference/yopo_tracker/infer, schema: uav_inference_interfaces/srv/InferYopoTracker}
+  readiness: CUDA worker healthy, ROS inference service available, matching RGB-D calibration and TF, fresh synchronized vehicle state, airborne hover and FollowTimedPath ready
   stop: latch stop through the Adapter and wait for the session's finished event and low-speed hover before native Land
   rollback: after confirmed stop and disarm, restore the prior source and matching overlay, then restart with a fresh target estimate
   persistence: none

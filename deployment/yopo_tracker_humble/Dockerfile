@@ -17,6 +17,8 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
 
 COPY upstream/Controller/src/utils/quadrotor_msgs /opt/yopo-tracker/interfaces/quadrotor_msgs
 COPY planner_interfaces /opt/yopo-tracker/interfaces/uav_planner_interfaces
+COPY inference_interfaces /opt/yopo-tracker/interfaces/uav_inference_interfaces
+COPY inference_ros /opt/yopo-tracker/interfaces/uav_inference
 RUN source /opt/ros/humble/setup.bash && \
     colcon --log-base /tmp/yopo-build-log build --base-paths interfaces \
       --build-base /tmp/yopo-build --install-base /opt/yopo-tracker/install \
@@ -24,7 +26,9 @@ RUN source /opt/ros/humble/setup.bash && \
 
 COPY upstream/YOPO upstream/YOPO
 COPY upstream/LICENSE upstream/LICENSE
-RUN echo 'a625490468cb8734867e51d2af2be68a8182bcbbbb1e0401b1d2a32e6ccd5f7f  upstream/YOPO/saved/YOPO_1/epoch50.pth' | sha256sum -c -
+RUN if [[ -d upstream/YOPO/saved ]]; then \
+      echo 'a625490468cb8734867e51d2af2be68a8182bcbbbb1e0401b1d2a32e6ccd5f7f  upstream/YOPO/saved/YOPO_1/epoch50.pth' | sha256sum -c -; \
+    fi
 
 COPY ros2_adapter ./ros2_adapter
 COPY entrypoint.sh brake-calibration.sitl.json ./

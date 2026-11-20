@@ -23,6 +23,8 @@ def main():
     parser.add_argument('--offline', action='store_true', help='Disable network access in build steps')
     parser.add_argument('--reuse-worker', action='store_true',
                         help='Build a local verification image sharing the specified CUDA worker layers')
+    parser.add_argument('--with-native-baseline', action='store_true',
+                        help='Include the checkpoint for standalone native diagnostics and replay')
     args = parser.parse_args()
     if args.reuse_worker and not args.uv_cache_image:
         parser.error('--reuse-worker requires --uv-cache-image')
@@ -45,15 +47,24 @@ def main():
             UPSTREAM_COMMIT, *UPSTREAM_PATHS)
         context = temporary / 'context'
         (context / 'upstream').mkdir(parents=True)
-        run('tar', '-xf', archive, '-C', context / 'upstream')
+        exclusions = [] if args.with_native_baseline else ['--exclude=YOPO/saved']
+        run('tar', *exclusions, '-xf', archive, '-C', context / 'upstream')
         for file in DEPLOYMENT_FILES:
             shutil.copy2(deployment / file, context)
         for layer in ('native', 'bridge'):
             shutil.copytree(adapter / layer, context / 'ros2_adapter' / layer,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         shutil.copytree(repo / 'src/tool/navigation/interfaces', context / 'planner_interfaces')
+        inference = repo / 'src/basic_function/inference'
+        shutil.copytree(inference / 'interfaces', context / 'inference_interfaces')
+        shutil.copytree(inference / 'ros2_adapter', context / 'inference_ros',
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         target = 'reuse' if args.reuse_worker else 'standalone'
-        default_tag = 'uav/yopo-tracker:humble-native-local' if args.reuse_worker else 'uav/yopo-tracker:humble-native'
+        default_tag = 'uav/yopo-tracker:humble-native'
+        if args.with_native_baseline:
+            default_tag += '-baseline'
+        if args.reuse_worker:
+            default_tag += '-local'
         build_args = ['--target', target]
         if args.offline:
             build_args.extend(['--pull=false', '--network=none'])

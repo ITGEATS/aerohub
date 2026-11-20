@@ -1,6 +1,6 @@
 # YOPO-Tracker Planner
 
-单机 RGB-D 跟踪 Planner。锁定的 YOPO-Tracker 模型及目标滤波器选出曲线，ROS 2 Humble Adapter 加上制动尾段，通过默认 `FollowTimedPath` 执行。原生 Takeoff 和 Land 由任务调用。
+单机 RGB-D 跟踪 Planner。独立的 [Inference worker](../../../../basic_function/inference/models/yopo_tracker/README.md) 返回锁定模型的预测，Planner 保有原生目标滤波与选轨。ROS 2 Humble Adapter 加上制动尾段，通过默认 `FollowTimedPath` 执行。原生 Takeoff 和 Land 由任务调用。
 
 - [组件清单](../../../../../deployment/yopo_tracker_humble/component.yaml)记录依赖、资源所有权和阶段状态。
 - [Adapter 运行说明](ros2_adapter/README.md)包括构建、启动、停止与回归入口。
@@ -11,6 +11,12 @@
 状态为 `partial`。先前的 AirSim + PX4 SITL 故障用例以原生 CUDA 模型连续执行两版追踪轨迹。暂停 RGB-D 发布后，飞行器沿已载入的制动尾段减速，最终 Action 返回 `COMPLETED`。悬停连续低速 1.011 仿真秒，末速约 0.022 m/s，原生 Land 和 PX4 解除武装通过。
 
 镜像的 DDS 合成回归覆盖错时 RGB-D、位姿和速度配对以及真实 CUDA 推理。FollowTimedPath 接口回归覆盖连续性拒绝和滚动交接。复验命令见 [Adapter 运行说明](ros2_adapter/README.md#隔离验证)。
+
+### 独立推理录制回放
+
+使用 AirSim 的 `airsim-ground-02/ground-rgbd-02/bag` 回放。前 29 对真实 RGB-D 与里程计经 ROS `InferYopoTracker` 和内部 HTTP 进入独立 CUDA worker。原生 EKF 和选轨产生两版轨迹，真实 FollowTimedPath 依次接纳 Goal 和 Modify，实际发布的 76、79 个模拟控制器参考样本分别匹配两版曲线的 PVA 和 yaw。取消后参考停止输出。与同录包的原同进程 CUDA 基线相比，两版轨迹使用的 RGB、深度和里程计采集 stamp 与轨迹时长逐项一致。证据为本地 `log/yopo-tracker/inference-record-closed-loop-02.log` 与 `inference-record-native-followtimedpath.log`。
+
+本轮采用共享环境中的独立进程完成录包闭环。历史观测保留采集 stamp，对录包关闭墙钟年龄判断，执行使用模拟控制器。独立推理后的实时帧龄、完整 AirSim/PX4 跟踪及独立生产镜像仍待验收。
 
 ### Blocks 追人试飞与 RGB-D 帧龄
 

@@ -71,7 +71,7 @@ Tracker 的 RGB 与深度均使用 320×192、水平 90°。桥用 `(W−1)/2, (
 
 算力侧为配对成功的 RGB-D 保存两个采集时刻、配对姿态和相机外参；同一帧的模型结果始终引用这份快照。内置滤波器使用由**观测时相机位姿**解释的目标位置。轨迹候选的相对位移则在固定 ENU 中叠加到**计划交接时刻的参考起点**；终端速度与加速度只旋转。两个原点必须分别保留。目标估计与候选选择继续使用上游实现，公共 Tracking Tool、普通 YOPO 的导航目标和 SUPER 地图均不作为此 Planner 的输入。
 
-单机实时入口位于 [ros2_adapter](ros2_adapter/README.md)。输入侧对齐图像与定位，工作线程调用锁定的原生 RGB-D 模型和目标 EKF。Adapter 在上游选中曲线处冻结边界状态、时长和 yaw，由一个客户端提交 FollowTimedPath。模型及预处理随当前迁移镜像运行。独立 Inference 服务接入仍属于后续设计。回放与实时入口复用轨迹编码、模型加载和 yaw 采样。
+单机实时入口位于 [ros2_adapter](ros2_adapter/README.md)。输入侧对齐图像与定位，调用原生 CPU 预处理。Planner 通过 `InferYopoTracker` 获取 [独立 Inference worker](../../../../basic_function/inference/models/yopo_tracker/README.md) 的五组网络预测头，再执行原生目标 EKF 与选轨。Adapter 在选中曲线处冻结边界状态、时长和 yaw，由一个客户端提交 FollowTimedPath。实时入口和录制回放复用状态处理、模型服务客户端、轨迹编码和 yaw 采样。
 
 ## 5. 默认 FollowTimedPath 接入设计
 

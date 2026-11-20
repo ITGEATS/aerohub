@@ -1,6 +1,6 @@
 # YOPO-Tracker ROS 2 Humble Adapter
 
-上游使用 ROS 2 Jazzy 和 Python 3.12。迁移目标是项目固定 onboard-computer 镜像的 ROS 2 Humble 和 Python 3.10。镜像构建从上游 Git 提交 `d313f8610195dc986caceff7a3616f63d7e6f31f` 导出，保留 MIT 许可证，校验 `epoch50.pth`，并用 Humble 的 rosidl 构建上游 `quadrotor_msgs`。NumPy 1.21.5、SciPy 1.8.0 和 OpenCV 4.5.4 来自固定基础镜像。镜像内的独立环境按 `uv.lock` 安装 Torch/CUDA 与 YAML 依赖。
+上游使用 ROS 2 Jazzy 和 Python 3.12。迁移目标是项目固定 onboard-computer 镜像的 ROS 2 Humble 和 Python 3.10。镜像构建从上游 Git 提交 `d313f8610195dc986caceff7a3616f63d7e6f31f` 导出并保留 MIT 许可证。实时 Planner 复用原生的 CPU 图像和状态处理。模型权重的准备、CUDA 预热和执行由独立的 [Inference worker](../../../../../basic_function/inference/models/yopo_tracker/README.md) 负责。
 
 ## 构建
 
@@ -10,7 +10,7 @@
 python deployment/yopo_tracker_humble/build.py
 ```
 
-有本地上游仓库时，传入 `--upstream <git-repo>` 可从本地 Git 对象导出同一提交。依赖缓存可用时，可加 `--offline` 禁止构建步骤联网。镜像在构建阶段生成 `quadrotor_msgs` 和当前仓库 `uav_planner_interfaces` 类型支持，包含上游源码、模型权重、`native/` 原生调用与 `bridge/` 实时 Adapter。运行只加载镜像内产物。
+有本地上游仓库时，传入 `--upstream <git-repo>` 可从本地 Git 对象导出同一提交。依赖缓存可用时，可加 `--offline` 禁止构建步骤联网。镜像在构建阶段生成 Humble 的 `quadrotor_msgs`、`uav_planner_interfaces` 和 `uav_inference_interfaces` 类型支持，并安装 Inference ROS Adapter。默认构建排除模型权重。执行同进程历史诊断或数值基线时，传入 `--with-native-baseline` 生成带校验权重的 `humble-native-baseline` 镜像。
 
 本机已有兼容 CUDA worker 时，可构建共享其镜像层的本地验收镜像。以下命令使用本轮验证过的 worker。将本地上游路径传给 `--upstream` 可复用已有 Git 对象。
 
@@ -20,11 +20,11 @@ python deployment/yopo_tracker_humble/build.py \
   --reuse-worker --tag uav/yopo-tracker:humble-native-local
 ```
 
-此模式复用 worker 的 `/opt/vision`，只导出上游源码、权重、Humble 类型支持和启动代码等应用层。首次构建仍需要锁定依赖和接口产物，已有构建缓存时可直接复用。
+此模式复用兼容镜像的 `/opt/vision`，打包上游源码、Humble 类型支持和启动代码。首次构建仍需要锁定依赖和接口产物，已有构建缓存时可直接复用。
 
 ## 原生节点契约
 
-容器传入 `--native-diagnostics` 可启动原生诊断节点。该入口保留上游的 measured 起点模式、时间步长和候选生成策略。话题在 `yopo_net` 的节点私有命名空间内，可通过 ROS remapping 配置。实时执行接入见[适配设计](../DESIGN.md)。
+带权重的基线镜像传入 `--native-diagnostics` 可启动原生诊断节点。该入口保留上游的 measured 起点模式、时间步长和候选生成策略。话题在 `yopo_net` 的节点私有命名空间内，可通过 ROS remapping 配置。实时执行接入见[适配设计](../DESIGN.md)。
 
 | 节点私有接口 | 消息 | 语义 |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ python deployment/yopo_tracker_humble/build.py \
 
 ```bash
 docker run --rm --network none --gpus all -e ROS_LOCALHOST_ONLY=1 \
-  --entrypoint bash uav/yopo-tracker:humble-native -c '
+  --entrypoint bash uav/yopo-tracker:humble-native-baseline -c '
     source /opt/ros/humble/setup.bash &&
     source /opt/yopo-tracker/install/local_setup.bash &&
     cd /opt/yopo-tracker &&
@@ -60,6 +60,8 @@ docker run --rm --network none --gpus all -e ROS_LOCALHOST_ONLY=1 \
 
 `--selected <sqlite3-bag>` 使用实际模型回放指定录制。录制包含 `/drone_0/rgb`、`/drone_0/depth` 和 `/drone_0/odom`。图像必须按采集时间可配对，里程计必须使用固定 `drone0/odom` ENU 和原生节点需要的世界系速度，首段位置须与模拟控制器初始位置连续。验证保留录制的观测时间，并在推理前单独确定执行时刻。该入口最多核对两段，不连接实时相机或飞控。
 
+使用 `verify_action.sh --selected-service <sqlite3-bag>` 回放同一录制可验证独立 worker 链路。容器应带 CUDA、原生基线权重和可用的 FastAPI/uvicorn，且可只读访问完整仓库和录包。脚本启动独立的 CUDA worker 进程、Inference ROS 进程与真实 FollowTimedPath。回放使用原始图像和里程计采集 stamp，对历史观测关闭墙钟帧龄判断，仍检查 ROS Header、时差、请求 ID 与权重校验和。执行侧使用当前时钟和模拟控制器，核对两版反馈、运动参考 PVA/yaw 和取消。实时帧龄和飞行动力学需独立验收。
+
 ### Windows AirSim 固定参考试飞的 PX4 启动
 
 使用 [start_sitl_px4.ps1](../replay/start_sitl_px4.ps1) 启动试飞的单机飞控容器。它使用本地 flight-board 镜像、ROS 域 161 和 PX4 实例 96。传入本轮已有的 Docker 网络、容器名和供 PX4 连接 TCP 中继的 settings 文件。需自定义固件 ULog 话题时传入 `-LoggerTopicsFile`。相机、时钟和 AS2 由各自入口启动。
@@ -73,14 +75,17 @@ docker exec $vehicleContainer /opt/px4-gazebo/bin/px4-param --instance 96 show S
 
 ### 实时 ROS 2 Adapter
 
-[正式节点](bridge/live_node.py)是运行镜像的默认入口。使用包含同一版 `uav_planner_interfaces` 的 AS2 执行端。容器接入部署已有的 DDS 网络和 ROS 域，同域运行时钟、相机、定位及执行节点。启动时提供对应场景的制动配置。
+[正式节点](bridge/live_node.py)是运行镜像的默认入口。先启动 [CUDA worker](../../../../../basic_function/inference/models/yopo_tracker/README.md)，确认其 `/health/ready`，再启动 Inference ROS Adapter 和 Planner。使用包含同一版 `uav_planner_interfaces` 的 AS2 执行端。同域运行时钟、相机、定位及执行节点。 `worker_endpoint` 指向 CUDA worker 的可达 HTTP 地址。
 
 ```bash
-docker run --rm --gpus all --network "$sitl_network" -e ROS_DOMAIN_ID="$ros_domain" \
+docker run --rm --network "$sitl_network" -e ROS_DOMAIN_ID="$ros_domain" \
+  uav/yopo-tracker:humble-native --inference-ros-adapter --ros-args -r __ns:=/drone0 \
+  -p endpoint:="$worker_endpoint" -p use_sim_time:=true
+docker run --rm --network "$sitl_network" -e ROS_DOMAIN_ID="$ros_domain" \
   uav/yopo-tracker:humble-native --brake-calibration /opt/yopo-tracker/brake-calibration.sitl.json
 ```
 
-接线沿用 `drone0` 的 FrontCamera RGB-D、CameraInfo、AS2 位姿和速度、TF 及 `/clock`。相机桥配置 RELIABLE，维持采集时间戳。任务使用原生 AS2 起飞并进入悬停后，调用 `/yopo_tracker_live/start`。匹配 RGB-D 与定位后，单独的工作线程调用锁定模型及其目标 EKF。Adapter 通过同一个 FollowTimedPath Action 会话接管，以已接纳轨迹的未来 PVA/yaw 生成接续点。Action feedback 区分接纳和实际生效。
+接线沿用 `drone0` 的 FrontCamera RGB-D、CameraInfo、AS2 位姿和速度、TF 及 `/clock`。相机桥配置 RELIABLE，维持采集时间戳。任务使用原生 AS2 起飞并进入悬停后，调用 `/yopo_tracker_live/start`。配对观测经原生 CPU 预处理后，Planner 通过 `/drone0/inference/yopo_tracker/infer` 获取网络预测头，再用原生目标 EKF 和选轨逻辑生成轨迹。Planner 内原生 CPU 张量辅助代码仍依赖 PyTorch。Adapter 通过同一个 FollowTimedPath Action 会话接管，以已接纳轨迹的未来 PVA/yaw 生成接续点。Action feedback 区分接纳和实际生效。
 
 实时 Adapter 提交的 FollowTimedPath 速度参数为 1.0 m/s。原生规划器继续生成带时间戳的 PVA 参考，实际飞行速度由控制器响应和飞行日志确认。
 

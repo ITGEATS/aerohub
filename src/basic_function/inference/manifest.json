@@ -17,6 +17,10 @@
       "directory": "src/basic_function/inference/models/yopo",
       "description": "YOPO candidate relative PVA/cost inference in an isolated CUDA environment"
     },
+    "yopo-tracker": {
+      "directory": "src/basic_function/inference/models/yopo_tracker",
+      "description": "YOPO-Tracker RGB-D network heads in an isolated CUDA environment"
+    },
     "yolo26n-seg": {
       "directory": "src/basic_function/inference/models/yolo26n_seg",
       "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"

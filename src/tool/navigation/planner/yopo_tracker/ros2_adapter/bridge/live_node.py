@@ -12,7 +12,7 @@ from as2_msgs.msg import ControllerInfo, ControlMode, PlatformInfo
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.action import ActionClient
-from rclpy.executors import ExternalShutdownException
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.qos import qos_profile_sensor_data
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -22,13 +22,15 @@ from uav_planner_interfaces.action._follow_timed_path import FollowTimedPath_Sen
 from .live_inputs import OBSERVATION_AGE_NS, ODOM_FRAME, TrackingInputs, ns
 from .protected_trajectory import BrakeLimits, CONTROL_STEP_NS, HANDOFF_LEAD_NS, protect_curve
 from .timed_points import timed_goal
-from ..native.tracker_model import SECOND, boundary, frozen_yaw, load_tracker, sample_yaw
+from ..native.service_tracker import load_service_tracker
+from ..native.tracker_model import SECOND, boundary, frozen_yaw, sample_yaw
 
 
 class LiveTracker(TrackingInputs):
-    def __init__(self, tracker, limits, weight_sha256):
+    def __init__(self, tracker, limits, weight_sha256, *, inference_ready=lambda: True):
         super().__init__('yopo_tracker_live')
         self.tracker = tracker
+        self.inference_ready = inference_ready
         self.limits = limits
         self.worker = ThreadPoolExecutor(max_workers=1)
         self.inference = None
@@ -66,6 +68,9 @@ class LiveTracker(TrackingInputs):
     def start(self, _, reply):
         if self.task or self.inference:
             reply.message = 'A tracking or stopping session is still present'
+            return reply
+        if not self.inference_ready():
+            reply.message = 'YOPO-Tracker Inference service is unavailable or busy'
             return reply
         if (not self.platform or not self.platform.armed or not self.platform.offboard or
                 not self.controller or self.controller.input_control_mode.control_mode not in
@@ -285,15 +290,18 @@ def main():
     args = parser.parse_args()
     limits = BrakeLimits.from_calibration(json.loads(args.brake_calibration.read_text()))
     rclpy.init(args=[])
-    tracker, digest = load_tracker(args.upstream)
-    tracker.timer_ctrl.cancel()
-    node = LiveTracker(tracker, limits, digest)
+    tracker, digest = load_service_tracker(args.upstream)
+    node = LiveTracker(tracker, limits, digest, inference_ready=tracker.inference_ready)
+    executor = SingleThreadedExecutor()
+    executor.add_node(tracker)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.worker.shutdown(wait=True, cancel_futures=True)
+        executor.shutdown()
         node.destroy_node()
         tracker.destroy_node()
         rclpy.try_shutdown()

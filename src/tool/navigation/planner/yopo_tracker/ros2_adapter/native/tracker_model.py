@@ -6,6 +6,7 @@ import numpy as np
 
 
 SECOND = 10**9
+WEIGHT_SHA256 = 'a625490468cb8734867e51d2af2be68a8182bcbbbb1e0401b1d2a32e6ccd5f7f'
 
 
 def boundary(axes, t):
@@ -20,7 +21,7 @@ def load_tracker(upstream, *, image_fps=30):
 
     weight = root / 'saved/YOPO_1/epoch50.pth'
     digest = hashlib.sha256(weight.read_bytes()).hexdigest()
-    if digest != 'a625490468cb8734867e51d2af2be68a8182bcbbbb1e0401b1d2a32e6ccd5f7f':
+    if digest != WEIGHT_SHA256:
         raise ValueError(f'Unexpected checkpoint SHA256: {digest}')
     settings = dict(use_tensorrt=False, pitch_angle_deg=0, image_fps=image_fps,
                     simulation=True, conf_thresh=0.9, ekf_thresh=2.0,

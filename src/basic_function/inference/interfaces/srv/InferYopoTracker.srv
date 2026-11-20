@@ -1,0 +1,25 @@
+# Timestamps and frame IDs are the original paired measurements.
+string request_id
+std_msgs/Header rgb_header
+std_msgs/Header depth_header
+std_msgs/Header odometry_header
+# Little-endian float32, contiguous NCHW [1,4,192,320], normalized BGR + depth.
+uint8[] rgbd
+# Contiguous float32 [1,6,3,5] in primitive grid order.
+float32[90] observation
+---
+bool success
+string error_code
+string message
+string request_id
+std_msgs/Header rgb_header
+std_msgs/Header depth_header
+std_msgs/Header odometry_header
+string weight_sha256
+string device
+# Raw YOPO-Tracker network heads in the pinned 3x5 grid order.
+float32[135] endstate
+float32[45] target
+float32[15] cost
+float32[15] score
+float32[15] duration
