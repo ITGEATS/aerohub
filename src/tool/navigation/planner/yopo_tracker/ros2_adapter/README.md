@@ -82,6 +82,12 @@ docker run --rm --gpus all --network "$sitl_network" -e ROS_DOMAIN_ID="$ros_doma
 
 接线沿用 `drone0` 的 FrontCamera RGB-D、CameraInfo、AS2 位姿和速度、TF 及 `/clock`。相机桥配置 RELIABLE，维持采集时间戳。任务使用原生 AS2 起飞并进入悬停后，调用 `/yopo_tracker_live/start`。匹配 RGB-D 与定位后，单独的工作线程调用锁定模型及其目标 EKF。Adapter 通过同一个 FollowTimedPath Action 会话接管，以已接纳轨迹的未来 PVA/yaw 生成接续点。Action feedback 区分接纳和实际生效。
 
+实时 Adapter 提交的 FollowTimedPath 速度参数为 1.0 m/s。原生规划器继续生成带时间戳的 PVA 参考，实际飞行速度由控制器响应和飞行日志确认。
+
+首版生效后，若后续已接纳轨迹的刹车点接近其起点，Adapter 可在它生效前用最新配对观测预计算下一版。计算时冻结该已接纳版本的刹车起点、PVA 和 yaw，等到同一版本实际生效且观测仍新鲜才提交。交接用固定的刹车起点，继续执行 200 ms 计算提前量和 300 ms 帧龄检查。执行 `verify_action.sh --live-handoff` 可在隔离 ROS 2 环境中复验短交接窗口、陈旧结果和停车请求，并运行现有 FollowTimedPath 接口回放。
+
+执行 `verify_action.sh --live-ros-handoff` 可将实时 Adapter 和 FollowTimedPath 一起运行。该用例使用合成观测、可控耗时的选轨和模拟控制器，核对第三版提前计算、在第二版生效后提交，且执行端在原定交接点切换到第三版参考。
+
 每个追踪版本提交前即附上制动与静止覆盖。制动沿原曲线逐渐降低推进速度，按制动时刻的同一 PVA/yaw 交接，并从剩余曲线留出实测过冲余量。短覆盖或不可行候选会被跳过。校准 JSON 需要 `observed_terminal_overrun_m`、`reference_acceleration_m_s2` 和 `reference_jerk_m_s3`。前向 SITL 对照使用 0.675 m、3 m/s² 和 8 m/s³，适用于本次仿真配置。剩余曲线长度和采样的动力学限制用于选择制动方案，避障与实际停车效果需在目标场景验证。
 
 [SITL 制动配置](../../../../../../deployment/yopo_tracker_humble/brake-calibration.sitl.json)已随镜像打包。
@@ -96,4 +102,4 @@ ros2 service call /yopo_tracker_live/stop std_srvs/srv/Trigger '{}'
 
 先开启状态订阅，再在另一个终端发起任务。stop 的响应只确认请求已锁定。通过匹配任务 ID 的 `finished` 事件及实测低速判断是否可继续 Land。更新或回滚时，等待降落和解除解锁，恢复对应源码与同版 overlay，并重新初始化目标估计。
 
-[移动目标与相机中断验证脚本](../replay/sitl_tracking_brake.py) 操作隔离 AirSim 场景、原生 Takeoff 和 Land，并在指定数量的追踪 revision 生效后创建 `pause-camera` 文件，由宿主只暂停独立相机容器。两版追踪并暂停相机的用例已通过。三版连续追踪用例在第三条候选生成前进入制动，后续持续跟踪与实时图像仍有输入时的目标丢失用例待验收。
+[移动目标与相机中断验证脚本](../replay/sitl_tracking_brake.py) 操作隔离 AirSim 场景、原生 Takeoff 和 Land，并在指定数量的追踪 revision 生效后创建 `pause-camera` 文件，由宿主只暂停独立相机容器。两版追踪并暂停相机的用例已通过。持续追踪、默认帧龄和放宽帧龄的实飞对照见 [Blocks 追人试飞与 RGB-D 帧龄](../README.md#blocks-追人试飞与-rgb-d-帧龄)。

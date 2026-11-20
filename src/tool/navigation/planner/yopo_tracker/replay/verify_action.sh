@@ -32,6 +32,13 @@ if [[ "${1:-}" == --selected-fixture ]]; then
 elif [[ "${1:-}" == --selected ]]; then
   shift
   /opt/vision/bin/python -u "$replay/verify_selected.py" /opt/yopo-tracker/upstream "$@"
+elif [[ "${1:-}" == --live-handoff ]]; then
+  export PYTHONPATH="$(dirname "$replay"):$PYTHONPATH"
+  /opt/vision/bin/python -u "$replay/verify_live_handoff.py" -v
+  /opt/vision/bin/python -u "$replay/check_action.py" /opt/yopo-tracker/upstream
+elif [[ "${1:-}" == --live-ros-handoff ]]; then
+  export PYTHONPATH="$(dirname "$replay"):$PYTHONPATH"
+  /opt/vision/bin/python -u "$replay/verify_live_ros_handoff.py" /opt/yopo-tracker/upstream
 else
   /opt/vision/bin/python -u "$replay/check_action.py" /opt/yopo-tracker/upstream
 fi

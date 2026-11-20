@@ -32,6 +32,7 @@ class LiveTracker(TrackingInputs):
         self.limits = limits
         self.worker = ThreadPoolExecutor(max_workers=1)
         self.inference = None
+        self.observation = None
         self.platform = self.controller = self.odom = None
         self.status = self.create_publisher(String, '~/status', 20)
         self.action = ActionClient(self, FollowTimedPath, '/drone0/follow_timed_path')
@@ -81,6 +82,7 @@ class LiveTracker(TrackingInputs):
         self.task = f'yopo-tracker-{uuid4().hex}'
         self.revision = self.active = 0
         self.accepted = self.pending = self.result = None
+        self.observation = None
         self.brake_reason = self.low_speed_since = None
         self.finalizing = False
         self.last_input_ns = self.now_ns()
@@ -97,6 +99,7 @@ class LiveTracker(TrackingInputs):
     def brake(self, reason):
         if self.task and self.brake_reason is None:
             self.brake_reason = reason
+            self.observation = None
             self.record('brake_latched', reason=reason, revision=self.revision)
 
     def feedback(self, event):
@@ -128,7 +131,7 @@ class LiveTracker(TrackingInputs):
         revision = self.revision + 1
         goal = timed_goal(curve.axes, curve.duration_ns / SECOND, curve.knots, task_id=self.task,
                           vehicle_id='drone0', revision=revision, generated_ns=now,
-                          start_ns=start, max_speed=1.)
+                          start_ns=start, max_speed=1.0)
         self.record('submit', revision=revision, start_ns=start, brake_from_ns=start + curve.brake_from_ns,
                     brake_end_ns=start + curve.brake_end_ns, reserve_m=curve.reserve_m, **source)
         future = (self.action.send_goal_async(goal, feedback_callback=self.feedback) if revision == 1 else
@@ -159,6 +162,7 @@ class LiveTracker(TrackingInputs):
                                                 answer.result.revision == self.active == self.revision),
                         reason=answer.result.reason, revision=answer.result.revision)
             self.task = self.accepted = self.pending = self.result = None
+            self.observation = None
             return
         if self.accepted is None:
             if self.pending is None:
@@ -214,6 +218,7 @@ class LiveTracker(TrackingInputs):
             observed = dict(depth_ns=ns(depth.header.stamp), rgb_ns=ns(rgb.header.stamp),
                             odom_ns=ns(odom.header.stamp))
             self.last_input_ns = min(observed['depth_ns'], observed['rgb_ns'])
+            self.observation = depth, rgb, odom, observed
         if self.accepted:
             _, start, curve = self.accepted
             if now - self.last_input_ns >= OBSERVATION_AGE_NS:
@@ -225,23 +230,31 @@ class LiveTracker(TrackingInputs):
             return
         if self.inference and self.inference[0].done():
             future, start, source = self.inference
-            self.inference = None
             try:
                 curve, target, reason = future.result()
             except Exception as error:
+                self.inference = None
                 self.record('inference_error', error=str(error))
                 self.brake('INFERENCE_FAILED')
                 return
+            same_revision = source['anchor_revision'] == self.revision
+            age = now - min(source['depth_ns'], source['rgb_ns'])
+            valid = same_revision and now < start and 0 <= age <= OBSERVATION_AGE_NS
+            if curve and valid and self.active != self.revision:
+                return  # Keep the result until the anchor revision takes effect or the frame expires.
+            self.inference = None
             self.record('inference', selected=curve is not None, target_enu=target, reason=reason, **source)
-            if reason and self.accepted:
+            if reason and self.accepted and same_revision and self.active == self.revision:
                 self.brake(reason)
                 return
-            if curve and now < start and now - min(source['depth_ns'], source['rgb_ns']) <= OBSERVATION_AGE_NS:
+            if curve and valid:
                 self.submit(now, start, curve, source)
                 return
-        if snapshot is None:
+        if self.observation is None or self.pending or self.inference:
             return
-        if self.pending or self.inference or self.active != self.revision:
+        depth, rgb, odom, observed = self.observation
+        oldest = min(observed['depth_ns'], observed['rgb_ns'])
+        if not 0 <= now - oldest <= OBSERVATION_AGE_NS:
             return
         start, anchor = now + SECOND // 2, None
         if self.accepted:
@@ -251,9 +264,18 @@ class LiveTracker(TrackingInputs):
             start = epoch + current.brake_from_ns
             if start - now < HANDOFF_LEAD_NS:
                 return  # The already accepted brake covers this handoff.
+            if self.active != self.revision:
+                # The first reference still has to establish the controller mode.
+                # Prepare short handoffs while the accepted revision waits to take effect.
+                if not self.active or current.brake_from_ns > HANDOFF_LEAD_NS + OBSERVATION_AGE_NS:
+                    return
+                if epoch - oldest + CONTROL_STEP_NS > OBSERVATION_AGE_NS:
+                    return  # It would expire before the first post-switch planning tick.
             anchor = (*boundary(current.axes, current.brake_from_ns / SECOND),
                       sample_yaw(current.knots, current.brake_from_ns))
-        self.inference = self.worker.submit(self.select, depth, rgb, odom, anchor), start, observed
+        self.observation = None
+        source = dict(observed, anchor_revision=self.revision)
+        self.inference = self.worker.submit(self.select, depth, rgb, odom, anchor), start, source
 
 
 def main():

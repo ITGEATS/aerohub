@@ -1,5 +1,6 @@
 """Attach a continuous brake to the native curve before handing it to AS2."""
 from dataclasses import dataclass
+from itertools import islice
 import math
 
 import numpy as np
@@ -10,6 +11,7 @@ from ..native.tracker_model import SECOND
 HANDOFF_LEAD_NS = SECOND // 5  # Existing ordinary YOPO execution lead.
 CONTROL_STEP_NS = SECOND // 50  # Native reference sampling interval.
 HOLD_NS = 10 * SECOND  # Keep the brake endpoint covered while verifying low speed.
+BRAKE_BATCH_SIZE = 96
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,19 @@ class ProtectedTrajectory:
         return self.brake_end_ns + HOLD_NS
 
 
+def _exceeds_limits(axes, cuts_ns, brake_steps, sample_indices, limits):
+    # Match the original linspace grid, including its exact final sample.
+    u = np.where(sample_indices >= brake_steps, 1., sample_indices * (1. / brake_steps))
+    advance, rate, accel, jerk = brake_clock(u, brake_steps * CONTROL_STEP_NS / SECOND)
+    t = cuts_ns / SECOND + advance
+    v = np.array([axis.get_velocity(t) for axis in axes])
+    a = np.array([axis.get_acceleration(t) for axis in axes])
+    j = np.array([axis.get_jerk(t) for axis in axes])
+    acceleration = np.linalg.norm(a * rate**2 + v * accel, axis=0)
+    jerk = np.linalg.norm(j * rate**3 + 3 * a * rate * accel + v * jerk, axis=0)
+    return (acceleration > limits.acceleration_m_s2) | (jerk > limits.jerk_m_s3)
+
+
 def protect_curve(axes, knots, duration_ns, limits):
     """Keep the brake on the selected path, with measured overrun room along it."""
     ticks = np.array([*range(0, duration_ns, CONTROL_STEP_NS), duration_ns], dtype=np.int64)
@@ -86,31 +101,38 @@ def protect_curve(axes, knots, duration_ns, limits):
     if not len(usable):
         return None
     # Prefer the latest usable splice up to the overlap used by the live Tracker.
-    # Leave at least the normal handoff lead before the splice so a healthy
-    # stream can roll onto a fresh candidate.
-    for cut_ns in reversed(usable[(HANDOFF_LEAD_NS < usable) & (usable <= duration_ns // 2)]):
-        cut_s = cut_ns / SECOND
-        max_brake_ns = 2 * int(usable[-1] - cut_ns)
-        for brake_ns in range(max_brake_ns // CONTROL_STEP_NS * CONTROL_STEP_NS, 0, -CONTROL_STEP_NS):
-            brake_s = brake_ns / SECOND
-            u = np.linspace(0., 1., brake_ns // CONTROL_STEP_NS + 1)
-            advance, rate, accel, jerk = brake_clock(u, brake_s)
-            t = cut_s + advance
-            v = np.array([axis.get_velocity(t) for axis in axes])
-            a = np.array([axis.get_acceleration(t) for axis in axes])
-            j = np.array([axis.get_jerk(t) for axis in axes])
-            if (np.any(np.linalg.norm(a * rate**2 + v * accel, axis=0) > limits.acceleration_m_s2)
-                    or np.any(np.linalg.norm(j * rate**3 + 3 * a * rate * accel + v * jerk, axis=0) > limits.jerk_m_s3)):
-                continue
-            end_ns = int(cut_ns) + brake_ns
-            wrapped = tuple(BrakedAxis(axis, cut_s, brake_s) for axis in axes)
-            times = [*range(0, end_ns, CONTROL_STEP_NS), end_ns]
-            native_times = [round(wrapped[0].clock(stamp / SECOND)[0] * SECOND) for stamp in times]
-            # Use the same wrap-aware yaw interpolation as rolling handoffs.
-            knot_times, knot_yaw = zip(*knots)
-            yaw = np.interp(native_times, knot_times, np.unwrap(knot_yaw))
-            held = list(zip(times, yaw))
-            held.append((end_ns + HOLD_NS, held[-1][1]))
-            reserve = float(np.interp(int(cut_ns) + brake_ns / 2, ticks, remaining))
-            return ProtectedTrajectory(wrapped, held, int(cut_ns), end_ns, reserve)
+    cut_candidates = usable[(HANDOFF_LEAD_NS < usable) & (usable <= duration_ns // 2)]
+    candidates = (
+        (cut_ns, steps)
+        for cut_ns in reversed(cut_candidates)
+        for steps in range(2 * int(usable[-1] - cut_ns) // CONTROL_STEP_NS, 0, -1)
+    )
+    while batch := list(islice(candidates, BRAKE_BATCH_SIZE)):
+        cuts_ns, brake_steps = np.asarray(batch, dtype=np.int64).T[:, :, None]
+        # Screen on a subset of the same grid. All survivors still see every sample.
+        screen_indices = brake_steps * np.arange(9) // 8
+        survives = ~np.any(_exceeds_limits(axes, cuts_ns, brake_steps, screen_indices, limits), axis=1)
+        if not np.any(survives):
+            continue
+        cuts_ns, brake_steps = cuts_ns[survives], brake_steps[survives]
+        indices = np.arange(int(brake_steps.max()) + 1)
+        exceeds = _exceeds_limits(axes, cuts_ns, brake_steps, indices, limits)
+        allowed = np.flatnonzero(~np.any((indices <= brake_steps) & exceeds, axis=1))
+        if not allowed.size:
+            continue
+
+        first = allowed[0]
+        cut_ns = int(cuts_ns[first, 0])
+        brake_ns = int(brake_steps[first, 0]) * CONTROL_STEP_NS
+        end_ns = cut_ns + brake_ns
+        wrapped = tuple(BrakedAxis(axis, cut_ns / SECOND, brake_ns / SECOND) for axis in axes)
+        times = [*range(0, end_ns, CONTROL_STEP_NS), end_ns]
+        native_times = [round(wrapped[0].clock(stamp / SECOND)[0] * SECOND) for stamp in times]
+        # Use the same wrap-aware yaw interpolation as rolling handoffs.
+        knot_times, knot_yaw = zip(*knots)
+        yaw = np.interp(native_times, knot_times, np.unwrap(knot_yaw))
+        held = list(zip(times, yaw))
+        held.append((end_ns + HOLD_NS, held[-1][1]))
+        reserve = float(np.interp(cut_ns + brake_ns / 2, ticks, remaining))
+        return ProtectedTrajectory(wrapped, held, cut_ns, end_ns, reserve)
     return None
