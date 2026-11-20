@@ -6,7 +6,9 @@ def cleanup_checks(root, fleet):
     """Match this run's resource identities, including the optional recorder."""
     read=lambda p:json.loads((root/p).read_text(encoding='utf-8'))
     local=read('local.json');prefix=local['project']
-    roles=['adapter','native','inputs','overhead','observer']
+    split = local.get('native_placement') == 'per_vehicle' or (root/'swarm-topology.json').is_file()
+    native_roles = ['native-'+v['namespace'] for v in fleet['vehicles']] if split else ['native']
+    roles=['adapter',*native_roles,'inputs','overhead','observer']
     roles+=['camera-'+v['namespace'] for v in fleet['vehicles']]
     if local.get('diagnostics',{}).get('enabled'):roles.append('diagnostics')
     expected_workers={prefix+'-'+role for role in roles}
@@ -17,7 +19,7 @@ def cleanup_checks(root, fleet):
     checks={
         'worker_identities':len(worker_names)==len(expected_workers) and set(worker_names)==expected_workers,
         'core_identities':len(core_names)==len(expected_core) and set(core_names)==expected_core,
-        'all_exited_cleanly':all(x['State']['Running'] is False and x['State']['ExitCode']==0 for x in workers+core),
+        'all_exited_cleanly':all(not x.get('missing') and x['State']['Running'] is False and x['State']['ExitCode']==0 for x in workers+core),
     }
     return {'pass':all(checks.values()),'checks':checks,
             'expected_workers':sorted(expected_workers),'expected_core':sorted(expected_core)}

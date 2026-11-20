@@ -1,6 +1,6 @@
 # RACER 双机真实执行
 
-当前 PC 交付见 [双机运行与验收](PC_DUAL.md)。下文保留此前版本的记录。
+新建的 PC 双机运行默认每机独立运行 RACER，本地开发复现见[分容器入口与验收](PC_SPLIT.md)。已有共享算法容器的 PC 交付见[双机运行与验收](PC_DUAL.md)。下文保留此前版本的记录。
 
 原完整探索基线：**ForestScene PC 双机完整探索 `0.2.0-forest-complete.20261119`**。两轮原生自然结束、飞行及清理通过；第二轮辅助记录未完整读回，总体仍为 `partial`。配置、校验、复现、停止与回退见 [FOREST_COMPLETE.md](FOREST_COMPLETE.md)，分项证据见 [forest-complete-validation.json](forest-complete-validation.json)。
 

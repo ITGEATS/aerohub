@@ -46,7 +46,8 @@ class SelectionTests(unittest.TestCase):
         def base_up(obj):
             (obj.root/'configuration').mkdir(parents=True)
             (obj.root/'configuration-sources.json').write_text('{}')
-        with patch.object(module.Deployment,'up',base_up):d.up()
+        with patch.object(module.Deployment, 'up', base_up), patch('split_pc.check_initial_poses'):
+            d.up()
         data=json.loads((d.root/'configuration/flight.json').read_text())
         self.assertEqual(data['planning_box_enu'][0][1],7);self.assertEqual(data['completion_wall_budget_s'],300)
         self.assertEqual(json.loads((d.root/'configuration-sources.json').read_text())['flight']['sha256'],d.flight_source_sha)

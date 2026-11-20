@@ -2,7 +2,7 @@
 import json,sqlite3,sys
 from pathlib import Path
 sys.path.insert(0,'/ground-code')
-from verify_diagnostics import verify,rows
+from verify_diagnostics import verify,rows,native_queries
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 
@@ -18,7 +18,7 @@ for v in json.loads((root/'configuration/fleet.json').read_text())['vehicles']:
         checks={k:val for k,val in ground_checks.items() if k not in exclude}
         r['ground_only_checks_not_applied']={k:ground_checks[k] for k in exclude}
         r['untested']=['physical collision cause and obstacle clearance','RoboPi mixed topology','long-duration reliability']
-        records=[x for x in rows(root/'native'/ns/'map-query.jsonl') if x['kind']=='collision_check']
+        records=[x for x in rows(native_queries(root, ns)) if x['kind']=='collision_check']
         bag=next((root/'diagnostics'/ns/'bag').glob('*.db3'))
         db=sqlite3.connect('file:'+str(bag)+'?mode=ro',uri=True)
         topics=list(db.execute('select id,type from topics where name=?',('/racer_execution/drone_'+str(v['racer_id'])+'/plan',)))

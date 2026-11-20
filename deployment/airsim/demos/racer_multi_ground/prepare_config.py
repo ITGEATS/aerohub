@@ -10,6 +10,11 @@ fleet=json.loads((fleet_source if fleet_source.exists() else Path('/code/fleet.j
 shutil.copyfile('/single/config/fastdds_udp.xml',config/'fastdds_udp.xml')
 settings=json.loads((root/'settings.json').read_text())
 if set(settings['Vehicles'])!={v['airsim'] for v in fleet['vehicles']}:raise ValueError('settings/fleet mismatch')
+if (root/'local.json').exists() and json.loads((root/'local.json').read_text()).get('native_placement') == 'per_vehicle':
+    from deployment.airsim.demos.racer_multi_flight.split_pc import resolve_placement
+    image = json.loads(Path('/single/images.lock.json').read_text())['algorithm']
+    topology = resolve_placement(Path('/repo'), fleet, image)
+    (root/'swarm-topology.json').write_text(json.dumps(topology, indent=2))
 settings=apply_overhead_view(settings,{'altitude_m':8.,'update_hz':3.})
 (root/'settings.json').write_text(json.dumps(settings,indent=2))
 for v in fleet['vehicles']:

@@ -16,6 +16,11 @@ def rows(path):
             if line.strip():yield json.loads(line)
 
 
+def native_queries(root, ns):
+    folder = 'native-'+ns if (root/'swarm-topology.json').is_file() else 'native'
+    return root/folder/ns/'map-query.jsonl'
+
+
 def verify(root, ns):
     out=root/'diagnostics'/ns;prefix='/racer_multi/'+ns
     report=json.loads((out/'recorder-result.json').read_text())
@@ -42,7 +47,7 @@ def verify(root, ns):
         if topic.endswith('/vehicle_status_v4'):arm.add(m.arming_state)
         if topic.endswith('/vehicle_land_detected'):land.add(m.landed)
     del reader
-    native=list(rows(root/'native'/ns/'map-query.jsonl'))
+    native=list(rows(native_queries(root, ns)))
     clouds={(r['topic'],r['publish_stamp_ns']):r for r in native if r['kind']=='map_cloud'}
     cloud_versions={}
     for r in native:

@@ -8,6 +8,22 @@ from run import Deployment,ROS,ONBOARD,read_inspect,call,sha
 class FlightDeployment(Deployment):
     def __init__(self,path):
         super().__init__(path)
+        placement = self.local.get('native_placement')
+        recorded = self.root/'local.json'
+        if recorded.is_file():
+            previous = json.loads(recorded.read_text(encoding='utf-8'))
+            archived = previous.get('native_placement')
+            if archived is None:
+                archived = 'per_vehicle' if (self.root/'swarm-topology.json').is_file() else 'shared'
+            if placement is not None and placement != archived:
+                raise ValueError('native_placement conflicts with the recorded run')
+            placement = archived
+        elif placement is None:
+            placement = 'per_vehicle'
+        self.local['native_placement'] = placement
+        if placement not in ('shared', 'per_vehicle'):
+            raise ValueError('native_placement must be shared or per_vehicle')
+        self.split_native = placement == 'per_vehicle'
         self.flight_path=self.config_path(path,'flight_config',DEMO/'flight.json')
         if 'flight_config' in self.local:self.local['flight_config']=str(self.flight_path)
         self.flight_config=json.loads(self.flight_path.read_text())
@@ -24,6 +40,9 @@ class FlightDeployment(Deployment):
             raise ValueError('This flight coordinator is validated for exactly two UAVs')
         if 'completion_wall_budget_s' in self.local:self.validate_completion_config()
         if sha(self.flight_path)!=self.flight_source_sha:raise ValueError('selected flight configuration changed')
+        if self.split_native:
+            from split_pc import check_initial_poses
+            check_initial_poses(REPO, self.local, self.fleet)
         super().up();(self.root/'configuration/flight.json').write_text(json.dumps(self.flight_config,indent=2))
         provenance=self.root/'configuration-sources.json';origins=json.loads(provenance.read_text())
         origins['flight']={'path':str(self.flight_path),'sha256':self.flight_source_sha}
@@ -45,9 +64,33 @@ class FlightDeployment(Deployment):
         for rel in source:
             dst=self.root/'source-snapshot'/rel;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(REPO/rel,dst)
         (self.root/'runtime-source.json').write_text(json.dumps(source,indent=2))
-        self.run('native',self.images['algorithm'],ROS+'source /racer-run/install/setup.bash\ncd /deps\nsha256sum -c nlopt-debs.sha256\ndpkg -i nlopt-debs/*.deb\ncd /racer-run\nsha256sum -c executable.sha256\nexec python3 /multi/group.py native')
+        native_command = ROS+'source /racer-run/install/setup.bash\ncd /deps\nsha256sum -c nlopt-debs.sha256\ndpkg -i nlopt-debs/*.deb\ncd /racer-run\nsha256sum -c executable.sha256\nexec python3 /multi/group.py native'
+        if self.split_native:
+            topology = json.loads((self.root/'swarm-topology.json').read_text())
+            targets = topology['onboard_computer_vehicles']
+            if [v['name'] for v in targets] != [v['namespace'] for v in self.fleet['vehicles']]:
+                raise ValueError('recorded PC placement differs from selected fleet')
+            for vehicle in targets:
+                ns = vehicle['name']
+                self.run('native-'+ns, self.images['algorithm'], native_command+' '+ns)
+        else:
+            self.run('native', self.images['algorithm'], native_command)
         self.run('adapter',self.images['onboard'],ONBOARD+'source /racer-run/install/local_setup.bash\nexec python3 /multi/group.py flight_adapter')
+        if self.split_native:
+            from split_pc import verify_processes
+            probe = ROS+'source /interfaces/install/local_setup.bash\nsource /racer-run/install/local_setup.bash\n'
+            code = self.run('readiness', self.images['workstation'], probe+'exec python3 /repo/deployment/airsim/demos/racer_multi_flight/split_readiness.py', False)
+            if code:
+                raise RuntimeError('split PC readiness failed; see readiness/result.json')
+            verify_processes(self)
+
     def mission_mode(self,mode):
+        if self.split_native:
+            from split_pc import verify_processes
+            readiness = json.loads((self.root/'readiness/result.json').read_text())
+            if not readiness['pass']:
+                raise RuntimeError('split PC readiness did not pass')
+            verify_processes(self)
         if mode=='explore-complete':
             from completion import validate_budget
             validate_budget(json.loads((self.root/'configuration/flight.json').read_text()).get('completion_wall_budget_s'))
@@ -57,14 +100,19 @@ class FlightDeployment(Deployment):
         return self.run('mission',self.images['workstation'],ROS+'source /interfaces/install/local_setup.bash\nsource /racer-run/install/local_setup.bash\nexport PYTHONPATH=/single:$PYTHONPATH\nexec python3 /repo/deployment/airsim/demos/racer_multi_flight/mission.py '+mode,False)
     def stop(self):
         self.ground(self.root);states=[]
-        for role in ['adapter','native','inputs']+['camera-'+v['namespace'] for v in self.fleet['vehicles']]+['overhead','observer']+(['diagnostics'] if self.local.get('diagnostics',{}).get('enabled') else []):
-            name=self.prefix+'-'+role;info=read_inspect(name)
+        native_roles = ['native-'+v['namespace'] for v in self.fleet['vehicles']] if self.split_native else ['native']
+        for role in ['adapter',*native_roles,'inputs']+['camera-'+v['namespace'] for v in self.fleet['vehicles']]+['overhead','observer']+(['diagnostics'] if self.local.get('diagnostics',{}).get('enabled') else []):
+            name=self.prefix+'-'+role
+            if self.split_native and not call(['docker','ps','-aq','--filter','name=^/'+name+'$']):
+                states.append({'name':name, 'missing':True})
+                continue
+            info=read_inspect(name)
             if info['Config']['Labels'].get('aerohub.racer.owner')!=self.prefix:raise ValueError('owner mismatch')
             if info['State']['Running']:call(['docker','stop','-t','30',name])
             with (self.root/role/'container.log').open('w',encoding='utf-8') as f:subprocess.run(['docker','logs',name],stdout=f,stderr=subprocess.STDOUT)
             states.append({'name':name,'State':read_inspect(name)['State']})
         (self.root/'cleanup-result.json').write_text(json.dumps(states,indent=2))
-        if any(s['State']['Running'] or s['State']['ExitCode'] for s in states):raise RuntimeError('cleanup failed')
+        if any(s.get('missing') or s['State']['Running'] or s['State']['ExitCode'] for s in states):raise RuntimeError('cleanup failed')
     def logger(self,stop=False):
         self.ground(self.root);out=self.root/'ulog';out.mkdir(exist_ok=True)
         for v in self.fleet['vehicles']:

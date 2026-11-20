@@ -1,0 +1,141 @@
+{
+  "scope": "PC development simulation; original split-container harness and packaged entry. Raw evidence files are relative to each named run.",
+  "source_commit": "a2391f8de48babb447eb00a609d599655c5e9c40",
+  "status": "partial",
+  "runs": [
+    {
+      "run": "racer-pc-split-1120-230711",
+      "sha256": {
+        "configuration-sources.json": "94312521f589a0fc78f5de2a320c6613892f5882cb8793c024528e0c48431073",
+        "build-manifest.json": "739ce534e3948f2ba0396704007d57833cd13ffdf8e7f2e4bb20b55017648fff",
+        "verified-placement.json": "8e43f6ffa1182ea1bb1d5da25ccfec51c7e019b67bc18a7466a8cc773f999b1a",
+        "readiness/result.json": "392d5e917b2ec090adb3cd4eb51bfe5ba8acf48082067d5355efd049bd06705d",
+        "cleanup-result.json": "a18d481bd97d83de3cdd6079456dc9a4897a185555014c8b010a675e05010a5c",
+        "core-final.json": "b1035ac26a9ba98efceb13a7d9c8d7e435243f3dc5c1bbe3e9218d6cd6dd99a5",
+        "ground-flow-result.json": "24c4be529d601dbd3654c58d4f682c1121cef671afa19977e74ff95c258e52e1"
+      }
+    },
+    {
+      "run": "racer-split-complete-1120-231643",
+      "sha256": {
+        "configuration-sources.json": "94312521f589a0fc78f5de2a320c6613892f5882cb8793c024528e0c48431073",
+        "build-manifest.json": "739ce534e3948f2ba0396704007d57833cd13ffdf8e7f2e4bb20b55017648fff",
+        "verified-placement.json": "ed34cb2d9365c75b8b51b456b26fc5cd3a3067f81f614835dcca7a1fc2c252b3",
+        "readiness/result.json": "b3e9bca67735c6454bdd8f207a8ed9b9fac90bf66a4fea19ede7e1194c208081",
+        "cleanup-result.json": "0a4dfa6b764b8f569b1504f74b40e3a379033342882cd19cb1877319504b5fc7",
+        "core-final.json": "e700114f970b88bda0bdaf1167a55558597c74cd3dd0ab29024203c6ca573f28",
+        "mission/result.json": "214a0b3dfc9420f593b0a1e73fc397d1a2efc7394d9dc3bd0f38817f2eb436cb",
+        "flow-result.json": "5cc9de7399e99f9fbbece1f2f555684d6ef3624e18674d5459097a4c9267847b",
+        "evaluation.json": "ba56f1f2f76d1e09c478da6a3a1eb1ae739841d711dc58b67bb56c9d7897c8dd",
+        "recording-readback/recording-result.json": "a7f8e7fe69cf3fbe6ecd5632e61f924f6771afe720f7ed719bfb67e6607a1cd1"
+      }
+    },
+    {
+      "run": "racer-split-complete-1120-233024",
+      "sha256": {
+        "configuration-sources.json": "bf3dbf419aa8b2e996afc9262db1e77ecf868a32734fac95728b87ad3ef954a7",
+        "build-manifest.json": "739ce534e3948f2ba0396704007d57833cd13ffdf8e7f2e4bb20b55017648fff",
+        "verified-placement.json": "3cffa410cc14067057d4aa467badb885f22844c715cf35441d7e7e2b75f04ffe",
+        "readiness/result.json": "35402535aa1ffdf01a311594d2b52000d92ae97cf193cd1b02a4815d8314b112",
+        "cleanup-result.json": "d602ee0f229335c900fd1d6025e1364f41e9417ea8e5bf42520be84de4c1f004",
+        "core-final.json": "bc04c4d3a917f98016a1a33142e9284109f09c79d220c991ba64d8363983b240",
+        "mission/result.json": "433546e0fff63ff429a20f06add133bdaed0b960cbee73ddeea5bba63e33f3d1",
+        "flow-result.json": "81e8bf842c5c8c2f10dd357dcea0a4962e011bd437661db44c99573a47556e40",
+        "evaluation.json": "1919272d46d036f81f085717ab97fef9480f6c0cecd95cb45b4635092b6b8180",
+        "recording-readback/recording-result.json": "39fe8b69ee9940c74feb0814f3b58bbdb065020f615fce4f8ad11f31661d5e83"
+      }
+    },
+    {
+      "run": "racer-split-complete-1120-235100",
+      "sha256": {
+        "configuration-sources.json": "bf3dbf419aa8b2e996afc9262db1e77ecf868a32734fac95728b87ad3ef954a7",
+        "build-manifest.json": "739ce534e3948f2ba0396704007d57833cd13ffdf8e7f2e4bb20b55017648fff",
+        "verified-placement.json": "2b64b17e73866b4cb983946a4943f69b90cb1be8ea7d0a43efab5ea224aa499e",
+        "readiness/result.json": "450432af102ffa53e2f301bb0af0c6a9c23855e039ae9eda39ec500a2bd9a43b",
+        "cleanup-result.json": "bdffc5990a186334d6bab064dbdb386e7aac41023fdbabb50dfbf5d154526ae1",
+        "core-final.json": "f4692c202b4bb14b1b5a538a950d48fc409e04b003b9dd5f8e805857df06a3fb",
+        "mission/result.json": "be6300b3a34aea2d43574aae97664e7903ede8f720f72531fe3347536a9bb3cb",
+        "flow-result.json": "91059b712fecc9616c076404e6df5a9507457c5a5963074e82ca7831b08ac8f9",
+        "evaluation.json": "231f38fbd684167ab37e271029d411abef3106c5541e23c36eaff3100c2ab3d2",
+        "recording-readback/recording-result.json": "aec7f367b2058412e7c2e367ac4f4e4e65b477fff1575f510b91accf0aa9a58b"
+      }
+    }
+  ],
+  "packaged_entry_validation": {
+    "host_offline_tests": 47,
+    "ros_interface_tests": {
+      "drone0": 2,
+      "drone1": 2,
+      "network": "none"
+    },
+    "swarm_placement": "Isolated prepare_config output matched both archived vehicle mappings",
+    "native_worker_lifecycle": "Each selected exploration node exposed the expected ROS drone ID. After readiness, the worker, exploration node and both solvers exited zero on stop.",
+    "early_stop_limit": "An isolated stop sent immediately on first process visibility did not pass; initialization-time shutdown is not validated.",
+    "archive_replay": "Original per-vehicle metrics and cleanup verdicts matched one shared and three split flights. Recorded worker identities matched ground and successful flight sessions.",
+    "live_flight_from_packaged_entry": {
+      "run": "racer-review-flight-1121-164424-b",
+      "pass": true,
+      "mode": "explore-complete",
+      "runs_verified": 1,
+      "vehicles": {
+        "drone0": {
+          "active_revisions": 16,
+          "rejected_revisions": 5,
+          "tracking_wall_s": 150.45,
+          "max_horizontal_excursion_m": 7.0,
+          "termination_reason": "native_finished"
+        },
+        "drone1": {
+          "active_revisions": 30,
+          "rejected_revisions": 2,
+          "tracking_wall_s": 150.46,
+          "max_horizontal_excursion_m": 8.18,
+          "termination_reason": "native_finished"
+        }
+      },
+      "containers_exited_zero": 16,
+      "recording_readback_pass": true,
+      "sha256": {
+        "configuration/flight.json": "cefc126d8cb21cb70ead618db4a8775c4dc632ebe5bbc4bfdbebebf69469460d",
+        "configuration/fleet.json": "a10f3d939284824bcb101546f7e2a5ef192b2fdb7d50a868b1e6be7e89aead4e",
+        "runtime-source.json": "7ee02b4eeee630358b782e44d97c483c72c426d8f40cf021a6ca5f32e980a510",
+        "build-manifest.json": "739ce534e3948f2ba0396704007d57833cd13ffdf8e7f2e4bb20b55017648fff",
+        "verified-placement.json": "18ffa99c3008802019c59dee9793b623f324b32955112b460fc2bc6f9df8700a",
+        "mission/result.json": "93d326980de86531a8abe3ce7168d12e654246ed9548c3ef2afcf43df7ded08c",
+        "flow-result.json": "87857652cde102f4e1d4b81de5f77804acef831ea1aa46214119c81066c90e77",
+        "evaluation.json": "37fddca64158988cd1feedac0a2703a505589fe425c055417f066faa8a1620f3",
+        "cleanup-result.json": "26bf801df64f8b9dc0362ab60aee73b1f1c6278c87358a0cb03879ef034c81c6",
+        "core-final.json": "8f529397e00f136a7edcfbbaff1c3e563f4babde6f004ea4bc84e6592455a6ff",
+        "recording-readback/recording-result.json": "6575ccf5f90c0d386b12bbfc2200cadcef4e95843d9b4768951d5366cbd53bf8"
+      }
+    },
+    "live_ground": {
+      "run": "racer-review-ground-1121-002959",
+      "native_placement": "default (omitted from input)",
+      "stages": {
+        "up": 0,
+        "sensors": 0,
+        "survey": 0,
+        "start": 0,
+        "stop": 0,
+        "down": 0
+      },
+      "readiness_checks_passed": 23,
+      "distinct_native_containers": 2,
+      "containers_exited_zero": 16,
+      "sha256": {
+        "swarm-topology.json": "a3d678244c938d854274d892c3401d33b707e155aba32707aa01f68ed570f3eb",
+        "verified-placement.json": "925809559ad68be820aac529d010443da9aa1eca7c6e53e144deab0246bf2345",
+        "readiness/result.json": "72f2f9e8c1c2975129723a13e9ae068b33b5946d84a60f7401d25712ee2b6fde",
+        "px4-ground.json": "fb58c04634115e923fd6e759cced1a736d45bcc8ce6b66bbbe94e8ee424928fe",
+        "cleanup-result.json": "c70448ba7a2e23b919a108237ce4cc63b098f65168e3363ffb49b690cd5de385",
+        "core-final.json": "c513bd574db661241f16bde052cc21b3db29991d17fc1565ffc42ba92750755d"
+      }
+    }
+  },
+  "skill_review": [
+    "uav-component-deployment: externalize host configuration and verify individual owned worker lifecycles",
+    "uav-sim-e2e-validation: retain the flight, cleanup and recording verdicts independently. Existing guidance covers this case."
+  ],
+  "status_scope": "Historical and packaged runs have mixed outcomes. The packaged entry passed one complete two-vehicle PC run; coverage and repeatability remain unassessed."
+}

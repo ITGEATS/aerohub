@@ -15,7 +15,14 @@ class Worker(ServiceThread):
             os.killpg(self.process.pid,signal.SIGTERM)
             try:self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:os.killpg(self.process.pid,signal.SIGKILL);self.process.wait(timeout=3)
-for v in fleet['vehicles']:
+vehicles = fleet['vehicles']
+if len(sys.argv) > 2:
+    if kind != 'native' or len(sys.argv) != 3:
+        raise ValueError('only the native worker supports a vehicle selector')
+    vehicles = [v for v in vehicles if v['namespace'] == sys.argv[2]]
+    if len(vehicles) != 1:
+        raise ValueError('native worker must select exactly one configured vehicle')
+for v in vehicles:
     out=root/v['namespace'];out.mkdir(exist_ok=False)
     env=dict(os.environ,RACER_VEHICLE_INDEX=str(v['index']),RACER_OUTPUT=str(out))
     worker=Worker(identity=v['namespace'],placement='pc',command=['python3','/multi/'+kind+'.py'],
