@@ -25,7 +25,8 @@ APPLICATIONS = {
 }
 AS2_PACKAGES = {'uav_planner_interfaces', 'uav_follow_path_execution', 'as2_behavior', 'as2_behaviors_motion', 'as2_core', 'as2_motion_controller',
                 'as2_motion_reference_handlers', 'as2_msgs', 'as2_platform_pixhawk', 'as2_state_estimator',
-                'mocap4r2_msgs', 'px4_msgs', 'rmw_fastrtps_shared_cpp', 'vision_msgs'}
+                'mocap4r2_msgs', 'px4_msgs', 'rmw_fastrtps_shared_cpp', 'vision_msgs',
+                'uav_inference_interfaces', 'uav_inference'}
 SUPER_PACKAGES = {'super_planner','rog_map','mars_quadrotor_msgs','uav_super_adapter','uav_planner_framework','as2_navigation_inputs'}
 EGO_PACKAGES = {'ego_planner','path_searching','plan_env','quadrotor_msgs','traj_opt','traj_utils','uav_ego_planner_adapter','uav_planner_framework','as2_navigation_inputs'}
 OLD = '/data/local/tmp/aerohub-as2'
