@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    detector_backend: yolo
+    registered_depth: true
+    depth_is_perspective: false
+    image_topic: sensor_measurements/FrontCamera/rgb/image
+    depth_topic: sensor_measurements/FrontCamera/depth_planar/image
+    rgb_info_topic: sensor_measurements/FrontCamera/rgb/camera_info
+    depth_info_topic: sensor_measurements/FrontCamera/depth_planar/camera_info

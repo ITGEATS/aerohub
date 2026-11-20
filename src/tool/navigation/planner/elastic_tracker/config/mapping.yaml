@@ -1,0 +1,19 @@
+# Defaults: upstream/src/mapping/launch/mapping.launch; static inflation override below.
+use_global_map: false
+use_mask: false
+down_sample_factor: 2
+depth_filter_tolerance: 0.15
+depth_filter_mindist: 0.2
+depth_filter_margin: 2
+p_min: -199
+p_max: 220
+p_hit: 62
+p_mis: 62
+p_occ: 139
+p_def: -199
+resolution: 0.15
+local_x: 20
+local_y: 20
+local_z: 5
+# User instruction 2026-11-17: 1 cell * 0.15 m = 0.15 m per axis.
+inflate_size: 1

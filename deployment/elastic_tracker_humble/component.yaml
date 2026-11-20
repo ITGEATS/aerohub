@@ -1,0 +1,36 @@
+schema_version: '0.1'
+id: elastic_tracker_native
+version: 0.2.0
+kind: navigation-internal-component
+source:
+  directory: src/tool/navigation/planner/elastic_tracker
+  upstream: src/tool/navigation/planner/elastic_tracker/upstream
+  commit: 0a302a2a9cc8b733e74941fdd4af3fb449447bea
+  port: src/tool/navigation/planner/elastic_tracker/ros2_adapter/native/port
+  license: GPL-3.0 for the native port; Apache-2.0 for AeroHub bridge code
+provides: [planner.elastic-tracker]
+cards: [cards/planner/elastic-tracker.yaml]
+roles:
+  compute: [Object Detection, TrackObject, Elastic Planner, FollowTimedPath]
+  workstation: [tracking action client, mission orchestration]
+dependencies:
+  detection: deployment/object_detection/component.yaml
+  tracking: deployment/target_tracking/component.yaml
+  execution: src/behavior/follow_path
+runtime:
+  developer_image: ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.0
+  architecture: x86_64
+  build: deployment/elastic_tracker_humble/build.sh
+  start: uav_elastic_tracker_adapter/stack.launch.py
+  perception: uav_elastic_tracker_adapter/tracking_object.launch.py
+  namespace: drone0
+  clock: Consistent ROS clock for the camera, tracking, Planner and execution
+  preconditions: Matching AS2 and tool interfaces, calibrated RGB-D and TF, current odometry, and one motion owner
+  health: Action discovery plus current target validity and elastic_adapter/state input_ready
+  stop: Disable Elastic and await stop_confirmed before canceling TrackObject
+  rollback: Stop the mission, restore the pinned build, and restart with empty map and tracking state
+  motion_owner: uav_follow_path_execution/FollowTimedPath
+validation:
+  stage: partial
+  evidence: src/tool/navigation/planner/elastic_tracker/README.md
+  unfinished: [continuous moving-target tracking, self-contained release image, RoboPi, real aircraft]

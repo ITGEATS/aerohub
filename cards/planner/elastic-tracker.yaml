@@ -1,0 +1,48 @@
+schema_version: '1.0'
+id: planner.elastic-tracker
+version: 0.2.0
+type: capability
+name: Elastic target tracking
+description: Consumes vehicle state, axial depth and private target estimates; submits
+  complete timed trajectories to the existing FollowTimedPath execution owner.
+implementation:
+  component_id: elastic_tracker_native
+  manifest: deployment/elastic_tracker_humble/component.yaml
+  shared_runtime: elastic-tracker
+  coupled_capabilities: []
+inputs:
+- id: target_state
+  capability_type: perception/target/state/3d
+- id: local_state
+  capability_type: state/local/odometry/3d
+- id: depth
+  capability_type: sensor/camera/depth/axial-image
+- id: controller
+  capability_type: control/controller/status
+outputs:
+- id: execution_state
+  capability_type: diagnostics/health/text
+interfaces:
+- id: enable
+  role: functional_operation
+  interaction: request_response
+  protocol: ros2_service
+  schema: std_srvs/srv/SetBool
+  parameter_schema: null
+lifecycle:
+  management: system_managed
+  operations:
+    start: null
+    status: null
+    stop: null
+hardware_requirements:
+- hardware_type: sensor/camera/depth
+- hardware_type: compute/cpu/x86-64
+- hardware_type: flight-controller/px4
+resource_access:
+  reads:
+  - vehicle/local-odometry
+  - vehicle/rgbd-target-observations
+  shared_writes: []
+  exclusive_writes:
+  - vehicle/motion
