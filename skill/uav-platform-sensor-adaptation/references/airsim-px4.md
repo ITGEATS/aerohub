@@ -23,6 +23,8 @@ AS2 的 IMU topic 名不能证明数据未经处理；检查角速度、加速�
 
 先确认 scene 二进制、AirSim/PX4 源码版本与实际配置一致。源码中存在功能不证明下载的预编译场景包含它。检查仿真时间与 PX4 时间如何映射、暂停/reset 后是否清空旧数据，以及各车辆 TF/话题是否隔离。
 
+Windows AirSim 经 TCP 中继连到 Docker PX4 时，MAVLink 参数走独立的 UDP 通路。核对 UDP 对端、PX4 接收计数和固件实际生效值。已确认 AirSim GPS 模型延迟为 200 ms 的用例，可以按 SUPER 的启动方式显式传入 `PX4_PARAM_SENS_GPS0_DELAY=200`。用 PX4 CLI 和 ULog 确认参数，并用 `vehicle_gps_position.timestamp - timestamp_sample` 核对补偿。YOPO-Tracker 的固定路径和实时断流试飞都核实了 200 ms 启动值，固定路径 ULog 也确认了 200 ms 的时间戳修正。
+
 ## FAST-LIVO2 案例的已验证边界
 
 项目使用统一 AirSim RPC ROS 2 传感器桥提供 IMU、RGB 图像和 PointCloud2，再由 FAST-LIVO2 Adapter 转为锁定算法接口。AirSim 1.8.1 没有逐点采样时间，适配明确使用 instantaneous scan，不按扫描角速度伪造时间；仿真推导属性不能描述成真实硬件回传值。

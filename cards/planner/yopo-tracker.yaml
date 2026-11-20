@@ -1,0 +1,66 @@
+schema_version: '1.0'
+id: planner.yopo-tracker
+version: '0.1.0'
+type: tool
+name: YOPO-Tracker visual tracking
+description: Tracks a visual target selected by the native RGB-D model and submits rolling motion trajectories with a braking tail through FollowTimedPath.
+
+implementation:
+  component_id: aerohub.planner.yopo-tracker
+  manifest: deployment/yopo_tracker_humble/component.yaml
+  shared_runtime: yopo_tracker_live
+  coupled_capabilities: []
+
+inputs:
+  - id: rgb
+    capability_type: sensor/camera/rgb/image/reliable
+  - id: rgb_camera_info
+    capability_type: sensor/camera/rgb/camera-info/reliable
+  - id: axial_depth
+    capability_type: sensor/camera/depth/axial-image/32fc1/reliable
+  - id: depth_camera_info
+    capability_type: sensor/camera/depth/camera-info/reliable
+  - id: self_pose
+    capability_type: state/self/pose/3d
+  - id: self_twist
+    capability_type: state/self/twist/3d
+  - id: odometry
+    capability_type: state/local/odometry/3d
+  - id: controller_status
+    capability_type: control/controller/status
+  - id: platform_status
+    capability_type: control/platform/status
+
+outputs:
+  - id: tracking_events
+    capability_type: task/yopo-tracker/events
+
+interfaces:
+  - id: start_tracking
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+  - id: stop_tracking
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: std_srvs/srv/Trigger
+    parameter_schema: null
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/gpu/cuda
+  - hardware_type: sensor/camera/rgb
+  - hardware_type: sensor/camera/depth
+  - hardware_type: flight-controller/px4
+
+resource_access:
+  reads: [sensor/rgb-camera, sensor/depth-camera, vehicle/self-state, vehicle/controller-status]
+  shared_writes: [compute/gpu]
+  exclusive_writes: [vehicle/motion]
