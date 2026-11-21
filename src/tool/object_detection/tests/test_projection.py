@@ -78,6 +78,20 @@ class ProjectionTest(unittest.TestCase):
         self.assertIn('CANCELLED_GENERATION',result.error)
         self.assertFalse(result.detections[0].position_valid)
 
+    def test_point_center_uses_the_depth_of_each_selected_pixel(self):
+        depth = np.full((20, 20), 2., np.float32)
+        depth[:, 10:] = 2.1
+        self.image.data = array('B', depth.tobytes())
+        self.p.depth.clear()
+        self.p.on_depth(self.image)
+
+        result = self.p.project(self.frame, 8, lambda _: True, 'yolo_mask_gemini2_point_center')
+        self.assertTrue(result.valid, result.error)
+        detection = result.detections[0]
+        self.assertAlmostEqual(detection.depth_m, 2.05)
+        self.assertAlmostEqual(detection.position.x, 1.9)
+        self.assertAlmostEqual(detection.position.z, 2.05)
+
     def test_late_capture_time_tf_recovers_within_existing_budget(self):
         self.buffer.clear()
         self.p.wait=.25

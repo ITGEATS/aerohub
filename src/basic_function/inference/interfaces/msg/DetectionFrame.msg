@@ -3,6 +3,7 @@ std_msgs/Header header
 string request_id
 uint64 generation
 uint64 worker_generation
+uint64 tracking_generation
 string model_version
 uint32 width
 uint32 height

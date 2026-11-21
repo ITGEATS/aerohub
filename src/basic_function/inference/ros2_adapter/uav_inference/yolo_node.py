@@ -57,15 +57,18 @@ class YoloNode(Node):
             self.last_call = dict(request_id=request.request_id, source_stamp=seconds(source.header.stamp))
             boxes, transform = self.detector.detect(image,
                 source.header.stamp.sec * 1_000_000_000 + source.header.stamp.nanosec,
-                source.header.frame_id, request.generation, request.request_id)
+                source.header.frame_id, request.generation, request.request_id,
+                tracking_stream=request.tracking_stream)
             frame = DetectionFrame(header=source.header, request_id=request.request_id,
                 generation=request.generation, worker_generation=self.detector.worker_generation,
+                tracking_generation=self.detector.tracking_generation,
                 model_version=self.detector.model_version, width=source.width, height=source.height,
                 valid=True, transform_json=json.dumps(transform), timings_json=json.dumps(dict(
                     self.detector.timings, ros_image_conversion_ms=(converted-started)*1000,
                     adapter_total_ms=(time.perf_counter()-started)*1000)))
             for box in boxes:
-                detection = Detection(xyxy=box['xyxy'], category=box['category'], confidence=box['confidence'])
+                detection = Detection(xyxy=box['xyxy'], category=box['category'],
+                                      confidence=box['confidence'], track_id=box.get('track_id', 0))
                 mask = box['mask']
                 detection.mask = Image(header=source.header, width=source.width, height=source.height,
                     encoding='mono8', step=source.width, data=array('B', mask.tobytes()))

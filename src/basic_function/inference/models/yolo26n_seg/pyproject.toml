@@ -2,7 +2,7 @@
 name = "aerohub-yolo26n-seg-worker"
 version = "0.1.0"
 requires-python = ">=3.10,<3.11"
-dependencies = ["aerohub-inference-runtime", "ultralytics==8.4.210", "torch==2.6.0", "torchvision==0.21.0", "numpy==1.26.4", "opencv-python==4.11.0.86", "pyyaml==6.0.3"]
+dependencies = ["aerohub-inference-runtime", "ultralytics==8.4.210", "torch==2.6.0", "torchvision==0.21.0", "numpy==1.26.4", "opencv-python==4.11.0.86", "pyyaml==6.0.3", "lap==0.5.13"]
 
 [tool.uv.sources]
 aerohub-inference-runtime = {path = "../../runtime"}

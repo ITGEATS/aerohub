@@ -12,7 +12,7 @@ class TorchBackend:
     """One model, fixed named tensors, synchronous CPU/CUDA execution."""
 
     def __init__(self, model_factory, weights_path, model_id, inputs, outputs, device='cuda',
-                 state_loader=None):
+                 state_loader=None, *, load_on_cpu=False):
         self.device = torch.device(device)
         if self.device.type not in ('cuda', 'cpu'):
             raise ValueError('device must be CPU or CUDA')
@@ -27,10 +27,13 @@ class TorchBackend:
         weights = Path(weights_path)
         self._lock = threading.Lock()
         self._closed = False
-        self._model = model_factory().to(self.device).eval()
+        load_device = torch.device('cpu') if load_on_cpu else self.device
+        self._model = model_factory().to(load_device).eval()
         state = (state_loader(weights) if state_loader is not None else
-                 torch.load(weights, map_location=self.device, weights_only=True))
+                 torch.load(weights, map_location=load_device, weights_only=True))
         self._model.load_state_dict(state)
+        if load_device != self.device:
+            self._model.to(self.device)
         self.metadata = dict(model_id=model_id,
                              model_version='sha256:' + hashlib.sha256(weights.read_bytes()).hexdigest(),
                              device=str(self.device), inputs=self.inputs, outputs=self.outputs)

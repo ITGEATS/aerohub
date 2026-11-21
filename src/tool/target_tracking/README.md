@@ -10,6 +10,28 @@
 原算法关联最近的门内目标，保留 M/N 确认、可达域重捕获和短时预测；没有外观身份或
 跨遮挡身份保证。Qt/Rt 是上游模型假设，不是检测器报告的测量协方差。
 
+## 流式 ByteTrack 与原始观测
+
+Object Detection 使用 YOLO 时，可通过 `stream_enabled:=true bytetrack_enabled:=true`
+为同一连续图像流的检测附加二维 ID。Tracking 使用 `observation_mode:=stream`，
+并将 `stream_query` 设为检测器的 `query`。默认的快照和 Grounding DINO 路径继续使用
+三维关联。可配置 `world_frame` 固定输入坐标系，缺省沿用首次有效观测固定 frame 的行为。
+
+Tracking 只在同一个检测流世代内使用 ID，候选仍必须有有效三维测量并通过原三维门。
+同 ID 候选优先，已知冲突 ID 不接管当前轨迹。无 ID 输入继续使用三维关联。
+当轨迹重新确认时，读取实测历史的消费者需按 `track_epoch` 切换历史。
+
+- `tools/target_tracking/state` 发布估计状态和预测。使用速度时须同时检查
+  `valid` 和 `velocity_valid`。单独的重新初始化位置没有速度证据。
+- `tools/target_tracking/associated_position` 在已确认轨迹接纳每条三维测量时
+  发布 `AssociatedPosition3D`。保留滤波前的位置、原始采集时间和 frame。
+  消费者使用 `session_id / generation / track_epoch` 隔离历史，并以 `capture_id` 去重。
+  缺测、拒绝和纯预测期间不会发布实测事件。空检测仍可推进状态中的处理序号，
+  最近三维观测时间保持原值。
+
+新增字段影响 ROS 消息类型。部署时重编同一 overlay 中的接口和消费者。
+单机观测仍以 `follow=false` 启动，现有显式转向请求继续通过 Navigation Tool。
+
 ## 数据与时间契约
 
 - Goal：非空 `query`、有限正 `timeout`（墙钟秒）；query 的支持范围由部署的检测后端决定。

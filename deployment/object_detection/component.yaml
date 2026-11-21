@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.tool.object-detection
-version: 0.4.0
+version: 0.5.0
 source:
   directory: src/tool/object_detection
   license: GPL-3.0-or-later
@@ -22,6 +22,9 @@ runtime:
       address: /drone0/tools/object_detection/observe
       schema: uav_object_detection_interfaces/srv/DetectSnapshot
       parameter_schema: src/tool/object_detection/interfaces/srv/DetectSnapshot.srv
+    detections:
+      address: /drone0/perception/object_detection/detections
+      schema: uav_object_detection_interfaces/msg/ObjectDetectionFrame
   python_entry: drone.object_detection.detect
   camera_binding: deployment/object_detection/params.example.yaml
   query: original text; backend-specific normalized interpretation
@@ -33,6 +36,7 @@ runtime:
   sharing: public-observations-legacy-service-and-stream-share-one-adapter-and-inference-worker
   readiness: RGB and inference for 2D; positioning additionally needs depth, calibration and historical TF
   stream_default: false
+  bytetrack: opt-in with bytetrack_enabled; applies to streaming YOLO only
   estimate_position_default: false
   optional_position_inputs:
     when: estimate_position=true

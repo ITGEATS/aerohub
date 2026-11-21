@@ -1,6 +1,6 @@
 schema_version: '0.1'
 id: aerohub.tool.target-tracking
-version: 0.3.0
+version: 0.4.0
 source:
   directory: src/tool/target_tracking
   license: MIT
@@ -29,14 +29,20 @@ runtime:
       address: /drone0/tools/target_tracking/track
       schema: uav_target_tracking_interfaces/action/TrackObject
       parameter_schema: src/tool/target_tracking/interfaces/action/TrackObject.action
+    state:
+      address: /drone0/tools/target_tracking/state
+      schema: uav_target_tracking_interfaces/msg/TargetState
+    associated_position:
+      address: /drone0/tools/target_tracking/associated_position
+      schema: uav_target_tracking_interfaces/msg/AssociatedPosition3D
   python_entry: drone.target_tracking.track
   timeout_clock: monotonic-wall-clock
   persistent_state: none; each goal starts a new EKF and UUID
   rollback: cancel, stop owned process, restore source and rebuild overlay, restart with empty state
   coupling: one EKF per active action, Python client separate; shares external detection worker
 resources:
-  reads: [tools/object_detection/observe]
-  writes: [target-state-action-feedback]
+  reads: [tools/object_detection/observe, perception/object_detection/detections]
+  writes: [target-state-action-feedback, target-state-stream, associated-position-stream]
   exclusive: [local-tracking-session]
   enforcement: local lock; serial detection request occupancy persists until actual reply
   motion_authority: follow=false none; follow=true delegated to Navigation Tool

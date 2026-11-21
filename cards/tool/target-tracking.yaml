@@ -1,16 +1,20 @@
 schema_version: "1.0"
 id: tool.target-tracking
-version: "0.3.0"
+version: "0.4.0"
 type: tool
 name: Target Tracking Tool
-description: Maintains one query-selected 3D target state using serial positioned observations and the locked YOPO-Tracker EKF. Default follow=false is observation-only; optional follow=true requests turn-only Navigation TARGET_YAW with frozen own position (current SUPER/YOPO reject this mode); nearest gated target is not a semantic identity guarantee. Consumes only valid 3D positions; box-based surface measurements are not object centers. Requires the separately deployed detector and its calibrated RGB-D and historical TF.
+description: Maintains one query-selected 3D target state using serial positioned observations and the locked YOPO-Tracker EKF. Default follow=false is observation-only; optional follow=true requests turn-only Navigation TARGET_YAW with frozen own position (current SUPER/YOPO reject this mode); scoped ByteTrack IDs optionally guide 3D association in supported streams, without a semantic identity guarantee. Consumes only valid 3D positions; box-based surface measurements are not object centers. Requires the separately deployed detector and its calibrated RGB-D and historical TF.
 implementation:
   component_id: aerohub.tool.target-tracking
   manifest: deployment/target_tracking/component.yaml
   shared_runtime: target-tracking-adapter
   coupled_capabilities: []
 inputs: []
-outputs: []
+outputs:
+  - id: target_state
+    capability_type: perception/target/state/3d
+  - id: associated_position
+    capability_type: perception/target/associated-position/3d
 interfaces:
   - id: track
     role: functional_operation
@@ -24,6 +28,6 @@ lifecycle:
 hardware_requirements:
   - hardware_type: compute/cpu/x86-64
 resource_access:
-  reads: [tools/object_detection/observe]
+  reads: [tools/object_detection/observe, perception/object_detection/detections]
   shared_writes: []
   exclusive_writes: [local/target-tracking-session, delegated/vehicle.motion]
