@@ -87,7 +87,7 @@ case "$component" in
  swarm-formation) packages+=(uav_as2_setpoint_adapter ego_planner uav_swarm_formation_adapter as2_navigation_inputs) ;;
  all) packages+=(uav_as2_setpoint_adapter mrs_formation_reshaping uav_cat_ora_adapter ego_planner uav_swarm_formation_adapter as2_navigation_inputs) ;;
  super) packages+=(super_planner uav_super_adapter as2_navigation_inputs) ;;
- aerovla) packages+=(uav_aerovla_planner) ;;
+ aerovla) packages+=(uav_aerovla_planner uav_planner_framework) ;;
  ego-planner-v2) packages+=(ego_planner uav_ego_planner_adapter as2_navigation_inputs uav_follow_path_execution) ;;
 esac
 bash "$root/deployment/oh-ros-build/run.sh" build "${packages[@]}"
