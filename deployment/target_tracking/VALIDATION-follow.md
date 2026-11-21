@@ -1,3 +1,7 @@
+# 历史转向试验（已移除）
+
+本文保留旧实现的验证记录。当前 Tracking 仅观测，拒绝 `follow=true`；下述转向行为不再是现行能力。
+
 # Follow选项验证（2026-11-16）
 
 follow=false默认只观测；true请求转向人物，冻结自身xyz，不追逐。新增Result

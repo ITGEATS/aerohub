@@ -1,6 +1,6 @@
 # YOPO-Tracker Planner
 
-单机 RGB-D 跟踪 Planner。独立的 [Inference worker](../../../../basic_function/inference/models/yopo_tracker/README.md) 返回锁定模型的预测，Planner 保有原生目标滤波与选轨。ROS 2 Humble Adapter 加上制动尾段，通过默认 `FollowTimedPath` 执行。原生 Takeoff 和 Land 由任务调用。
+Following Tool 的单机 RGB-D 视觉跟随实现，保留现有 Planner 目录和 `start/stop` 验证入口。目标由原生模型和关联逻辑选择，不调用 Tracking Tool，也不接受文本查询或指定目标身份。独立的 [Inference worker](../../../../basic_function/inference/models/yopo_tracker/README.md) 返回锁定模型的预测，Planner 保有原生目标滤波与选轨。ROS 2 Humble Adapter 加上制动尾段，通过默认 `FollowTimedPath` 执行。朝向由跟随实现内部生成并随轨迹执行，不新增单独转向入口。原生 Takeoff 和 Land 由任务调用。
 
 - [组件清单](../../../../../deployment/yopo_tracker_humble/component.yaml)记录依赖、资源所有权和阶段状态。
 - [Adapter 运行说明](ros2_adapter/README.md)包括构建、启动、停止与回归入口。

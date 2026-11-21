@@ -39,12 +39,12 @@ resources:
   writes: [target-state-action-feedback]
   exclusive: [local-tracking-session]
   enforcement: local lock; serial detection request occupancy persists until actual reply
-  motion_authority: follow=false none; follow=true delegated to Navigation Tool
+  motion_authority: none; follow=true rejected
   clock: caller-selected ROS clock; rollback aborts session
   ports: DDS only; inherits domain/network; no HTTP listener
 validation:
   stage: partial
   evidence: deployment/target_tracking/VALIDATION.md
   unfinished: [moving-target-accuracy, occlusion-and-identity, platform-fault-recovery, following-Mission]
-  follow_contract: deployment/target_tracking/VALIDATION-follow.md
+  historical_follow_validation: deployment/target_tracking/VALIDATION-follow.md
   query_contract: deployment/object_detection/VALIDATION-query.md

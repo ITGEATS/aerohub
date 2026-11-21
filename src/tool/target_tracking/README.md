@@ -1,9 +1,8 @@
 # Target Tracking Tool
 
-默认只观测的文本查询目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
+纯观测的文本查询目标跟踪：`TrackObject` → 串行 `DetectSnapshot`
 （`estimate_position=true`）→ 锁定 YOPO-Tracker EKF → Action 状态反馈。
-`follow=false` 不调用导航；`follow=true` 经 Navigation Tool 请求保持自身位置并转向人物。
-两种模式均不直接调用 Behavior、运动参考或平台服务，不发布自身状态/TF。
+`TrackObject` 仅观测，不调用导航或 Behavior，不发布运动参考或自身状态/TF。`follow` 字段仅保留消息兼容性，`true` 会被拒绝。原地转向和移动跟随均归 Following Tool；Following 可以调用 `TrackObject` 获取观测，并负责收尾自己启动的会话。
 
 源码分为 `interfaces/`、`ros2_adapter/`、`python_api/`。原算法与 MIT 许可证直接从
 已锁定参考子模块安装到 `share/uav_target_tracking/upstream/`，不改动、不复制 Fork。
@@ -76,39 +75,22 @@ CUDA replay are recorded in `deployment/object_detection/VALIDATION-query.md`.
 Live DINO tracking, identity/accuracy and flight remain unverified (partial).
 
 
-## Follow 选项（接口0.3.0）
+## 纯观测接口（0.3.0）
 
-```python
-drone.target_tracking.track(query='person', timeout=20., follow=False)  # 默认只观测
-drone.target_tracking.track(query='person', timeout=20., follow=True)   # 请求转向人物
-```
+`follow` 仅为消息与客户端签名兼容保留，必须为 `False`；`True` 在接单时拒绝。
+Tracking 不获取运动控制权，Result 的 `stop_confirmed` 对纯观测会话始终为 true。
+原地转向属于 Following 实现内部的运动处理，不提供单独转向入口。
 
-`follow` 是严格bool，只表示是否转向，不表示追逐或平移跟随。开启后，Tracking等待
-有效目标与同固定坐标系的新鲜自身位置和飞行状态，冻结首次请求时自身xyz，
-根据目标水平位置计算yaw；通过Navigation的TARGET_YAW＋HOLD请求，最多5Hz串行更新。
-没有有效目标时不提交运动，原有有限观察窗口到期TIMEOUT不代表已看到或已转向。
-
-Navigation独占运动资源；不能同时另起一个Navigation位置任务。今后要边飞边转向，
-须合并到同一个Navigation任务，不能两个入口分别争抢位置/yaw。
-目标失效、取消、超时或失败时取消自有Navigation并等待stop_confirmed；
-停止未知返回STOP_UNCONFIRMED并阻止本Tracking进程再次开启follow，不能自行抢占恢复。
-最终Action终态在Navigation清理后返回，Result新增stop_confirmed。
-
-**SUPER现可显式启用TARGET_YAW末端约束，但这不代表保持原位连续转向已支持；YOPO仍不支持。默认关闭或后端不支持时明确失败，不静默忽略。**
-此提交完成选项、Tool调用和生命周期，尚未完成SUPER转向执行和仿真转向验收。
-真实ROS替身测试通过不代表当前SUPER已能转向。应先使用follow=false完成观测。
-
-Action schema有变化，所有Tracking接口/服务端/客户端必须加载同一新overlay。
-独立构建和回归：
+构建和回归沿用现有脚本名称：
 
 ```bash
 bash deployment/target_tracking/build_follow_overlay.sh
 bash deployment/target_tracking/test_follow_overlay.sh
 ```
 
-新overlay默认在log/target-tracking-follow/workspace，旧query overlay只读复用；
-部署先加载旧query overlay再加载新follow overlay，TRACKING_WORKSPACE指向后者。
-详细证据见deployment/target_tracking/VALIDATION-follow.md。
+所有服务端与客户端需加载匹配的 overlay。脚本默认的历史工作区路径仅用于复用
+既有构建，可通过参数指定其他工作区。旧转向试验见
+[历史记录](../../../deployment/target_tracking/VALIDATION-follow.md)，不属于现行接口。
 
 ### 测量来源的不确定性
 
@@ -132,7 +114,7 @@ WestStreet known-height部署显式1m，依据之前独立身高测距约0.6–0
 公开只读目标状态流为 `<UAV>/tools/target_tracking/state`（`TargetState`），语义与Action
 反馈一致，包括valid、observation_stamp、valid_until、session/generation；会话结束发布
 无效状态。平台相机指向可按部署显式绑定此流，不能把场景Actor身份/真值作为替代。
-相机指向不占无人机运动控制；现有 `follow=True` 的原地机头朝向语义不因此改变。
+相机指向不占无人机运动控制；机体朝向由 Following 的具体实现处理。
 
 ### 短窗平均与跳点过滤（显式启用）
 
