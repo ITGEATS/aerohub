@@ -26,10 +26,19 @@ FRAME ADAPTATION (declared, per AGENTS "compat via Adapter" rule): the
 upstream policy is NED-native (AirSim: body +y = right, yaw clockwise+,
 "down" positive = descend; hint bands and move_path both assume it). The
 ROS world here is ENU. ``policy`` stays verbatim NED; this node converts
-ENU pose/target -> NED before calling it and converts the resulting
-timed points back to ENU (yaw sign negated) before publishing, so the
-published trajectory preserves the exact physical behavior upstream would
-have executed.
+ENU pose/target -> NED before calling it and publishes the resulting timed
+points in the fleet NED contract (the framework's make_goal performs the
+single NED -> vehicle ENU/odom conversion). It must NOT convert back to ENU
+here, or the goal's first point is mirrored to the wrong altitude/heading.
+
+ROLLING EXECUTION SHAPING (adapter layer, ``policy`` stays verbatim): NPU
+inference takes ~1.8 s while a policy step's trajectory is ~1.5 s, so a
+published non-final segment would expire before the next one arrives. This
+node rebuilds the handoff point from the CURRENT pose at response time and
+extends the trailing hold to ``roll_horizon_s`` so the next trajectory arrives
+inside the current coverage window and the behavior's rolling continuity and
+late-trajectory checks pass. The move endpoint velocity is zeroed so the hold
+is a static quintic-Hermite segment (no overshoot, v=0 continuity).
 """
 
 import copy
@@ -43,17 +52,18 @@ from scipy.spatial.transform import Rotation as R
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (DurabilityPolicy, QoSProfile, ReliabilityPolicy,
+                       qos_profile_sensor_data)
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from uav_inference_interfaces.srv import InferAeroVla
-from uav_planner_interfaces.msg import (TimedTrajectoryPoint,
+from uav_planner_interfaces.msg import (PlannerFailure, TimedTrajectoryPoint,
                                         TimedTrajectorySegment,
                                         VehicleTrajectory)
 
-from . import policy, prompts
+from . import policy, prompts, resolved as resolved_config_module
 
 
 def stamp_to_s(stamp):
@@ -112,7 +122,43 @@ class AerovlaPlannerNode(Node):
         self.inference_timeout = param('inference_timeout_s', 30.0)
         # TimedTrajectorySegment.valid_from = now + this lead.
         self.valid_from_lead = param('valid_from_lead_s', 0.05)
+        # Adapter-layer rolling horizon (seconds). Must exceed the gap between
+        # successfully published trajectories: one inference is ~1.8 s, and a
+        # transient INVALID_INPUT retry adds one dropped cycle (~3.5 s gap).
+        # Must stay below the framework trajectory_timeout (8 s). A longer hold
+        # only keeps the vehicle at the step endpoint; it also makes the
+        # behavior's start<=previous.end() update check easier to satisfy.
+        self.roll_horizon_s = param('roll_horizon_s', 6.0)
         self.max_failures = param('max_consecutive_failures', 3)
+        # When spawned by the planner framework (execution_backend=follow_path)
+        # the resolved task config overrides the ROS-parameter defaults so the
+        # published segments carry the framework task_id and vehicle set that
+        # OutputGateway.accept validates (uav_planner_framework/trajectory.py).
+        resolved_path = param('resolved_config', '')
+        if resolved_path:
+            view = resolved_config_module.load_resolved(resolved_path)
+            settings = view['parameters']
+            self.service_name = settings['service_name']
+            self.obj_desc = settings['obj_desc']
+            self.target_position = [float(v) for v in settings['target_position_enu']]
+            rate_hz = float(settings['rate_hz'])
+            self.max_skew = float(settings['max_input_skew_s'])
+            self.inference_timeout = float(settings['inference_timeout_s'])
+            self.valid_from_lead = float(settings['valid_from_lead_s'])
+            self.roll_horizon_s = float(settings.get('roll_horizon_s',
+                                                    self.roll_horizon_s))
+            self.max_failures = int(settings['max_consecutive_failures'])
+            self.vehicle_id = view['vehicle_id']
+            self.resolved_task_id = view['task_id']
+            # Board contract: no transformers on the board, so the prompt
+            # table must ride the resolved parameters (manifest defaults or
+            # task override), not only the ROS-parameter standalone default.
+            prompt_table_path = str(settings.get('prompt_table') or prompt_table_path)
+            front_topic = str(settings.get('front_topic') or front_topic)
+            down_topic = str(settings.get('down_topic') or down_topic)
+            pose_topic = str(settings.get('pose_topic') or pose_topic)
+        else:
+            self.resolved_task_id = ''
         if not (isinstance(rate_hz, float) and math.isfinite(rate_hz) and rate_hz > 0.0):
             raise ValueError('rate_hz must be a positive finite number')
         if len(self.target_position) != 3 or not all(
@@ -128,7 +174,9 @@ class AerovlaPlannerNode(Node):
         self.pose = None
         self.state = 'IDLE'          # IDLE|RUNNING|PAUSED|STOPPED
         self.goal_seq = 0
-        self.task_id = ''
+        # Under the framework the task_id is fixed by the resolved config
+        # (gateway validation); standalone goals fall back to aerovla-<seq>.
+        self.task_id = self.resolved_task_id
         self.generation = 0          # bumped on goal/cancel; discards in-flight
         self.step = 0
         self.in_flight = None        # dict(future, generation, sent)
@@ -136,16 +184,47 @@ class AerovlaPlannerNode(Node):
         self.last_error = ''
         self.last_gen_ids = []
         self.total_ms = 0.0
+        # Reference (not measured) handoff from the last published non-final
+        # segment. The behavior checks rolling continuity against its own
+        # sampled reference at new.start, so the next segment must start at
+        # this cached endpoint rather than the noisy actual pose.
+        self.ref_handoff = None      # {'position': [x,y,z]_ned, 'yaw': yaw_ned}
 
-        self.create_subscription(Image, 'front', self.on_front, qos_profile_sensor_data)
-        self.create_subscription(Image, 'down', self.on_down, qos_profile_sensor_data)
-        self.create_subscription(PoseStamped, 'pose', self.on_pose, qos_profile_sensor_data)
+        self.create_subscription(Image, front_topic, self.on_front, qos_profile_sensor_data)
+        self.create_subscription(Image, down_topic, self.on_down, qos_profile_sensor_data)
+        self.create_subscription(PoseStamped, pose_topic, self.on_pose, qos_profile_sensor_data)
         self.create_subscription(PoseStamped, 'goal', self.on_goal, 1)
         self.create_service(Trigger, 'cancel', self.on_cancel)
-        self.trajectory_pub = self.create_publisher(TimedTrajectorySegment, 'trajectory', 10)
+        # The framework subscribes planner/trajectory with RELIABLE +
+        # TRANSIENT_LOCAL (ros_node.py L82-92); offer the same durability so
+        # the match is QoS-compatible.
+        self.trajectory_topic = param('trajectory_topic', 'trajectory')
+        self.failure_topic = param('failure_topic', '')
+        # Observation inputs default to the standalone relative topics; the
+        # resolved config (manifest defaults) points them at the deployed
+        # flight_board topics (front/down cameras and fleet localization).
+        front_topic = param('front_topic', 'front')
+        down_topic = param('down_topic', 'down')
+        pose_topic = param('pose_topic', 'pose')
+        trajectory_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                    durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.trajectory_pub = self.create_publisher(TimedTrajectorySegment,
+                                                    self.trajectory_topic, trajectory_qos)
+        self.failure_pub = (self.create_publisher(PlannerFailure, self.failure_topic, 10)
+                            if self.failure_topic else None)
         self.status_pub = self.create_publisher(String, 'status', 10)
         self.infer_client = self.create_client(InferAeroVla, self.service_name)
         self.create_timer(1.0 / float(rate_hz), self.tick)
+        # Framework mode: the resolved config IS the task trigger — the
+        # framework spawns this process on START/RESUME, so waiting for a
+        # goal topic message would deadlock the chain (the planner is not
+        # on the DDS graph when the client's one-shot goal was published).
+        # Standalone mode keeps the goal-topic trigger (yopo paradigm).
+        if self.resolved_task_id:
+            self.state = 'RUNNING'
+            self.get_logger().info('framework mode: task %s running from spawn'
+                                   % self.resolved_task_id)
+            self.publish_status()
 
     # ---------------- inputs ----------------
     def on_front(self, msg):
@@ -163,11 +242,13 @@ class AerovlaPlannerNode(Node):
             self.get_logger().error('goal position must be finite')
             return
         self.goal_seq += 1
-        self.task_id = 'aerovla-%d' % self.goal_seq
+        if not self.task_id:
+            self.task_id = 'aerovla-%d' % self.goal_seq
         self.generation += 1
         self.step = 0
         self.failures = 0
         self.last_error = ''
+        self.ref_handoff = None
         self.state = 'RUNNING'
         self.get_logger().info('goal #%d accepted, task %s' % (self.goal_seq, self.task_id))
         self.publish_status()
@@ -175,6 +256,7 @@ class AerovlaPlannerNode(Node):
     def on_cancel(self, request, response):
         self.generation += 1
         self.in_flight = None
+        self.ref_handoff = None
         self.publish_empty_trajectory()
         self.state = 'STOPPED'
         response.success = True
@@ -246,6 +328,53 @@ class AerovlaPlannerNode(Node):
         self.in_flight = ctx
         self.in_flight['future'] = future
 
+    def _fresh_pose_ned_state(self):
+        """NED view of the latest measured pose (used for the first segment)."""
+        pose = self.pose.pose
+        return {
+            'position': enu_ned_vector([pose.position.x, pose.position.y,
+                                        pose.position.z]),
+            'orientation': enu_to_ned_quat({'x': pose.orientation.x,
+                                            'y': pose.orientation.y,
+                                            'z': pose.orientation.z,
+                                            'w': pose.orientation.w}),
+        }
+
+    def _handoff_state(self):
+        """NED start state for the next trajectory.
+
+        Rolling continuity is checked against the behavior's REFERENCE at
+        new.start, not the noisy measured pose. During the hold tail the
+        previous reference is its endpoint, so a continuing sequence must
+        start from the cached reference endpoint (position + yaw), not the
+        measured pose (~0.37 m tracking error would be rejected). For the
+        first segment there is no cached handoff, so use the fresh pose.
+        """
+        if self.ref_handoff is None:
+            return self._fresh_pose_ned_state()
+        yaw_ned = float(self.ref_handoff['yaw'])
+        # A NED z-rotation quaternion whose yaw_from_quat() == yaw_ned.
+        q = R.from_euler('z', yaw_ned).as_quat().tolist()
+        return {'position': list(self.ref_handoff['position']),
+                'orientation': q}
+
+    def _shape_for_rolling(self, points):
+        """Adapter-layer execution shaping; ``policy`` stays verbatim.
+
+        Zero the move endpoint velocity so the trailing hold is a static
+        quintic-Hermite segment (no overshoot, v=0 handoff), and extend the
+        hold to roll_horizon_s so the next trajectory is published inside the
+        current coverage window instead of after TRAJECTORY_EXPIRED.
+        """
+        shaped = [dict(p) for p in points]
+        if len(shaped) < 2:
+            return shaped
+        shaped[-2]['velocity'] = (0.0, 0.0, 0.0)
+        tail = shaped[-1]
+        tail['velocity'] = (0.0, 0.0, 0.0)
+        tail['t'] = max(float(tail['t']), float(self.roll_horizon_s))
+        return shaped
+
     def on_response(self, future, ctx):
         if ctx['generation'] != self.generation or self.state != 'RUNNING':
             return  # superseded by a new goal or a cancel
@@ -273,14 +402,22 @@ class AerovlaPlannerNode(Node):
             self.get_logger().info('LAND signal; final trajectory published')
             self.publish_status()
             return
-        ned_points = policy.action_to_setpoints(ctx['ned_state'], fwd, down, yaw)
-        # Back to ENU for the published trajectory (yaw negated: NED yaw is
-        # clockwise-positive, ENU counterclockwise-positive).
-        points = [{'t': p['t'],
-                   'position': enu_ned_vector(p['position']),
-                   'velocity': enu_ned_vector(p['velocity']),
-                   'yaw': -float(p['yaw'])} for p in ned_points]
-        self.publish_trajectory(points, is_final=False)
+        # Build from the cached reference handoff (or fresh pose for the first
+        # segment) so the t=0 point matches the behavior's reference sample at
+        # new.start; policy stays verbatim NED, then adapter-only rolling
+        # shaping.
+        state = self._handoff_state()
+        ned_points = policy.action_to_setpoints(state, fwd, down, yaw)
+        # TimedTrajectorySegment uses the fleet/shared NED contract (see
+        # docs/项目简介.md and framework make_goal). The policy emits NED
+        # points; publish them directly so the framework applies its single
+        # NED->vehicle ENU conversion. _shape_for_rolling adds the hold tail.
+        shaped = self._shape_for_rolling(ned_points)
+        self.publish_trajectory(shaped, is_final=False)
+        # Cache the published endpoint as the next segment's reference handoff.
+        tail = shaped[-1]
+        self.ref_handoff = {'position': list(tail['position']),
+                            'yaw': float(tail['yaw'])}
         self.step += 1
         self.publish_status()
 
@@ -291,6 +428,12 @@ class AerovlaPlannerNode(Node):
         if self.failures >= self.max_failures:
             self.state = 'PAUSED'
             self.get_logger().error('loop paused after %d consecutive failures' % self.failures)
+            if self.failure_pub is not None:
+                failure = PlannerFailure()
+                failure.task_id = self.task_id
+                failure.reason = 'PLANNER_ERROR'
+                failure.detail = code
+                self.failure_pub.publish(failure)
         self.publish_status()
 
     # ---------------- outputs ----------------
@@ -325,11 +468,16 @@ class AerovlaPlannerNode(Node):
         """Landing: one point at the current pose, is_final=true (task
         contract); the loop stops after this publication."""
         pose = self.pose.pose
-        yaw = policy.yaw_from_quat({'x': pose.orientation.x, 'y': pose.orientation.y,
-                                    'z': pose.orientation.z, 'w': pose.orientation.w})
+        yaw_enu = policy.yaw_from_quat({'x': pose.orientation.x, 'y': pose.orientation.y,
+                                        'z': pose.orientation.z, 'w': pose.orientation.w})
+        # Publish the final handoff point in fleet NED like every segment.
+        # enu_ned_vector maps (x,y,z)_enu -> (y,x,-z)_ned; NED yaw is
+        # clockwise-positive: yaw_ned = pi/2 - yaw_enu.
         point = {'t': 0.0,
-                 'position': [pose.position.x, pose.position.y, pose.position.z],
-                 'velocity': [0.0, 0.0, 0.0], 'yaw': yaw}
+                 'position': enu_ned_vector([pose.position.x, pose.position.y,
+                                             pose.position.z]),
+                 'velocity': [0.0, 0.0, 0.0],
+                 'yaw': (math.pi / 2 - yaw_enu)}
         self.publish_trajectory([point], is_final=True)
 
     def publish_empty_trajectory(self):
@@ -361,6 +509,12 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except Exception:
+        # Teardown races (signal shutdown mid-spin_once) surface as RCLError;
+        # only swallow them when the context is already gone (same guard as
+        # uav_planner_framework.ros_node.main).
+        if rclpy.ok():
+            raise
     finally:
         node.destroy_node()
         if rclpy.ok():

@@ -31,9 +31,11 @@ description: 迁移或复现无人机 Planner 时使用；识别计划产物与�
 提供已验证样例，其他 Planner 的支持需分别验证。Demo 是调用方，算法专有 Topic/Service
 由适配层封装，公共 Module 不包含算法专有协议。
 
-Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担。轨迹转换保留中间点、时间、P/V/A/yaw、车辆对应和共同时间基准。控制量或策略动作先定义对应执行模式，不伪装成轨迹。
+Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担。轨迹转换保留中间点、时间、P/V/A/yaw、车辆对应和共同时间基准。**TimedTrajectorySegment 的点坐标契约是机群共享/本机 NED**：Adapter 输出前必须确认它处在契约坐标系，禁止把策略内部的 NED 点转成 ENU 后再由框架 `make_goal` 二次 NED→ENU，否则首点被镜像到错误高度/南北方向，Behavior 会因"initial point is not continuous with vehicle position"拒绝 Goal。转换方向只做一次且与下游契约相反方向配对；`publish_final` 的最终交接点也必须遵守同一 NED 契约。控制量或策略动作先定义对应执行模式，不伪装成轨迹。
 
 批处理覆盖无解、边界与地图 reset；滚动覆盖 revision、未来交接连续性、迟到与任务世代；多机覆盖身份、同步和部分失败；策略覆盖频率、隐状态、watchdog 与停车。
+
+实际求解/推理时延与单步轨迹时长共同决定滚动更新是否可持续。若每条轨迹的 horizon 短于产出下一条所需时间，下一条到达时当前段已 `TRAJECTORY_EXPIRED`（非 final 段覆盖耗尽即失败），滚动链无法闭合。这不靠调定时器频率解决：先把实测单步求解/推理耗时与轨迹 horizon 并列报告。**这类缺口优先在 Adapter 层修复，不改上游算法/行为层**：把非 final 段的保持尾段延长到覆盖「一个推理周期 + 一次失败重试的间隙」，并保持低于框架 `trajectory_timeout`；更关键的是，下一段的 t=0 交接点必须取**已发布上一段在该 start 时刻的参考采样**，而不是实测位姿——Behavior 的滚动连续性检查用的是它自己的参考值，用实测位姿会被 tracking error（AeroVLA 实测 0.37m）判为 `discontinuous trajectory replacement`。做法是 Adapter 缓存上一段末点(position+yaw)作为下一段起点，goal/cancel 时清空；延长段首尾速度置零以保证静态保持、无 Hermite 过冲。AeroVLA 2026-11-21 用此法（roll_horizon=6s + 参考交接点缓存）在不改 policy 与行为层的前提下取得 `FLIGHT_CHAIN_PASS`。若仍无法闭合，才作为设计限制记录或交用户裁决，不能默默放宽门槛宣称通过。
 
 将批处理优化器用于局部规划时，保留独立的环境查询、局部目标/路线及重规划调度，不因复用地图就默认复用另一 Planner 的规划算法。用户允许先复制地图实现时，可维护带来源和许可证的私有副本，不强行先抽公共模块。首次静止边界与运动中未来 P/V/A 交接分别实现；仅收到执行接受确认后才更新已承诺的轨迹基准。远端新障碍应触发替代规划，不能把每次地图变化都等价为整段任务失败；交接前缀受阻和替代规划失败则按声明的停止机制处理。实际求解耗时、地图更新率和执行交接延迟共同决定可用的重规划周期，不能只用定时器配置频率代表实际更新能力。
 
