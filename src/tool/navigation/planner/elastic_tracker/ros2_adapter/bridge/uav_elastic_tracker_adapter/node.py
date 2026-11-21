@@ -57,6 +57,7 @@ class Adapter(Node):
             self.diagnostics.reject('target:'+str(exc))
             return
         self.target_stamp = accepted.stamp_ns
+        trace(self, 'target_adapter_accepted', stamp_ns=self.target_stamp)
         if 'target' not in self.seen_inputs:
             self.seen_inputs.add('target')
             record(self, 'adapter', 'first_target', task_id=self.task, stamp_ns=self.target_stamp)

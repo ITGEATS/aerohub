@@ -7,11 +7,28 @@ from uav_target_tracking_interfaces.msg import TargetState
 from uav_elastic_tracker_adapter.elastic_tracking_bridge import TargetStateBridge
 
 
-def state(stamp, *, session='first', generation=1, valid=True, status='tracked', expires=10):
-    message = TargetState(session_id=session, status=status, valid=valid, generation=generation)
+HAS_VELOCITY_VALID = 'velocity_valid' in TargetState.get_fields_and_field_types()
+
+
+def state(stamp, *, session='first', generation=1, valid=True, status='tracked',
+          expires=10, velocity_valid=True):
+    message = TargetState(valid=valid, generation=generation)
+    if HAS_VELOCITY_VALID:
+        states = {
+            'confirm': TargetState.ACQUIRING, 'tracked': TargetState.TRACKING,
+            'predicted': TargetState.COASTING, 'lost': TargetState.LOST,
+            'stopped': TargetState.STOPPED,
+        }
+        message.session_id.uuid = [ord(session[0])] * 16
+        message.state = states[status]
+        message.last_observation_stamp.sec = 1
+        message.velocity_valid = velocity_valid
+    else:
+        message.session_id = session
+        message.status = status
+        message.observation_stamp.sec = 1
     message.header.frame_id = 'odom'
     message.header.stamp.sec = stamp
-    message.observation_stamp.sec = 1
     message.valid_until.sec = expires
     message.position.x = 3.
     message.velocity.y = -.7
@@ -46,6 +63,13 @@ class TargetStateBridgeTest(unittest.TestCase):
                                  source.covariance[6 * row + column])
                 self.assertEqual(result.twist.covariance[6 * row + column],
                                  source.covariance[6 * (row + 3) + column + 3])
+
+    @unittest.skipUnless(HAS_VELOCITY_VALID, 'requires the newer TargetState schema')
+    def test_unavailable_velocity_is_not_forwarded(self):
+        self.bridge.forward(state(3, velocity_valid=False))
+        self.assertFalse(self.outputs)
+        self.bridge.forward(state(4, velocity_valid=True))
+        self.assertEqual(len(self.outputs), 1)
 
     def test_invalid_duplicate_old_generation_and_stopped_are_silent(self):
         wrong_frame = state(1)

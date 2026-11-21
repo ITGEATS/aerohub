@@ -131,6 +131,38 @@ class FollowPathConversionTest(unittest.TestCase):
 
 @unittest.skipIf(TimedTrajectorySegment is None, "requires generated ROS messages")
 class ExecutionFeedbackTest(unittest.TestCase):
+    def test_single_modify_rejection_keeps_previous_revision_and_allows_next_update(self):
+        coordinator = FleetFollowPathClient.__new__(FleetFollowPathClient)
+        coordinator.node = None
+        coordinator.closed = coordinator.failed = False
+        coordinator.generation = 0
+        coordinator.revision = 2
+        coordinator.acknowledged_revision = 1
+        coordinator.pending = {'a'}
+        coordinator.actions = {'a': Mock()}
+        coordinator.plans = {('a', 1): (False, 3.), ('a', 2): (False, 3.)}
+        coordinator.on_update_rejected = Mock(return_value=True)
+        coordinator.on_ready = Mock()
+        coordinator._fail = Mock()
+
+        rejected = Future()
+        rejected.set_result(Mock(accepted=False))
+        coordinator._modified('a', 0, rejected)
+        coordinator._fail.assert_not_called()
+        coordinator.on_update_rejected.assert_called_once()
+        coordinator.on_ready.assert_not_called()
+        self.assertFalse(coordinator.pending)
+        self.assertEqual(coordinator.acknowledged_revision, 1)
+        self.assertEqual(set(coordinator.plans), {('a', 1)})
+
+        coordinator.revision += 1
+        coordinator.pending.add('a')
+        accepted = Future()
+        accepted.set_result(Mock(accepted=True))
+        coordinator._modified('a', 0, accepted)
+        coordinator.on_ready.assert_called_once()
+        self.assertEqual(coordinator.acknowledged_revision, 3)
+
     def test_settling_uses_active_revision_not_latest_pending_plan(self):
         coordinator=FleetFollowPathClient.__new__(FleetFollowPathClient)
         coordinator.closed=coordinator.failed=False

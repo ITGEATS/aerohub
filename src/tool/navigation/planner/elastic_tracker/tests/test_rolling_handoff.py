@@ -38,7 +38,8 @@ def handoff(start_offset=30_000_000):
  # Source timing is planning_nodelet.cpp:268,512 (unchanged 0.03s).
  source=curve(2,now+start_offset,1.)
  previous=curve(1,99*SECOND)
- client=SimpleNamespace(ready=True,pending=set(),closed=False,failed=False,revision=1,submit=Mock())
+ client=SimpleNamespace(ready=True,pending=set(),closed=False,failed=False,revision=1,
+  acknowledged_revision=1,submit=Mock())
  node=SimpleNamespace(queued=source,client=client,reference_ready=True,parameters=PARAMETERS,
   last_curve=(suffix(previous,99*SECOND,PARAMETERS['sample_dt'],0.),99*SECOND),
   last_source=previous,
@@ -51,6 +52,23 @@ def submitted_valid(node):
  return valid.sec*SECOND+valid.nanosec
 
 class RollingHandoffTest(unittest.TestCase):
+ def test_update_rejection_discards_candidate_and_keeps_coverage_of_acknowledged_curve(self):
+  node,source,now=handoff(200_000_000)
+  previous=node.last_curve
+  node.submission=(source,suffix(source,stamp_ns(source['start_time']),PARAMETERS['sample_dt'],0.),
+                   stamp_ns(source['start_time']))
+  node.rejected_updates=0
+  node.discard_offer=Mock()
+  node.check_coverage=Mock()
+  self.assertTrue(NativeAdapter.execution_update_rejected(node))
+  node.discard_offer.assert_called_once_with(source['traj_id'],'execution_update_rejected')
+  node._fresh_inputs.assert_called_once_with(now,'after_update_rejected')
+  node.check_coverage.assert_called_once()
+  self.assertIsNone(node.submission)
+  self.assertIsNone(node.queued)
+  self.assertIs(node.last_curve,previous)
+  self.assertEqual(node.rejected_updates,1)
+
  def test_acknowledged_handoff_keeps_source_epoch_and_commits_after_reply(self):
   node,source,_=handoff(200_000_000)
   node.execution_handoff=True

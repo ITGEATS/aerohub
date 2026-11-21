@@ -42,6 +42,7 @@ class NativeAdapter(Adapter):
         self.submission = None
         self.coverage_end_ns = self.coverage_stop = None
         self.source_count = self.submitted = self.late_updates = 0
+        self.rejected_updates = 0
         ns = self.config['deployment'][self.vehicle]['namespace'].strip('/')
         self.state_publisher = self.create_publisher(String, '/' + ns + '/elastic_adapter/state', 10)
         self.create_subscription(TrajectorySetpoints, '/' + ns + '/motion_reference/trajectory',
@@ -118,11 +119,13 @@ class NativeAdapter(Adapter):
             self.submission = None
             self.coverage_end_ns = self.coverage_stop = None
             self.source_count = self.submitted = self.late_updates = 0
+            self.rejected_updates = 0
             self.error = ''
             self.failed = False
             self.phase = 'waiting_for_plan'
-            self.client = FleetFollowPathClient(self, self.config, self.client_failure,
-                                               on_ready=self.execution_ready)
+            self.client = FleetFollowPathClient(
+                self, self.config, self.client_failure, on_ready=self.execution_ready,
+                on_update_rejected=self.execution_update_rejected if self.execution_handoff else None)
             self.enabled = True
             if self.native_topic:
                 trigger = PoseStamped()
@@ -202,6 +205,18 @@ class NativeAdapter(Adapter):
     def discard_offer(self, source_id, reason):
         self.discarded.publish(Int32(data=source_id))
         trace(self, 'native_offer_discarded', source_id=source_id, reason=reason)
+
+    def execution_update_rejected(self):
+        if self.submission is None or self.last_curve is None:
+            return False
+        native, _, _ = self.submission
+        self.submission = self.queued = None
+        self.rejected_updates += 1
+        # Release this offer without replacing the planner's committed curve.
+        self.discard_offer(native['traj_id'], 'execution_update_rejected')
+        if self._fresh_inputs(self.get_clock().now().nanoseconds, 'after_update_rejected'):
+            self.check_coverage()
+        return True
 
     def on_rpc_ready(self):
         if not self.enabled:
@@ -291,7 +306,7 @@ class NativeAdapter(Adapter):
         self.handoff_context = dict(now_ns=now, valid_from_ns=valid, source=native,
             previous_source=self.last_source,
             previous_valid_from_ns=self.last_curve[1] if self.last_curve else None,
-            previous_acknowledged_revision=self.client.revision)
+            previous_acknowledged_revision=self.client.acknowledged_revision)
         if handoff:
             self.submission = (native, rows, valid)
         self.client.submit(segment)
@@ -343,10 +358,12 @@ class NativeAdapter(Adapter):
             execution_mode='timed_path', enabled=self.enabled, error=self.error, phase=self.phase,
             source_count=self.source_count, input_ready=self.input_ready(),
             prepared=bool(self.client and self.client.ready), revision=self.client.revision if self.client else 0,
+            acknowledged_revision=self.client.acknowledged_revision if self.client else 0,
             stop_requested=bool(self.client and self.client.cancel_started),
             stop_confirmed=self.client.quiescent if self.client and self.client.cancel_started else self.client is None,
             native_source_id=self.last_id, submitted_segments=self.submitted,
-            late_updates=self.late_updates, reference_ready=self.reference_ready,
+            late_updates=self.late_updates, rejected_updates=self.rejected_updates,
+            reference_ready=self.reference_ready,
             initial_handoff=self.initial_handoff, coverage_stop=self.coverage_stop))))
 
 

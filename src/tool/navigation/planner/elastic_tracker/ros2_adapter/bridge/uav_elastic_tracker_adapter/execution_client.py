@@ -57,11 +57,12 @@ def make_goal(segment, item, deployment, revision, speed):
 
 
 class FleetFollowPathClient:
-    def __init__(self, node, resolved, on_failure, on_ready=None):
+    def __init__(self, node, resolved, on_failure, on_ready=None, on_update_rejected=None):
         self.node = node
         self.config = resolved
         self.on_failure = on_failure
         self.on_ready = on_ready
+        self.on_update_rejected = on_update_rejected
         self.actions, self.modifiers, self.stoppers = {}, {}, {}
         self.handles = {}
         self.results = set()
@@ -69,6 +70,7 @@ class FleetFollowPathClient:
         self.feedbacks = {}
         self.pending = set()
         self.revision = 0
+        self.acknowledged_revision = 0
         self.failed = False
         self.closed = False
         self.deadline = None
@@ -177,11 +179,9 @@ class FleetFollowPathClient:
                 self._fail(f"FOLLOW_PATH_REJECTED:{vehicle}")
                 return
             self.handles[vehicle] = handle
-            self.pending.discard(vehicle)
             handle.get_result_async().add_done_callback(
                 lambda f, v=vehicle, g=generation: self._result(v, g, f))
-            if not self.pending and getattr(self, 'on_ready', None):
-                self.on_ready()
+            self._acknowledge(vehicle)
         except Exception as exc:
             self._fail(f"FOLLOW_PATH_ERROR:{vehicle}:{exc}")
 
@@ -191,13 +191,23 @@ class FleetFollowPathClient:
             return
         try:
             if not future.result().accepted:
+                if len(self.actions) == 1 and self.on_update_rejected is not None:
+                    self.plans.pop((vehicle, self.revision), None)
+                    self.pending.discard(vehicle)
+                    if self.on_update_rejected():
+                        return
                 self._fail(f"FOLLOW_PATH_UPDATE_REJECTED:{vehicle}")
                 return
-            self.pending.discard(vehicle)
-            if not self.pending and getattr(self, 'on_ready', None):
-                self.on_ready()
+            self._acknowledge(vehicle)
         except Exception as exc:
             self._fail(f"FOLLOW_PATH_UPDATE_ERROR:{vehicle}:{exc}")
+
+    def _acknowledge(self, vehicle):
+        self.pending.discard(vehicle)
+        if not self.pending:
+            self.acknowledged_revision = self.revision
+            if self.on_ready is not None:
+                self.on_ready()
 
     def _result(self, vehicle, generation, future):
         if self.closed or generation != self.generation or self.failed:

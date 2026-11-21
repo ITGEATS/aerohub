@@ -12,6 +12,7 @@ from rosgraph_msgs.msg import Clock
 from geometry_msgs.msg import PoseStamped
 from .transport import rpc
 from .contracts import accept_odometry, InputRejected, InputDiagnostics, serialize_odometry as odometry
+from .timing import trace
 
 
 def header(value):
@@ -85,6 +86,9 @@ class Inputs(Node):
         self.send({'kind': 'clock', 'stamp': [msg.clock.sec, msg.clock.nanosec]})
 
     def send_odom(self, kind, msg):
+        if kind == 'target':
+            stamp = msg.header.stamp
+            trace(self, 'target_input_received', stamp_ns=stamp.sec * 1_000_000_000 + stamp.nanosec)
         try:
             accepted = accept_odometry(msg, self.get_parameter('world_frame').value,
                                       self.get_clock().now().nanoseconds, self.accepted_stamps.get(kind))
@@ -96,6 +100,7 @@ class Inputs(Node):
         if forwarded:
             self.accepted_stamps[kind] = accepted.stamp_ns
         if forwarded and kind == 'target':
+            trace(self, 'target_input_forwarded', stamp_ns=accepted.stamp_ns)
             self.accepted_target.publish(msg)
         return forwarded
 
@@ -103,10 +108,16 @@ class Inputs(Node):
         if msg.encoding not in ('32FC1', '16UC1'):
             self.get_logger().error('ET mapping requires 32FC1 metres or 16UC1 millimetres')
             return
-        self.send({'kind': 'depth', 'message': {'header': header(msg.header),
+        stamp = msg.header.stamp
+        stamp_ns = stamp.sec * 1_000_000_000 + stamp.nanosec
+        trace(self, 'depth_input_started', stamp_ns=stamp_ns, size_bytes=len(msg.data))
+        data = base64.b64encode(bytes(msg.data)).decode()
+        trace(self, 'depth_input_encoded', stamp_ns=stamp_ns)
+        forwarded = self.send({'kind': 'depth', 'message': {'header': header(msg.header),
                   'height': msg.height, 'width': msg.width, 'encoding': msg.encoding,
                   'is_bigendian': msg.is_bigendian, 'step': msg.step,
-                  'data': base64.b64encode(bytes(msg.data)).decode()}})
+                  'data': data}})
+        trace(self, 'depth_input_finished', stamp_ns=stamp_ns, forwarded=forwarded)
 
 
 def main(args=None):

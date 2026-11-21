@@ -1,11 +1,13 @@
 """Adapt the public Tracking Tool state to Elastic's target Odometry."""
 import rclpy
 from nav_msgs.msg import Odometry
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from uav_target_tracking_interfaces.msg import TargetState
 
 from .contracts import InputRejected, accept_odometry
+from .timing import trace
 
 
 def stamp_ns(stamp):
@@ -28,13 +30,20 @@ class TargetStateBridge(Node):
         self.stopped = False
 
     def forward(self, state):
-        session = state.session_id
         stamp = stamp_ns(state.header.stamp)
-        observed = stamp_ns(state.observation_stamp)
         expires = stamp_ns(state.valid_until)
-        usable = (state.status in ('tracked', 'predicted') and 0 < observed <= stamp <= expires
-                  and self.get_clock().now().nanoseconds <= expires)
-        stopped = state.status == 'stopped'
+        if hasattr(state, 'last_observation_stamp'):
+            session = bytes(state.session_id.uuid)
+            if not any(session):
+                return
+            observed = stamp_ns(state.last_observation_stamp)
+            usable = state.velocity_valid and state.state in (state.TRACKING, state.COASTING)
+            stopped = state.state == state.STOPPED
+        else:
+            session = state.session_id
+            observed = stamp_ns(state.observation_stamp)
+            usable = state.status in ('tracked', 'predicted')
+            stopped = state.status == 'stopped'
         if state.header.frame_id != self.frame or not session or state.generation == 0:
             return
         if session != self.session:
@@ -48,7 +57,8 @@ class TargetStateBridge(Node):
             self.last_stamp_ns = 0
         if stopped:
             self.stopped = True
-        if not state.valid or not usable:
+        if (not state.valid or not usable or not 0 < observed <= stamp <= expires
+                or self.get_clock().now().nanoseconds > expires):
             return
 
         message = Odometry(header=state.header, child_frame_id=self.frame)
@@ -67,6 +77,8 @@ class TargetStateBridge(Node):
             return
         if accepted.stamp_ns > self.last_stamp_ns:
             self.last_stamp_ns = accepted.stamp_ns
+            trace(self, 'target_bridge_publish', stamp_ns=accepted.stamp_ns,
+                  observation_ns=observed, valid_until_ns=expires)
             self.output.publish(message)
 
 
@@ -75,6 +87,8 @@ def main(args=None):
     node = TargetStateBridge()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
         rclpy.try_shutdown()

@@ -9,6 +9,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     sim_time = ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)
+    query = ParameterValue(LaunchConfiguration('query'), value_type=str)
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value='drone0'),
         DeclareLaunchArgument('use_sim_time', default_value='true', choices=['true', 'false']),
@@ -22,7 +23,8 @@ def generate_launch_description():
              parameters=[LaunchConfiguration('detector_config'), {
                  'use_sim_time': sim_time,
                  'stream_enabled': True,
-                 'query': ParameterValue(LaunchConfiguration('query'), value_type=str),
+                 'query': query,
+                 'target_class': query,
              }], remappings=[
                  ('inference/yolo/infer', '/inference/yolo/infer'),
                  ('inference/yolo/status', '/inference/yolo/status'),
@@ -31,7 +33,7 @@ def generate_launch_description():
              parameters=[{
                  'use_sim_time': sim_time,
                  'observation_mode': 'stream',
-                 'stream_query': ParameterValue(LaunchConfiguration('query'), value_type=str),
+                 'stream_query': query,
                  'max_capture_age': ParameterValue(
                      LaunchConfiguration('max_capture_age'), value_type=float),
                  'max_prediction_time': ParameterValue(
