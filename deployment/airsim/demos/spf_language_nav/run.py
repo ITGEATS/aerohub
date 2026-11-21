@@ -227,10 +227,10 @@ def cloud_binding():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     config = ROOT / 'config/inference.cloud.local.yaml'
-    selected = module.load_model_config(config, 'spf')
+    selected = module.load_model_config(config, 'vlm')
     if selected['engine'] != 'cloud':
         raise ValueError('SPF demo currently has no local inference implementation')
-    return 'spf', config
+    return 'vlm', config
 
 
 def launch_compute(output):
@@ -243,11 +243,11 @@ def launch_compute(output):
 
 
 def launch_inference(output):
-    _, config = cloud_binding()
+    name, config = cloud_binding()
     environment = []
     import yaml
     document = yaml.safe_load(config.read_text())
-    cloud = document['models']['spf']['cloud']
+    cloud = document['models'][name]['cloud']
     for field in ('base_url_env', 'model_env', 'api_key_env'):
         key = cloud.get(field)
         if key and key in os.environ:

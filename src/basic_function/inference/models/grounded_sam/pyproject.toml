@@ -1,0 +1,26 @@
+[project]
+name = "aerohub-grounded-sam-worker"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "aerohub-inference-runtime",
+  "torch==2.9.1",
+  "torchvision==0.24.1",
+  "transformers>=4.49,<5",
+  "segment-anything",
+  "opencv-python",
+  "numpy",
+  "pillow",
+  "huggingface_hub",
+]
+
+[tool.uv.sources]
+aerohub-inference-runtime = { path = "../../runtime" }
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+segment-anything = { git = "https://gh-proxy.com/https://github.com/facebookresearch/segment-anything" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

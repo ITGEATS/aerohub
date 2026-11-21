@@ -1,0 +1,11 @@
+# CityNav Demo：共享 Inference Function（frames 变体）节点参数。
+# endpoint = 同容器 supervisor 拉起的 uv worker（/infer + /infer_frames）；
+# 无 camera_topic——帧由 planner 随请求显式提供（Tool 化改造 2026-11-18）。
+/drone0/vision_language_frames_inference:
+  ros__parameters:
+    use_sim_time: true
+    endpoint: http://127.0.0.1:8013
+/drone0/image_text_inference:
+  ros__parameters:
+    grounded_sam_endpoint: http://__HOST__:8100
+    clip_endpoint: http://__HOST__:8101

@@ -31,6 +31,17 @@ description: 迁移或复现无人机 Planner 时使用；识别计划产物与�
 提供已验证样例，其他 Planner 的支持需分别验证。Demo 是调用方，算法专有 Topic/Service
 由适配层封装，公共 Module 不包含算法专有协议。
 
+语言/语义类任务入口使用共享 `NavigateToSemanticGoal`（`to_semantic_goal`，
+description + 有限正 timeout），任务级细粒度参数（步数预算、记忆开关等）降为
+部署参数，不进公共契约。**被复现工作必须以 Tool 形式交付后才能提交**（2026-11-18
+项目负责人裁决，CityNav Tool 化轮）：私有 goal 话题与专有 LLM 代理包不进入交付——
+云 VLM 调用改走共享 Inference Function（多图+system_prompt 的
+`InferVisionLanguageFrames`，空 images=纯文本），上游 prompt 逐字复制归 Planner 包
+持有并以 AST 比对锁定提交防漂移，语义解析（landmark/JSON/is_found）全部留在
+Planner 层，Inference 只返回模型原始文本；观测话题（status/events）与运维入口
+（cancel）可保留。改造后历史飞行通过结论不自动迁移到新契约：单测、真实 DDS
+生命周期与仿真端到端须按新契约分别重验并在 validation 中按轮次记录。
+
 Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担。轨迹转换保留中间点、时间、P/V/A/yaw、车辆对应和共同时间基准。**TimedTrajectorySegment 的点坐标契约是机群共享/本机 NED**：Adapter 输出前必须确认它处在契约坐标系，禁止把策略内部的 NED 点转成 ENU 后再由框架 `make_goal` 二次 NED→ENU，否则首点被镜像到错误高度/南北方向，Behavior 会因"initial point is not continuous with vehicle position"拒绝 Goal。转换方向只做一次且与下游契约相反方向配对；`publish_final` 的最终交接点也必须遵守同一 NED 契约。控制量或策略动作先定义对应执行模式，不伪装成轨迹。
 
 批处理覆盖无解、边界与地图 reset；滚动覆盖 revision、未来交接连续性、迟到与任务世代；多机覆盖身份、同步和部分失败；策略覆盖频率、隐状态、watchdog 与停车。

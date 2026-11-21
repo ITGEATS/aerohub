@@ -5,13 +5,13 @@
       "directory": "src/basic_function/inference/models/diffphys",
       "description": "Official DiffPhys swarm checkpoint recurrent inference with caller-owned hidden state"
     },
+    "grounded_sam": {
+      "directory": "src/basic_function/inference/models/grounded_sam",
+      "description": "GroundingDINO (HF port) plus SAM vit_h greedy open-vocabulary mask prediction with CityNav upstream semantics"
+    },
     "grounding-dino-tiny": {
       "directory": "src/basic_function/inference/models/grounding_dino",
       "description": "Grounding DINO tiny text-conditioned original-pixel box inference in an isolated CUDA environment"
-    },
-    "yolo26n-seg": {
-      "directory": "src/basic_function/inference/models/yolo26n_seg",
-      "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"
     },
     "yopo": {
       "directory": "src/basic_function/inference/models/yopo",
@@ -21,9 +21,21 @@
       "directory": "src/basic_function/inference/models/aerovla",
       "description": "AeroVLA openvla-7b+LoRA policy inference on RoboPi Houmo xh2 NPU (vision/prefill/decode HMM triple); images and prompt ids in, raw model text out"
     },
-    "spf": {
+    "yopo-tracker": {
+      "directory": "src/basic_function/inference/models/yopo_tracker",
+      "description": "YOPO-Tracker RGB-D network heads in an isolated CUDA environment"
+    },
+    "yolo26n-seg": {
+      "directory": "src/basic_function/inference/models/yolo26n_seg",
+      "description": "YOLO26n-seg original-pixel boxes and instance masks through isolated CUDA inference"
+    },
+    "clip": {
+      "directory": "src/basic_function/inference/models/clip",
+      "description": "CLIP ViT-L/14 image-text cosine similarity scoring for CityNav memory exploit node evaluation"
+    },
+    "vlm": {
       "directory": "src/basic_function/inference/models/vision_language",
-      "description": "SPF logical inference model; currently implemented by the Cloud alternative, remote model privately configured"
+      "description": "Shared vision-language inference with a deployment-configured cloud binding"
     }
   }
 }

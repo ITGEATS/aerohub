@@ -23,6 +23,42 @@ def build_openai_payload(prompt, jpeg_b64, model, temperature, max_tokens):
         temperature=temperature, max_tokens=max_tokens)
 
 
+def build_openai_frames_payload(prompt, frames, model, temperature, max_tokens,
+                                system_prompt=''):
+    """frames: [(label, jpeg_b64)] in request order; empty list is text-only.
+
+    Message shape matches the upstream CityNavAgent viewpoint query: per-frame
+    "{label} image: " text block + image_url block, prompt text block last;
+    a non-empty system_prompt adds the system message (upstream landmark
+    extraction shape).
+    """
+    content = []
+    for label, jpeg_b64 in frames:
+        if label:
+            content.append(dict(type='text', text='%s image: ' % label))
+        content.append(dict(type='image_url',
+                            image_url=dict(url='data:image/jpeg;base64,' + jpeg_b64)))
+    content.append(dict(type='text', text=prompt))
+    messages = []
+    if system_prompt:
+        messages.append(dict(role='system', content=system_prompt))
+    messages.append(dict(role='user', content=content))
+    return dict(model=model, messages=messages,
+                temperature=temperature, max_tokens=max_tokens)
+
+
+def build_gemini_frames_payload(prompt, frames, temperature, max_tokens):
+    parts = []
+    for label, jpeg_b64 in frames:
+        if label:
+            parts.append(dict(text='%s image: ' % label))
+        parts.append(dict(inline_data=dict(mime_type='image/jpeg', data=jpeg_b64)))
+    parts.append(dict(text=prompt))
+    return dict(contents=[dict(role='user', parts=parts)],
+                generationConfig=dict(temperature=temperature, topP=0.95,
+                                      topK=40, maxOutputTokens=max_tokens))
+
+
 def build_gemini_payload(prompt, jpeg_b64, temperature, max_tokens):
     return dict(contents=[dict(role='user', parts=[dict(text=prompt),
                 dict(inline_data=dict(mime_type='image/jpeg', data=jpeg_b64))])],
@@ -75,6 +111,40 @@ class CloudBackend:
                 raise ValueError('empty image')
         except (ValueError, TypeError):
             raise ValueError('invalid base64 image') from None
+        if self.provider == 'openai':
+            payload = build_openai_payload(prompt, image_base64, self.model,
+                                           self.temperature, self.max_tokens)
+        else:
+            payload = build_gemini_payload(prompt, image_base64,
+                                           self.temperature, self.max_tokens)
+        return self._chat(payload, timeout)
+
+    def infer_frames(self, prompt, frames, timeout, system_prompt=''):
+        """frames: [(label, jpeg_b64)] in order; empty list is text-only."""
+        if not isinstance(prompt, str) or not prompt.strip() or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError('non-empty prompt and positive timeout required')
+        if not isinstance(frames, list):
+            raise ValueError('frames must be a list')
+        if not isinstance(system_prompt, str):
+            raise ValueError('system prompt must be a string')
+        for label, jpeg_b64 in frames:
+            if not isinstance(label, str):
+                raise ValueError('frame label must be a string')
+            try:
+                if not base64.b64decode(jpeg_b64, validate=True):
+                    raise ValueError('empty image')
+            except (ValueError, TypeError):
+                raise ValueError('invalid base64 image') from None
+        if self.provider == 'openai':
+            payload = build_openai_frames_payload(prompt, frames, self.model,
+                                                  self.temperature, self.max_tokens,
+                                                  system_prompt)
+        else:
+            payload = build_gemini_frames_payload(prompt, frames,
+                                                  self.temperature, self.max_tokens)
+        return self._chat(payload, timeout)
+
+    def _chat(self, body, timeout):
         with self._lock:
             if self._closed:
                 raise RuntimeError('cloud backend is closed')
@@ -83,12 +153,9 @@ class CloudBackend:
                 raise CloudError('NOT_READY', 'cloud credential unavailable')
             if self.provider == 'openai':
                 url = self.base_url + '/chat/completions'
-                body = build_openai_payload(prompt, image_base64, self.model,
-                                            self.temperature, self.max_tokens)
                 headers = {'Authorization': 'Bearer ' + key}
             else:
                 url = self.base_url + '/models/' + urllib.parse.quote(self.model, safe='') + ':generateContent'
-                body = build_gemini_payload(prompt, image_base64, self.temperature, self.max_tokens)
                 headers = {'x-goog-api-key': key}
             request = urllib.request.Request(url, data=json.dumps(body, allow_nan=False).encode(),
                                              headers=dict(headers, **{'Content-Type': 'application/json'}))

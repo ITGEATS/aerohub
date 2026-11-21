@@ -3,7 +3,7 @@ id: aerohub.inference.vision-language
 version: '0.2.0'
 source:
   integration: [src/basic_function/inference/runtime, src/basic_function/inference/models/vision_language, src/basic_function/inference/ros2_adapter]
-  model: models.spf.cloud; active_engines selects explicitly when multiple alternatives exist
+  model: models.vlm.cloud; active_engines selects explicitly when multiple alternatives exist
 provides: [inference.vision-language]
 cards: [cards/inference/vision-language.yaml]
 roles:
@@ -13,7 +13,7 @@ runtime:
   configuration: src/basic_function/inference/models/vision_language/worker.yaml
   private_configuration: config/inference.cloud.local.yaml
   credentials: per-model-engine api_key or explicit api_key_env in ignored YAML
-  configure: copy config/inference.cloud.example.yaml to config/inference.cloud.local.yaml and configure models.spf.cloud
+  configure: configure models.vlm.cloud in config/inference.cloud.local.yaml
   prepare: bash src/basic_function/inference/models/vision_language/setup.sh
   lock: src/basic_function/inference/models/vision_language/uv.lock
   launch: python3 deployment/inference/vision_language_run.py

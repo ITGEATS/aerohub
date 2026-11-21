@@ -100,18 +100,18 @@ class ConfigurationTest(unittest.TestCase):
             read_model_catalog(self.config)
         self.assertNotIn('not-a-real-secret',str(caught.exception))
 
-    def test_predictor_uses_spf_identity_and_ignores_unrelated_local_models(self):
-        self.write({'spf':{'cloud':self.cloud()},'yopo':{'cuda':{'weights':'not-loaded'}}})
+    def test_predictor_uses_vlm_identity_and_ignores_unrelated_local_models(self):
+        self.write({'vlm':{'cloud':self.cloud()},'yopo':{'cuda':{'weights':'not-loaded'}}})
         with patch.dict(os.environ,{'INFERENCE_MODEL_CONFIG':str(self.config)},clear=True):
             predictor=self.adapter().Predictor()
             try:
-                self.assertEqual(predictor.metadata['model_names'],['spf'])
-                self.assertEqual(predictor.engines['spf'].metadata['remote_model'],'glm-4v-flash')
+                self.assertEqual(predictor.metadata['model_names'],['vlm'])
+                self.assertEqual(predictor.engines['vlm'].metadata['remote_model'],'glm-4v-flash')
             finally:
                 predictor.close()
 
     def test_selecting_unimplemented_local_spf_never_falls_back_to_cloud(self):
-        self.write({'spf':{'cloud':self.cloud(),'cuda':{}}},{'spf':'cuda'})
+        self.write({'vlm':{'cloud':self.cloud(),'cuda':{}}},{'vlm':'cuda'})
         module=self.adapter()
         with patch.dict(os.environ,{'INFERENCE_MODEL_CONFIG':str(self.config)},clear=True), \
                 patch.object(module,'create_engine') as create:
@@ -120,7 +120,7 @@ class ConfigurationTest(unittest.TestCase):
             create.assert_not_called()
 
     def test_engine_initialization_failure_never_tries_another_alternative(self):
-        self.write({'spf':{'cloud':self.cloud(),'cuda':{}}},{'spf':'cloud'})
+        self.write({'vlm':{'cloud':self.cloud(),'cuda':{}}},{'vlm':'cloud'})
         module=self.adapter()
         with patch.dict(os.environ,{'INFERENCE_MODEL_CONFIG':str(self.config)},clear=True), \
                 patch.object(module,'create_engine',side_effect=RuntimeError('unavailable')) as create:
@@ -136,7 +136,7 @@ class ConfigurationTest(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_demo_resolves_logical_spf_entry(self):
+    def test_demo_resolves_logical_vlm_entry(self):
         root=Path(self.workspace.name)/'repo'
         helper=root/'src/basic_function/inference/runtime/aerohub_inference/cloud_config.py'
         helper.parent.mkdir(parents=True)
@@ -144,15 +144,15 @@ class ConfigurationTest(unittest.TestCase):
         helper.write_text(source.read_text())
         config=root/'config/inference.cloud.local.yaml'
         config.parent.mkdir()
-        config.write_text(yaml.safe_dump({'models':{'spf':{'cloud':self.cloud()}}}))
+        config.write_text(yaml.safe_dump({'models':{'vlm':{'cloud':self.cloud()}}}))
         module=self.demo_module()
         with patch.object(module,'ROOT',root),patch.dict(os.environ,{},clear=True):
-            self.assertEqual(module.cloud_binding(),('spf',config))
+            self.assertEqual(module.cloud_binding(),('vlm',config))
 
     def test_demo_forwards_model_specific_environment_names_not_secret_values(self):
-        self.write({'spf':{'cloud':dict(model='glm',api_key_env='SPF_KEY')}})
+        self.write({'vlm':{'cloud':dict(model='glm',api_key_env='SPF_KEY')}})
         module=self.demo_module()
-        with patch.object(module,'cloud_binding',return_value=('spf',self.config)), \
+        with patch.object(module,'cloud_binding',return_value=('vlm',self.config)), \
                 patch.object(module,'launch') as launch, \
                 patch.dict(os.environ,{'SPF_KEY':'not-a-real-secret','OPENAI_API_KEY':'unrelated'},clear=True):
             module.launch_inference(Path(self.workspace.name))

@@ -1,0 +1,11 @@
+string image_b64
+string text_prompt
+float32 box_threshold
+float32 text_threshold
+float64 timeout
+---
+bool success
+string error_code
+string message
+bool seg_success
+string mask_b64

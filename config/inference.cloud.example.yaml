@@ -1,6 +1,6 @@
 # Copy to inference.cloud.local.yaml (gitignored); fill per-model credentials there.
 models:
-  spf:
+  vlm:
     cloud:
       base_url: https://api.deepseek.com
       model: deepseek-flash
