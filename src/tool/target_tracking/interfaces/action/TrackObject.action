@@ -1,12 +1,12 @@
 string query
 # Finite wall-clock session budget in seconds. Completion is timeout, not arrival.
 float64 timeout
-# false: observe only. true: hold own position and request yaw toward the target.
+# Reserved for wire compatibility. Must be false; true is rejected.
 bool follow
 ---
 string code
 string reason
-# true only when owned Navigation has stopped, or this was observation-only.
+# Always true for observation-only sessions; no motion is acquired.
 bool stop_confirmed
 uav_target_tracking_interfaces/TargetState state
 ---

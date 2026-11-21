@@ -4,6 +4,8 @@
 
 图稿为 AeroHub 的目标设计，包含已有能力及拟议流程；不据此宣称 Auto Search、通用 Offline / Online Agent、所有 Tool、排行榜或 Gallery 自动化均已实现。Training 明确保留为构思中的部分。PC 与开发板是按任务选择的适配目标，各自的验证状态独立记录。
 
+术语补充（2026-11-21）：Tracking 仅观测，飞行目标跟随归 Following。现有图稿尚未单列 Following，其职责和允许调用 Tracking 的关系以架构正文为准；本次未重绘图稿。
+
 - 位图：[3840 × 2160 PNG](aerohub_five_part_architecture.png)
 - 可编辑图稿：[SVG](aerohub_five_part_architecture.svg)
 - 绘图源：[Python 渲染脚本](render_five_part_architecture.py)
