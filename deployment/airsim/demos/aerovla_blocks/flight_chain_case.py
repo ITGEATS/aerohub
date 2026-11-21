@@ -1,15 +1,18 @@
-"""Stage-4 PX4 SITL cross-machine flight chain (board client).
+"""Stage-5 AeroVLA case client (degraded topology, PX4 SITL).
 
-Full loop on ROS_DOMAIN_ID 83: PC clock container -> /clock; PX4 SITL (in the
-PC flight_board container, bridged by its uXRCE agent) -> board AS2 platform;
-AirSim Blocks cameras -> board AS2 sensor topics. Sequence: preflight gate ->
-arm -> offboard -> takeoff -> FLYING -> framework START -> aerovla planner
-(real Blocks images) -> TimedTrajectorySegment -> OutputGateway ->
-FollowTimedPath goal ACCEPTED by the extended behavior -> execution feedback
-observed -> framework CANCEL -> stop confirmed -> land -> disarm.
+CHAIN_CASE selects the case matrix entry (formal/cancel/fault); thresholds are
+locked before runs in validation.md. Topology: real NPU inference stays on the
+RoboPi HTTP worker; AS2/framework/planner/inference-adapter run in the PC
+onboard_computer container; flight_board provides PX4 SITL/clock; DDS is PC-side
+loopback only (no cross-machine DDS). Sequence: preflight -> arm -> offboard ->
+takeoff -> FLYING -> framework START -> AeroVLA planner on real Blocks cameras ->
+TimedTrajectorySegment -> FollowTimedPath -> execution feedback -> case-specific
+branch (formal: observe then CANCEL; cancel: CANCEL at goal acceptance; fault:
+wait for planner FAILED with unreachable NPU endpoint) -> land -> disarm.
 
-The SITL arming here is simulated flight (PX4 in a container); the physical
-board FC is never touched.
+This is simulated flight (PX4 in a container); the physical board FC is never
+armed here. OOD criterion: assert the chain correctly executes policy output,
+not navigation quality.
 """
 import json
 import os
