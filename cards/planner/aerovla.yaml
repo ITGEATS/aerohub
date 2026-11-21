@@ -1,0 +1,71 @@
+schema_version: "1.0"
+id: planner.aerovla
+version: "0.1.0"
+type: tool
+name: AeroVLA vision-language navigation planner
+description: Accepts a single-vehicle navigation goal described by a text object description and target position, runs AeroVLA vision-language inference on front/down RGB observations through a remote NPU worker, and converts each policy action into rolling NED timed trajectory segments executed by the existing FollowTimedPath chain. The upstream policy stays verbatim; frame conversion, rolling horizon and reference handoff live in the ROS adapter.
+
+implementation:
+  component_id: aerohub.planner.aerovla
+  manifest: deployment/airsim/demos/aerovla_blocks/component.yaml
+  shared_runtime: aerovla-planner-adapter
+  coupled_capabilities: []
+
+inputs:
+  - id: front_rgb
+    capability_type: sensor/camera/rgb/image
+  - id: down_rgb
+    capability_type: sensor/camera/rgb/image
+  - id: self_pose
+    capability_type: state/self/pose/3d
+  - id: controller_status
+    capability_type: control/controller/status
+
+outputs:
+  - id: timed_trajectory
+    capability_type: planning/trajectory/timed-segment/3d
+  - id: planner_failure
+    capability_type: planning/failure
+
+interfaces:
+  - id: control
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_service
+    schema: uav_planner_interfaces/srv/ControlPlanner
+    parameter_schema: src/tool/navigation/interfaces/srv/ControlPlanner.srv
+  - id: infer
+    role: functional_operation
+    interaction: request_response
+    protocol: ros2_service
+    schema: uav_inference_interfaces/srv/InferAeroVla
+    parameter_schema: src/basic_function/inference/interfaces/srv/InferAeroVla.srv
+
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: compute/npu/houmo-xh2
+  - hardware_type: sensor/camera/rgb
+  - hardware_type: flight-controller/px4
+
+resource_access:
+  reads:
+    - sensor/front-camera
+    - sensor/down-camera
+    - vehicle/self-state
+    - vehicle/controller-status
+  shared_writes:
+    - inference/npu-worker
+  exclusive_writes:
+    - vehicle/motion
+
+demo:
+  representations:
+    - id: rolling_timed_segments
+      stage: final
+      description: Rolling NED timed trajectory segments published by the adapter and executed through FollowTimedPath.
+      interface: {protocol: ros2_topic, schema: uav_planner_interfaces/msg/TimedTrajectorySegment}
+      renderer: trajectory_3d

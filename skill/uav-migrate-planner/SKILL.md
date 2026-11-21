@@ -64,5 +64,7 @@ Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担�
 
 使用 [`uav-package-component`](../uav-package-component/SKILL.md) 生成清单、Registry、卡片和交付状态。需要 RoboPi 时使用 [`deploy-lib`](../deploy-lib/SKILL.md)；PC 闭环与板端最小加载分别报告，后者不替代前者。
 
+**策略输出型 Planner 的 OOD 验收口径：** 对 VLM/策略型 Planner，验收只断言"链路正确执行策略输出"——合法动作/时间化段序列、motion reference、落地/收口信号、步数上限内终止，不断言导航质量（是否到点、朝向收敛、策略是否最优）。门槛（含步数上限、故障判据）必须在运行前锁定于 Demo 的 `validation.md`，formal/cancel/fault 用例矩阵全过且证据齐全后，才能把声明等级从"部分验证通过"升级为"该拓扑下复现成功"；任一 FAIL 或未执行不得改判，也不得删除失败尝试证据。AeroVLA 2026-11-21 在降级拓扑下三例全过、卡片/validation 齐备，声明等级为"降级拓扑下复现成功"，不代表原跨机 DDS 目标或真机。
+
 **完成门：** 交付声明与同一版本证据一致；失败、跳过和未执行项保留；复现结束后回顾并修订相关正式 Skill。
 

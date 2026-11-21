@@ -1,0 +1,45 @@
+schema_version: '0.1'
+id: aerohub.planner.aerovla
+version: '0.1.0'
+source:
+  upstream: src/tool/navigation/planner/aerovla/upstream
+  integration: src/tool/navigation/planner/aerovla/ros2_adapter
+  provenance: src/tool/navigation/planner/aerovla/ros2_adapter/native/SOURCE.json
+provides: [planner.aerovla]
+cards: [cards/planner/aerovla.yaml]
+roles:
+  compute: [AeroVLA-inference-adapter, uav_aerovla_planner, AS2, FollowTimedPath]
+  workstation: [planner-framework, ROS-case-client, simulation-scoring]
+  simulator: [AirSim-Blocks, sensor-bridge]
+  flight_controller: [PX4-SITL]
+runtime:
+  images: ['ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1', 'flight_board:v0.1.1']
+  platform: linux-x86_64
+  execution_location: pc
+  degraded_topology: 'NPU inference stays on RoboPi HTTP 8090; AS2/framework/planner/adapter in PC onboard_computer; DDS on PC loopback only (user ruling 2026-11-21).'
+  dependencies: [as2_python_api, uav_planner_python_api, uav_planner_framework, uav_follow_path_execution, uav_inference_interfaces, ROS-2-Humble, AirSim, PX4-SITL, tcim_lite]
+  launch: deployment/airsim/demos/aerovla_blocks/run_case.ps1
+  configuration: deployment/airsim/demos/aerovla_blocks/task.json
+  public_interfaces:
+    control:
+      address: /planner/control
+      schema: uav_planner_interfaces/srv/ControlPlanner
+      parameter_schema: src/tool/navigation/interfaces/srv/ControlPlanner.srv
+    infer:
+      address: /inference/aerovla/infer
+      schema: uav_inference_interfaces/srv/InferAeroVla
+      note: 'HTTP worker contract on RoboPi NPU (POST http://<board>:8090/infer); ROS service is adapter-local.'
+  python_entry: uav_aerovla_planner.planner_node
+  stop: planner-control-CANCEL-then-FollowPath-stop-confirmed-before-native-Land
+  sharing: adapter-owns-rolling-trajectory-handoff-cache-per-task
+  provider_selection: one-selected-planner-per-UAV-control-address-no-cross-process-arbitrator
+  persistence: log/aerovla/stage5
+resources:
+  motion: exclusive-drone0-FollowTimedPath-session
+  inference: remote-RoboPi-NPU-HTTP-8090-shared-worker
+validation:
+  evidence: deployment/airsim/demos/aerovla_blocks/validation.json
+  thresholds: deployment/airsim/demos/aerovla_blocks/validation.md
+  supported_constraints: [OOD-chain-execution-only]
+  arrival_semantics: legal-timed-step-sequence-and-motion-reference-then-CANCEL-confirm-and-native-land
+  limitations: [degraded-topology-only, PX4-SITL-not-real-hardware, cross-machine-DDS-not-restored, no-navigation-quality-assertion]

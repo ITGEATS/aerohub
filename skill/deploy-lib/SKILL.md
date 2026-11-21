@@ -70,3 +70,15 @@ staging 先独立保留再重试，不把回滚执行包误认为元数据也已
 等待真实数据和就绪状态后交接工作站 ROS 调用。任务结束不自动等于服务应停止：
 先记录服务仍存活，再由拥有身份的部署层显式回收。恢复未确认时保留服务与时钟。
 停止后复查包装进程及其子进程，并把 compute 证据单独收集，避免覆盖工作站结果。
+
+**DDS 降级拓扑与跨机边界（AeroVLA 2026-11-21 实测）：** 当 Windows + WSL + Docker
+Desktop 环境无法建立跨机 FastDDS 发现（包到板端、端口监听、无丢包但握手不成），可在
+用户明确裁决后采用降级拓扑：NPU 推理仍留板端 HTTP worker（如 8090），AS2/framework/
+planner/adapter 全部放到 PC 的 onboard_computer 容器，DDS 只走 PC 本机 loopback，跨机
+只剩 HTTP。就绪检查必须分别验证：板端 worker 身份+监听+预热、PC 侧 DDS 发现与真实数据
+流、HTTP 往返与生成的锁定 version/id。同宿主多容器下，flight-board 内置 UDP-only
+profile 会破坏本机发现，改用默认 SHM+UDP 且 `segment_size` 足够大（如 64MB）承载图像，
+`useBuiltinTransports=true` 不能关；容器需 `--network host --ipc host`。该拓扑的成功
+只证明降级边界内链路正确，不等于跨机 DDS 恢复或真机验收，须在组件清单 validation
+limitations 与交付说明中保留该边界。板端服务重启后的身份/预热与最小回归按
+`model-migration-houmo` 的反哺条目执行，不能仅凭端口 LISTEN 判断就绪。

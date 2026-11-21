@@ -9,6 +9,10 @@ hardware_types:
     name: CUDA-capable GPU
     description: An NVIDIA GPU with a compatible CUDA runtime; capacity constraints remain component-specific.
 
+  - id: compute/npu/houmo-xh2
+    name: Houmo xh2 NPU
+    description: A Houmo xh2 neural processing unit with the tcim_lite runtime and the model-specific HMM runtime files; used by AeroVLA vision-language inference on the RoboPi board.
+
   - id: sensor/imu/6dof
     name: Six-axis IMU
     description: A calibrated physical or simulated IMU providing angular velocity and linear acceleration.
