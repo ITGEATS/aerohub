@@ -18,7 +18,7 @@ def install(root, bundle, as2_root=None):
     with tarfile.open(bundle) as archive:
         for member in archive.getmembers():
             path = Path(member.name)
-            if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] not in ('as2', 'catora', 'swarm-formation') or member.issym() or member.islnk():
+            if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] not in ('as2', 'catora', 'swarm-formation', 'aerovla') or member.issym() or member.islnk():
                 raise RuntimeError('Unexpected archive member: '+member.name)
         archive.extractall(stage, filter='data')
     if as2_root != root/'as2' and any(p.name != 'as2' for p in stage.iterdir()):
@@ -31,7 +31,7 @@ def install(root, bundle, as2_root=None):
     rollback=stage/'.rollback'
     rollback.mkdir()
     try:
-        for name in ('as2','catora','swarm-formation'):
+        for name in ('as2','catora','swarm-formation','aerovla'):
             incoming = stage/name
             if not incoming.exists(): continue
             target = as2_root if name == 'as2' else root/('lib/'+name)

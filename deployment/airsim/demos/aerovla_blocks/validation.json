@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-21",
+  "stage": 5,
+  "demo": "deployment/airsim/demos/aerovla_blocks",
+  "topology": "downgraded (user ruling 2026-11-21): real NPU inference on RoboPi HTTP 8090; AS2/framework/planner/inference-adapter in PC onboard_computer container; flight_board provides PX4 SITL/clock; DDS only on PC loopback; cross-machine link is HTTP only. PX4 is SITL, not a physical board.",
+  "ood_criterion": "Assert only that the chain correctly executes the planner's output (legal timed-step sequence + motion reference + landing signal + graceful fault closure). Navigation quality / reaching the orange ball is NOT asserted.",
+  "thresholds_locked_pre_run": {
+    "formal": "START accepted; >=2 legal NED timed steps within N=20 cap (monotone time, first point = previous reference endpoint, ~0 velocity at handoff); FollowTimedPath goal ACCEPTED; motion_ref delta>0; then CANCEL->stop_confirmed->Land->disarm all pass. No assertion on final distance/heading.",
+    "cancel": "After START + goal ACCEPTED, inject CANCEL; control CANCEL accepted; FollowPath stop_confirmed within 30s; Land + disarm converge. No assertion on pre-cancel travel.",
+    "fault": "Inference endpoint unreachable (127.0.0.1:9): planner reports FAILED (overall_status=4) with non-empty failure_reason within max_consecutive_failures; framework stays responsive (control service answers CANCEL, accept or reject); recover() lands + disarms; no process core dump / node loss."
+  },
+  "claim_level": "partial-verification-passed under the downgraded topology (NOT reproduction-success of the original cross-machine DDS goal, NOT physical-board acceptance)",
+  "cases": [
+    {
+      "case": "formal",
+      "result": "PASS",
+      "evidence": "log/aerovla/stage5/formal-20261121-110657/",
+      "client_exit": 0,
+      "gates": "CLOCK_OK/FLYING_OK/GOAL_ACCEPTED(2)/MOTION_REFS(delta=102)/GOAL_STATUS_LATEST[2]/CANCEL_OK/STOP_CONFIRMED/DISARMED_OK all PASS",
+      "planner_steps": 5,
+      "npu_total_ms_recorded": 1747.4,
+      "final_goal_status": 2,
+      "notes": "Real NPU forward (non-mock); goal stayed ACTIVE across 5 steps, no modify rejection; OOD: legal step execution + motion refs + landing signal asserted, no reach-ball assertion."
+    },
+    {
+      "case": "cancel",
+      "result": "PASS",
+      "evidence": "log/aerovla/stage5/cancel-20261121-110327/",
+      "client_exit": 0,
+      "gates": "FLYING_OK/GOAL_ACCEPTED(2)/CANCEL_OK/STOP_CONFIRMED/DISARMED_OK all PASS",
+      "wall_s": 23.7,
+      "notes": "First attempt hit transient INVALID_INPUT x3 -> planner loop paused (evidence: cancel-20261121-110120); retried clean. No navigation-distance assertion."
+    },
+    {
+      "case": "fault",
+      "result": "PASS",
+      "evidence": "log/aerovla/stage5/fault-20261121-110510/",
+      "client_exit": 0,
+      "gates": "FLYING_OK/START_OK/FAULT_DETECTED(overall_status=4, failure_reason=TRAJECTORY_TIMEOUT non-empty)/FAULT_CANCEL_RESPONSIVE/DISARMED_OK all PASS",
+      "wall_s": 28.8,
+      "notes": "Endpoint set to 127.0.0.1:9 (unreachable). Downstream manifestation of unusable inference was planner emitting no steps -> trajectory timeout reported as FAILED; adapter.log had no explicit connection-error line. Framework answered CANCEL in terminal state (accepted=false, still responsive); recover() landed and disarmed. No core dump."
+    }
+  ],
+  "boundary": [
+    "Failures/skips remain visible: first cancel attempt (INVALID_INPUT x3) is retained as evidence, not deleted.",
+    "This matrix validates chain execution correctness under the degraded topology only; cross-machine DDS target and physical board remain unverified.",
+    "adapter-layer rolling fix (NED contract, cached reference handoff, roll horizon) is validated here; policy.py upstream-faithful semantics unchanged."
+  ],
+  "run_scripts": {
+    "runner": "deployment/airsim/demos/aerovla_blocks/run_case.ps1",
+    "client": "deployment/airsim/demos/aerovla_blocks/flight_chain_case.py",
+    "thresholds": "deployment/airsim/demos/aerovla_blocks/validation.md"
+  }
+}

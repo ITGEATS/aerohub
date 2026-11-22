@@ -1,0 +1,7 @@
+# Stage-4 board chain test: single drone0, measured-origin placeholder [0,0,0].
+# Stage 5 replaces the origin with the SITL-measured value at task start.
+drone0:
+  namespace: drone0
+  px4_origin_in_fleet_ned: [0.0, 0.0, 0.0]
+  topics:
+    pose: /drone0/self_localization/pose

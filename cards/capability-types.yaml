@@ -523,6 +523,24 @@ capability_types:
       axes: none
       timestamp: publication_time
 
+  - id: task/aerovla/status
+    name: AeroVLA Tool execution status
+    description: AeroVLA JSON status carrying task_id, state, phase, last_error and stop_confirmed for native GoTo/Land execution; land_success reports a successful Land Action result, not independent DISARMED confirmation.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
   - id: planning/failure
     name: Planner failure event
     description: Planner failure carrying task_id, reason and detail; no embedded timestamp or generic lifecycle status.
