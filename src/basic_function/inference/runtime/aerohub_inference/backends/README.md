@@ -31,7 +31,8 @@ cross-model scheduling or hot replacement.
 
 `TorchBackend` receives a model factory, weights, device and named tensor specs.
 It loads `state_dict` once and runs `eval()` / `inference_mode()`, with no CPU fallback
-when CUDA is requested. Tuple outputs follow the declared output order; dictionaries
+when CUDA is requested. Models that fuse layers during loading can opt into
+`load_on_cpu=True` to load and fuse before transfer to the execution device. Tuple outputs follow the declared output order; dictionaries
 must have exactly the declared names. `HmmBackend` discovers specs from the compiled
 HMM and uses the matching target TCIM runtime. Image operations and model-specific
 state transforms belong in neither engine.

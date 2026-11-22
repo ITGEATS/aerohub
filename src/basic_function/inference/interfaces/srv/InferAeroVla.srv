@@ -1,0 +1,19 @@
+# AeroVLA policy inference: two raw observation views plus a pre-tokenized
+# prompt; the worker returns the model's raw autoregressive text output.
+# Tokenization/prompt assembly and action parsing/dequantization stay in the
+# planner (Tool) layer; image headers carry the observation time.
+string request_id
+sensor_msgs/Image front
+sensor_msgs/Image down
+int64[] input_ids
+---
+bool success
+string error_code
+string message
+string request_id
+std_msgs/Header header
+string model_version
+string device
+string text
+int64[] gen_ids
+float64 total_ms

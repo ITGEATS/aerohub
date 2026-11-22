@@ -24,6 +24,7 @@ src/
 ## 职责边界
 
 - Navigation Tool 包含算法与任务执行协调，运动执行仍由 Behavior 承担。操作函数包含 `to_pose` 和 `to_semantic_goal`，各 alternative 声明其支持的子集；SPF 仅支持后者，目前无到达判定，超时返回 TIMEOUT 而非成功。目录归类不表示通用 Tool 生命周期、资源互斥或 Mission/Agent 已实现。
+- Tracking 仅观测目标状态；Following 负责飞行跟随，可以消费外部目标状态、调用 Tracking，或自行从视觉估计目标。朝向属于 Following 实现内部细节。YOPO-Tracker 按 Following 职责说明，暂保留在 `tool/navigation/planner/yopo_tracker/`，不因分类调整目录、包名或验证入口；当前也没有新增统一 Following Action。
 - Inference 是基础能力。`models/` 保存各工作中模型计算部分的适配、前后处理、依赖与验证；公共 runtime、ROS Adapter 和 CUDA/Houmo/Cloud alternative 提供在线推理服务。新增视觉语言接口按 `model_name` 调用；SPF 的 prompt 与导航解释仍归 Tool。YOPO 轨迹重建等导航逻辑仍位于 `tool/navigation/planner/`。
 - `navigation/interfaces/` 保留现有 `uav_planner_interfaces` 包。它历史上同时包含规划与 FollowTimedPath 执行协议；本次不拆包或更改类型，避免破坏现有消费者。
 - AS2、PX4 和仿真器依赖保留原位置。Demo Mission 脚本和部署编排仍在 `deployment/`，卡片仍在 `cards/`。

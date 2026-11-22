@@ -523,6 +523,24 @@ capability_types:
       axes: none
       timestamp: publication_time
 
+  - id: task/aerovla/status
+    name: AeroVLA Tool execution status
+    description: AeroVLA JSON status carrying task_id, state, phase, last_error and stop_confirmed for native GoTo/Land execution; land_success reports a successful Land Action result, not independent DISARMED confirmation.
+    transport:
+      protocol: ros2_topic
+      schema: std_msgs/msg/String
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: none
+      units: {}
+      coordinate_frame: none
+      axes: none
+      timestamp: publication_time
+
   - id: planning/failure
     name: Planner failure event
     description: Planner failure carrying task_id, reason and detail; no embedded timestamp or generic lifecycle status.
@@ -744,3 +762,56 @@ capability_types:
       coordinate_frame: configured_planning_world
       axes: ENU
       timestamp: absolute_trajectory_start_time
+  - id: perception/target/state/3d
+    name: Single-session 3D target state
+    description: Estimated target position, velocity, covariance, and session validity.
+    transport:
+      protocol: ros2_topic
+      schema: uav_target_tracking_interfaces/msg/TargetState
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s}
+      coordinate_frame: fixed_world_frame
+      axes: frame_defined
+      timestamp: state_sample_time
+
+  - id: perception/target/associated-position/3d
+    name: Associated 3D target measurement
+    description: Original 3D position accepted by a confirmed track, with session and track epoch.
+    transport:
+      protocol: ros2_topic
+      schema: uav_target_tracking_interfaces/msg/AssociatedPosition3D
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m}
+      coordinate_frame: fixed_world_frame
+      axes: frame_defined
+      timestamp: measurement_time
+
+  - id: perception/object/detection/instances
+    name: Image detections with optional 3D positions
+    description: Independent detections with original boxes and optional 3D positions. Cross-frame association is owned by Tracking.
+    transport:
+      protocol: ros2_topic
+      schema: uav_object_detection_interfaces/msg/ObjectDetectionFrame
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: mixed
+      units: {bounding_box: px, position: m}
+      coordinate_frame: image_and_configured_world_frame
+      axes: frame_defined
+      timestamp: image_and_depth_measurement_times

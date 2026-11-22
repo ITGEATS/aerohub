@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 source "$root/tools/robopi/load_env.sh"
 component=${1:-all}
-case "$component" in catora|swarm-formation|super|ego-planner-v2|all) ;; *) echo 'Usage: build_lib.sh [catora|swarm-formation|super|ego-planner-v2|all]' >&2; exit 2 ;; esac
+case "$component" in catora|swarm-formation|super|ego-planner-v2|aerovla|all) ;; *) echo 'Usage: build_lib.sh [catora|swarm-formation|super|ego-planner-v2|aerovla|all]' >&2; exit 2 ;; esac
 mkdir -p "$root/log/airsim/robopi-runtime"
 exec 9>"$root/log/airsim/robopi-runtime/cli.lock"
 flock -n 9 || { echo 'Another RoboPi operation is running' >&2; exit 1; }
@@ -31,6 +31,9 @@ if component in ('all','swarm-formation'):
    packages[ET.parse(directory/'package.xml').getroot().findtext('name')]=str(directory.relative_to(root))
  packages['uav_swarm_formation_adapter']='src/tool/navigation/planner/swarm_formation/ros2_adapter/bridge'
  packages['as2_navigation_inputs']='src/basic_function/perception/navigation_inputs'
+if component == 'aerovla':
+ packages.pop('uav_as2_setpoint_adapter')
+ packages['uav_aerovla_planner']='src/tool/navigation/planner/aerovla/ros2_adapter'
 if component == 'super':
  packages.pop('uav_as2_setpoint_adapter')
  packages.update(super_planner='src/tool/navigation/planner/super/ros2_adapter/native/super_planner',rog_map='src/tool/navigation/planner/super/ros2_adapter/native/rog_map',mars_quadrotor_msgs='src/tool/navigation/planner/super/ros2_adapter/native/mars_uav_sim/mars_quadrotor_msgs',uav_super_adapter='src/tool/navigation/planner/super/ros2_adapter/bridge',as2_navigation_inputs='src/basic_function/perception/navigation_inputs')
@@ -84,6 +87,7 @@ case "$component" in
  swarm-formation) packages+=(uav_as2_setpoint_adapter ego_planner uav_swarm_formation_adapter as2_navigation_inputs) ;;
  all) packages+=(uav_as2_setpoint_adapter mrs_formation_reshaping uav_cat_ora_adapter ego_planner uav_swarm_formation_adapter as2_navigation_inputs) ;;
  super) packages+=(super_planner uav_super_adapter as2_navigation_inputs) ;;
+ aerovla) packages+=(uav_aerovla_planner uav_planner_framework) ;;
  ego-planner-v2) packages+=(ego_planner uav_ego_planner_adapter as2_navigation_inputs uav_follow_path_execution) ;;
 esac
 bash "$root/deployment/oh-ros-build/run.sh" build "${packages[@]}"

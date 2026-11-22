@@ -30,11 +30,12 @@ def locate(depth, box, intrinsics, body_rotation, body_position, extrinsic, conf
     """Apply the pinned upstream Detect depth algorithm, then ROS/world transforms."""
     from . import gemini2_depth as reference
     d = diagnostics if diagnostics is not None else {}
-    d.update(method='gemini2_reference', box=list(box), accepted=False)
+    method = config.get('depth_method', 'gemini2_reference')
+    d.update(method=method, box=list(box), accepted=False)
     def reject(reason):
         d['reason'] = reason
         raise ValueError(reason)
-    if config.get('depth_method','gemini2_reference') != 'gemini2_reference':
+    if method not in ('gemini2_reference', 'gemini2_point_center'):
         reject('unsupported depth method')
     if depth.ndim != 2 or not np.isfinite(intrinsics).all():
         reject('invalid calibration/depth')
@@ -77,11 +78,18 @@ def locate(depth, box, intrinsics, body_rotation, body_position, extrinsic, conf
     values=millimeters[valid]
     bins,counts=np.unique(np.floor(values/reference.DEPTH_HIST_BIN_MM).astype(np.int32),return_counts=True)
     center=(bins[np.argmax(counts)]+.5)*reference.DEPTH_HIST_BIN_MM
-    selected=values[np.abs(values-center)<=reference.DEPTH_CLUSTER_WINDOW_MM]
-    fallback=selected.size<reference.MIN_VALID_DEPTH_POINTS
-    if fallback:selected=values
+    in_cluster = np.abs(values - center) <= reference.DEPTH_CLUSTER_WINDOW_MM
+    fallback = np.count_nonzero(in_cluster) < reference.MIN_VALID_DEPTH_POINTS
+    selected = values if fallback else values[in_cluster]
     spread=float(np.percentile(selected,90)-np.percentile(selected,10))/1000.
     camera=np.array([(u-cx)*z/fx,(v-cy)*z/fy,z])
+    if method == 'gemini2_point_center':
+        rows, columns = np.nonzero(valid)
+        if not fallback:
+            rows, columns = rows[in_cluster], columns[in_cluster]
+        depths = selected.astype(float) / 1000.
+        camera[:2] = [np.median((columns - cx) * depths / fx),
+                      np.median((rows - cy) * depths / fy)]
     local=body_rotation @ (extrinsic[0] @ camera + extrinsic[1]) + body_position
     if not np.isfinite(local).all():
         reject('nonfinite projection')

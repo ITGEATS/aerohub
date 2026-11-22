@@ -52,8 +52,11 @@ class ObjectDetectionTool(Node):
         self.output_frame = output_frame
         self.position_method = self.declare_parameter('position_method', 'backend_default').value
         self.target_height_m = self.declare_parameter('target_height_m', 0.0).value
-        if self.position_method not in ('backend_default', 'known_height_vertical_v1'):
+        if self.position_method not in ('backend_default', 'known_height_vertical_v1',
+                                         'yolo_mask_gemini2_point_center'):
             raise ValueError('unsupported position_method')
+        if self.position_method == 'yolo_mask_gemini2_point_center' and self.backend_name != 'yolo':
+            raise ValueError('yolo_mask_gemini2_point_center requires the YOLO mask backend')
         if self.position_method == 'known_height_vertical_v1' and not 0 < self.target_height_m < float('inf'):
             raise ValueError('known height requires positive finite target_height_m')
         self.position_config = dict(
@@ -168,7 +171,7 @@ class ObjectDetectionTool(Node):
             self.frame_available.set()
         self.trace('buffer_put',msg,overwritten_ns=overwritten_ns)
 
-    def infer(self,request,query=None,observation_active=None,estimate_position=True):
+    def infer(self, request, query=None, observation_active=None, estimate_position=True):
         query = self.query if query is None else query
         self.backend.resolve(query)
         if estimate_position and self.position_method == 'known_height_vertical_v1' and query.strip().lower() != 'person':
@@ -185,7 +188,7 @@ class ObjectDetectionTool(Node):
             started=time.perf_counter();done=threading.Event()
             self.last_call=dict(request_id=request.request_id,send_monotonic_s=started,
                 request_age_s=self.now()-seconds(request.image.header.stamp))
-            inference_request=self.backend.request(request,query)
+            inference_request = self.backend.request(request, query)
             self.trace('model_request',request.image)
             future=self.client.call_async(inference_request);future.add_done_callback(lambda _:done.set())
             if not done.wait(self.timeout+.15):
@@ -198,7 +201,6 @@ class ObjectDetectionTool(Node):
             if result is None or not result.success:raise ValueError(result.error if result else 'INFERENCE_FAILED')
             with self.lock:
                 if not self.enabled or token!=self.generation:raise ValueError('CANCELLED_GENERATION')
-            frame=result.result
             frame=self.backend.frame(result,request,query)
             identity=(frame.model_version,frame.worker_generation)
             if not frame.worker_generation or (self.backend_identity is not None and identity!=self.backend_identity):
@@ -243,7 +245,8 @@ class ObjectDetectionTool(Node):
             self.trace('buffer_take',msg)
             try:
                 self.trace('infer_begin',msg)
-                frame=self.infer(DetectObjects.Request(request_id=uuid.uuid4().hex,generation=generation,image=msg))
+                request = DetectObjects.Request(request_id=uuid.uuid4().hex, generation=generation, image=msg)
+                frame = self.infer(request)
                 self.trace('infer_end',msg,valid=frame.valid,error=frame.error)
                 with self.lock:
                     if generation!=self.generation:continue
@@ -253,7 +256,8 @@ class ObjectDetectionTool(Node):
                 boxes=[dict(xyxy=list(m.detection.xyxy),category=m.detection.category,confidence=m.detection.confidence,
                     position_valid=m.position_valid,position=[m.position.x,m.position.y,m.position.z]) for m in frame.detections]
                 self.debug.publish(String(data=json.dumps(dict(stamp=seconds(msg.header.stamp),boxes=boxes,
-                    generation=generation,model_version=frame.model_version,timings=json.loads(frame.timings_json)))))
+                    generation=generation,model_version=frame.model_version,
+                    timings=json.loads(frame.timings_json)))))
                 if self.overlay.get_subscription_count()>0:
                     image=array_image(msg)
                     for b in boxes:

@@ -187,6 +187,39 @@ PX4 SITL 与锁步 AirSim 的连接状态跨容器重启不一定自动恢复为
 
 ## 当前经验范围
 
+### AeroVLA onboard 降级跨容器链（2026-11-21，FLIGHT_CHAIN_PASS）
+
+这是范围降低后的拓扑，不等于原跨机 DDS 目标达成：真实 NPU 推理仍留 RoboPi（HTTP
+8090），AS2/framework/planner/inference-adapter 放到 PC 的 `onboard_computer` 容器，
+flight_board 供 PX4/clock，DDS 只走 PC 侧本机，跨机只剩 HTTP。按此矩阵连续两次取得
+**`FLIGHT_CHAIN_PASS`**（wall 43.2s/46.3s，第二次 client_exit=0）：板端 NPU 真实前向
+（HMM/tcim，total_ms~1757，非 mock）、跨机 HTTP `success=true`、真实 `/clock` 与传感器
+输入、planner START → 多步真实推理与滚动执行（无 modify 拒绝）→ `GOAL_ACCEPTED`
+（status=2）→ motion reference → CANCEL_OK → stop 确认 → LANDBEHAVIOR_OK → DISARMED_OK。
+此前 FAIL 的 `TRAJECTORY_EXPIRED` / `CANCEL rejected` 在 AeroVLA ROS adapter 层修复
+（延长滚动 horizon、缓存参考交接点、零速度保持；policy 与行为层不变），见
+`uav-migrate-planner`。证据：`log/aerovla/stage4/onboard-pass-20261121/`。
+边界：PX4 为 SITL、DDS 仅 PC 本机，不代表原跨机 DDS 目标或真机通过，仅限本轮版本。
+
+跨容器 DDS 传输的几个已验证诊断点（适用于同一宿主多容器、非跨物理设备）：
+- `clock` 节点进程在跑、AirSim RPC 正常返回时间戳、日志无错，不代表 `/clock` 已
+  发布。需在订阅容器内用同 RMW/profile/QoS/domain 的 `rclpy` 实测消息计数；
+  无消息时先查 DDS profile，不要先怀疑节点逻辑。flight-board 内置的 UDP-only
+  profile（`useBuiltinTransports=false`，跨机遗留）在 WSL 跨容器场景会失效；换默认
+  SHM+UDP 后 `/clock` 恢复。
+- 大消息（如 256x256x3 图像）即使发现正常也可能跨容器丢失，表现为 reader 只见
+  心跳、数据不到。默认 SHM 段 1MB 不足时用 `segment_size=64MB` 的 SHM 传输，并
+  保持 `useBuiltinTransports=true`；纯 SHM（关 builtin）会破坏发现。两端容器都要
+  `--network host --ipc host`，SHM 是否真正跨容器可见需实测，不以挂载参数推定。
+- 观测时间戳同步门限按真实传感器速率核对：5Hz 相机与 50Hz 位姿最新帧差可达
+  0.18s，`max_input_skew_s=0.1` 会让 `same_tick_inputs()` 每帧跳过、表现为
+  `TRAJECTORY_TIMEOUT`，不是推理故障。
+- TimedTrajectorySegment 的 NED 契约与双重转换见 `uav-migrate-planner` 和
+  `as2-extension-integration`；AeroVLA 曾因 adapter 多发一次 NED→ENU 被 Behavior
+  拒绝 Goal，修复后才到达 GOAL_ACCEPTED。
+- AirSim Blocks 进程可能崩溃导致 RPC 端口掉线（有 EXCEPTION_ACCESS_VIOLATION
+  崩溃目录），会使 clock 停发；每轮验收前确认 RPC 监听，崩溃证据单独保留。
+
 视觉 Tracker 出现断续规划时，分别记录有效目标观测、仅外推的目标估计、可提交曲线与实际生效的执行 revision。观察相机仍出图时的目标丢失、相机断流和持续正常跟踪。YOPO-Tracker 的相机断流回归在两版真实轨迹生效后暂停独立相机容器，保留时钟、定位和执行链。检查预置制动、轨迹内低速、Action 终态和切入悬停后的持续低速；记录实际证据覆盖的轨迹版本数和故障类型。
 
 FAST-LIVO2 已完成 AirSim 1.8.1 真实 IMU/图像/LiDAR 的有屏 shadow、AS2 authority、传感器中断和算法退出矩阵。shadow 通过预设 `0.5 m` 门限后，候选状态作为唯一 AS2 状态/TF 权威完成 Takeoff/GoTo/Land；故障用例在空中真实停止容器，并以 PX4 降落、解除武装和资源清理作为通过条件。该结论不包含 PX4 外部里程计融合、真实数据集或真机。

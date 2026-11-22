@@ -42,9 +42,11 @@ Planner 层，Inference 只返回模型原始文本；观测话题（status/even
 （cancel）可保留。改造后历史飞行通过结论不自动迁移到新契约：单测、真实 DDS
 生命周期与仿真端到端须按新契约分别重验并在 validation 中按轮次记录。
 
-Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担。轨迹转换保留中间点、时间、P/V/A/yaw、车辆对应和共同时间基准。控制量或策略动作先定义对应执行模式，不伪装成轨迹。
+Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担。轨迹转换保留中间点、时间、P/V/A/yaw、车辆对应和共同时间基准。**TimedTrajectorySegment 的点坐标契约是机群共享/本机 NED**：Adapter 输出前必须确认它处在契约坐标系，禁止把策略内部的 NED 点转成 ENU 后再由框架 `make_goal` 二次 NED→ENU，否则首点被镜像到错误高度/南北方向，Behavior 会因"initial point is not continuous with vehicle position"拒绝 Goal。转换方向只做一次且与下游契约相反方向配对；`publish_final` 的最终交接点也必须遵守同一 NED 契约。控制量或策略动作先定义对应执行模式，不伪装成轨迹。
 
 批处理覆盖无解、边界与地图 reset；滚动覆盖 revision、未来交接连续性、迟到与任务世代；多机覆盖身份、同步和部分失败；策略覆盖频率、隐状态、watchdog 与停车。
+
+实际求解/推理时延与单步轨迹时长共同决定滚动更新是否可持续。若每条轨迹的 horizon 短于产出下一条所需时间，下一条到达时当前段已 `TRAJECTORY_EXPIRED`（非 final 段覆盖耗尽即失败），滚动链无法闭合。这不靠调定时器频率解决：先把实测单步求解/推理耗时与轨迹 horizon 并列报告。**这类缺口优先在 Adapter 层修复，不改上游算法/行为层**：把非 final 段的保持尾段延长到覆盖「一个推理周期 + 一次失败重试的间隙」，并保持低于框架 `trajectory_timeout`；更关键的是，下一段的 t=0 交接点必须取**已发布上一段在该 start 时刻的参考采样**，而不是实测位姿——Behavior 的滚动连续性检查用的是它自己的参考值，用实测位姿会被 tracking error（AeroVLA 实测 0.37m）判为 `discontinuous trajectory replacement`。做法是 Adapter 缓存上一段末点(position+yaw)作为下一段起点，goal/cancel 时清空；延长段首尾速度置零以保证静态保持、无 Hermite 过冲。AeroVLA 2026-11-21 用此法（roll_horizon=6s + 参考交接点缓存）在不改 policy 与行为层的前提下取得 `FLIGHT_CHAIN_PASS`。若仍无法闭合，才作为设计限制记录或交用户裁决，不能默默放宽门槛宣称通过。
 
 将批处理优化器用于局部规划时，保留独立的环境查询、局部目标/路线及重规划调度，不因复用地图就默认复用另一 Planner 的规划算法。用户允许先复制地图实现时，可维护带来源和许可证的私有副本，不强行先抽公共模块。首次静止边界与运动中未来 P/V/A 交接分别实现；仅收到执行接受确认后才更新已承诺的轨迹基准。远端新障碍应触发替代规划，不能把每次地图变化都等价为整段任务失败；交接前缀受阻和替代规划失败则按声明的停止机制处理。实际求解耗时、地图更新率和执行交接延迟共同决定可用的重规划周期，不能只用定时器配置频率代表实际更新能力。
 
@@ -72,6 +74,8 @@ Planner 作为 Function 产生计划；执行由已有或扩展 Behavior 承担�
 ## 3. 注册与部署
 
 使用 [`uav-package-component`](../uav-package-component/SKILL.md) 生成清单、Registry、卡片和交付状态。需要 RoboPi 时使用 [`deploy-lib`](../deploy-lib/SKILL.md)；PC 闭环与板端最小加载分别报告，后者不替代前者。
+
+**策略输出型 Planner 的 OOD 验收口径：** 对 VLM/策略型 Planner，验收只断言"链路正确执行策略输出"——合法动作/时间化段序列、motion reference、落地/收口信号、步数上限内终止，不断言导航质量（是否到点、朝向收敛、策略是否最优）。门槛（含步数上限、故障判据）必须在运行前锁定于 Demo 的 `validation.md`，formal/cancel/fault 用例矩阵全过且证据齐全后，才能把声明等级从"部分验证通过"升级为"该拓扑下复现成功"；任一 FAIL 或未执行不得改判，也不得删除失败尝试证据。AeroVLA 2026-11-21 在降级拓扑下三例全过、卡片/validation 齐备，声明等级为"降级拓扑下复现成功"，不代表原跨机 DDS 目标或真机。
 
 **完成门：** 交付声明与同一版本证据一致；失败、跳过和未执行项保留；复现结束后回顾并修订相关正式 Skill。
 

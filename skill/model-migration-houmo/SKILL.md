@@ -88,6 +88,16 @@ YOPO 的打包脚本、板端依赖核对、启动方式和已验证范围见[�
 2026-11-11 YOPO 已在 Python 3.12 / Humble / TCIM 1.5.0 环境完成上述真实 NPU ROS
 快速检查；这不代表其他模型、其他板端版本或传感器闭环已验证。
 
+**板端重启/驱动异常处理（AeroVLA 2026-11-21 实测）：** 板端重启或 TCIM/HMM 驱动掉线后，
+HTTP worker 的 8090 端口可能仍显示 LISTEN 但推理不可用。恢复顺序：①先用 HDC 核对板端
+身份与 uptime（确认是目标设备），再查 `netstat :8090` 是否有真实监听；②重启 worker 前
+先确认旧进程与 HMM 映射（13 GiB 三件套）已释放，避免冷启动失败；③按模型 README 重新
+加载驱动、预热一次 golden 输入，确认返回锁定 model_version/生成 id 后再恢复 ROS 请求；
+④恢复后跑最小回归：candidate 对照、header 透传、健康诊断、过期输入拒绝、worker 离线
+路径各一次。AeroVLA 端到端联调中曾把推理端点误指不可达地址，planner 无产出并上报
+FAILED（TRAJECTORY_TIMEOUT）——适配器/框架能优雅失败与恢复，但 worker 自身身份/预热
+确认不能省略，不能仅凭端口 LISTEN 判断推理就绪。
+
 
 YOPO 已将 CUDA/HMM 的前后处理和请求组装收敛为模型目录的 `processing.py`、
 `predictor.py`，板端打包必须同时携带它们。后端 close、命名张量和计时键与 Torch

@@ -22,10 +22,12 @@ APPLICATIONS = {
     'catora': APP_PACKAGES,
     'swarm-formation': COMMON_PACKAGES | {'swarm_graph', 'traj_utils', 'plan_env', 'path_searching',
                                          'traj_opt', 'ego_planner', 'uav_swarm_formation_adapter', 'as2_navigation_inputs'},
+    'aerovla': {'uav_aerovla_planner', 'uav_planner_framework'},
 }
 AS2_PACKAGES = {'uav_planner_interfaces', 'uav_follow_path_execution', 'as2_behavior', 'as2_behaviors_motion', 'as2_core', 'as2_motion_controller',
                 'as2_motion_reference_handlers', 'as2_msgs', 'as2_platform_pixhawk', 'as2_state_estimator',
-                'mocap4r2_msgs', 'px4_msgs', 'rmw_fastrtps_shared_cpp', 'vision_msgs'}
+                'mocap4r2_msgs', 'px4_msgs', 'rmw_fastrtps_shared_cpp', 'vision_msgs',
+                'uav_inference_interfaces', 'uav_inference'}
 SUPER_PACKAGES = {'super_planner','rog_map','mars_quadrotor_msgs','uav_super_adapter','uav_planner_framework','as2_navigation_inputs'}
 EGO_PACKAGES = {'ego_planner','path_searching','plan_env','quadrotor_msgs','traj_opt','traj_utils','uav_ego_planner_adapter','uav_planner_framework','as2_navigation_inputs'}
 OLD = '/data/local/tmp/aerohub-as2'
@@ -197,6 +199,14 @@ def main():
             if (stage/app).exists():
                 text = (ROOT/'deployment/robopi/catora_env.sh').read_text().replace('/lib/catora/', '/lib/'+app+'/')
                 (stage/app/'env.sh').write_text(text)
+        if (stage/'aerovla').exists():
+            # Pre-tokenized prompt table (board has no transformers); node
+            # reads it through the prompt_table parameter.
+            shutil.copyfile(ROOT/'deployment/airsim/config/aerovla/prompt_ids_blocks.json',
+                            stage/'aerovla'/'prompt_ids_blocks.json')
+            demo = ROOT/'deployment/airsim/demos/aerovla_blocks'
+            shutil.copyfile(demo/'task.json', stage/'aerovla'/'task.json')
+            shutil.copyfile(demo/'deployment.yaml', stage/'aerovla'/'deployment.yaml')
         bundle = args.prepare_only or ROOT/'log/airsim/robopi-runtime/persistent-overlay.tar.gz'
         bundle.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(bundle, 'w:gz', format=tarfile.GNU_FORMAT) as archive:

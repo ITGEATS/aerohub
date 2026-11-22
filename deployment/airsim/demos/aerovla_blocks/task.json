@@ -1,0 +1,16 @@
+{
+  "task": {"name": "AeroVLA Blocks OrangeBall 单机（板端执行链验证）"},
+  "planner": {
+    "id": "aerovla",
+    "version": "b87aaa7c9338ae878d39300a1ef930c753e1ff90",
+    "parameters": {
+      "obj_desc": "The orange ball is situated on the ground in an open area, with buildings and road markings visible around it under a clear sky.",
+      "target_position_enu": [34.25, 33.1, -3.68],
+      "prompt_table": "/data/aerohub/lib/aerovla/prompt_ids_blocks.json",
+      "rate_hz": 2.0
+    }
+  },
+  "vehicles": ["drone0"],
+  "targets": {"drone0": {"x": 33.1, "y": 34.25, "z": 3.68}},
+  "completion": {"position_tolerance": 2.0, "hold_duration": 1.0, "task_timeout": 600.0}
+}
