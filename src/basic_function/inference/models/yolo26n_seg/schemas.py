@@ -12,14 +12,12 @@ class InferRequest(BaseModel):
     height: int = Field(gt=0, le=2048)
     encoding: str = 'png_bgr8'
     image_base64: str = Field(max_length=16777216)
-    tracking_stream: str = Field(default='', max_length=256)
 
 
 class Detection(BaseModel):
     xyxy: List[float] = Field(min_length=4, max_length=4)
     confidence: float = Field(ge=0, le=1)
     category: str
-    track_id: int = Field(default=0, ge=0, lt=2**64)
     mask_png_base64: str = Field(default='',max_length=6291456)
 
 
@@ -32,7 +30,6 @@ class InferResponse(BaseModel):
     height: int
     model_version: str
     worker_generation: int
-    tracking_generation: int = Field(default=0, ge=0, lt=2**64)
     boxes: List[Detection]
     transform: dict
     timings_ms: Dict[str, float]

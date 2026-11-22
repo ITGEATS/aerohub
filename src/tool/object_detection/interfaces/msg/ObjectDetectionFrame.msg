@@ -6,8 +6,6 @@ string request_id
 uint64 generation
 uint64 tool_generation
 uint64 worker_generation
-# Nonzero only for ByteTrack-enabled streams. IDs expire with this generation.
-uint64 tracking_generation
 string model_version
 ObjectDetection[] detections
 # False on missing calibration/depth/TF or any invalid requested position.

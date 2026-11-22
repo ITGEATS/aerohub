@@ -100,8 +100,7 @@ class Projector:
     def project(self, frame, token, active, position_method='yolo_mask_gemini2_reference'):
         result = ObjectDetectionFrame(image_header=frame.header, request_id=frame.request_id,
             generation=frame.generation, tool_generation=token, worker_generation=frame.worker_generation,
-            model_version=frame.model_version, timings_json=frame.timings_json,
-            tracking_generation=frame.tracking_generation)
+            model_version=frame.model_version, timings_json=frame.timings_json)
         result.header.frame_id = self.output_frame
         result.detections = [ObjectDetection(detection=d, position_method=position_method) for d in frame.detections]
         if position_method == 'known_height_vertical_v1':

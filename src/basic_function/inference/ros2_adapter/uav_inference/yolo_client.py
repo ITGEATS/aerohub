@@ -20,7 +20,7 @@ class HttpDetector:
         self.worker_generation = self.metadata['worker_generation']
         self.timings = {}
 
-    def detect(self, image, stamp_ns, frame, generation, request_id=None, *, tracking_stream=''):
+    def detect(self, image, stamp_ns, frame, generation, request_id=None):
         if image.dtype != np.uint8 or image.ndim != 3 or image.shape[2] != 3 or max(image.shape[:2]) > 2048:
             raise ValueError('expected BGR8 image up to 2048x2048')
         started = time.perf_counter()
@@ -33,8 +33,6 @@ class HttpDetector:
         body = dict(request_id=request_id or uuid.uuid4().hex, stamp_ns=int(stamp_ns),frame=frame,
                     generation=int(generation),width=image.shape[1],height=image.shape[0],
                     encoding='png_bgr8',image_base64=text)
-        if tracking_stream:
-            body['tracking_stream'] = tracking_stream
         encoded = time.perf_counter()
         try:
             result = self.client.request('/infer', body)
@@ -45,15 +43,8 @@ class HttpDetector:
             raise ValueError('worker response identity/geometry mismatch')
         if result['model_version'] != self.model_version or result['worker_generation'] != self.worker_generation:
             raise ValueError('worker changed: restart detector and estimator for new generation')
-        self.tracking_generation = result.get('tracking_generation', 0)
-        if bool(self.tracking_generation) != bool(tracking_stream):
-            raise ValueError('worker returned unexpected ByteTrack scope')
         boxes = result['boxes']
         for box in boxes:
-            track_id = box.get('track_id', 0)
-            if (not isinstance(track_id, int) or not 0 <= track_id < 2**64
-                    or (track_id and not self.tracking_generation)):
-                raise ValueError('invalid or unscoped ByteTrack ID')
             coords = box['xyxy']
             if (len(coords)!=4 or not np.isfinite(coords).all() or
                 not 0<=coords[0]<coords[2]<=body['width'] or not 0<=coords[1]<coords[3]<=body['height'] or

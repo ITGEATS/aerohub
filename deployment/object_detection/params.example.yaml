@@ -6,7 +6,6 @@
     depth_is_perspective: false
     depth_scale_16u: 0.001
     stream_enabled: false
-    bytetrack_enabled: false  # opt in only for a YOLO stream
     # Both camera publisher and subscribers must offer reliable QoS to enable this.
     camera_reliable: false
     image_topic: sensor_measurements/FrontCamera/rgb/image

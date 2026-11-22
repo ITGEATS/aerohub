@@ -16,7 +16,6 @@ from ultralytics.utils.nms import non_max_suppression
 from ultralytics.utils.ops import scale_boxes, process_mask_native
 import yaml
 from aerohub_inference.backends.torch import TorchBackend
-from stream_tracker import StreamTracker
 
 
 class TensorNetwork(torch.nn.Module):
@@ -83,7 +82,6 @@ class Predictor:
             device='cpu' if c['device']=='cpu' else 'cuda:0', load_on_cpu=True)
         self.backend.warmup({'image':np.zeros((1,3,size,size),np.uint8)})
         self.generation = time.time_ns()
-        self.stream_tracker = StreamTracker()
         version = dict(weights=expected['sha256'], state=converted['state_sha256'],
                        model=name, size=size, confidence=c['confidence'], classes=c['class_map'],
                        ultralytics=ultralytics.__version__, head='one-to-many+nms',
@@ -141,20 +139,12 @@ class Predictor:
                     if not ok:raise ValueError('mask PNG encoding failed')
                     detection['mask_png_base64']=base64.b64encode(png).decode('ascii')
                 selected.append(detection)
-        postprocessed = time.perf_counter()
-        tracking_generation = 0
-        if body.get('tracking_stream'):
-            tracking_generation = self.stream_tracker.attach(
-                selected, image, stream=body['tracking_stream'], source_generation=body['generation'],
-                frame=body['frame'], stamp_ns=body['stamp_ns'])
         finished=time.perf_counter()
         return dict(**{k:body[k] for k in ('request_id','stamp_ns','generation','frame','width','height')},
             model_version=self.metadata['model_version'],worker_generation=self.generation,boxes=selected,
-            tracking_generation=tracking_generation,
             transform=dict(gain=gain,resized=resized,pad=pad,input_size=size,coordinates='original_pixels'),
             timings_ms=dict(decode=(decoded-start)*1000,preprocess=(prepared-decoded)*1000,
-                backend_total=(forwarded-prepared)*1000,postprocess=(postprocessed-forwarded)*1000,
-                bytetrack=(finished-postprocessed)*1000 if tracking_generation else 0.0,
+                backend_total=(forwarded-prepared)*1000,postprocess=(finished-forwarded)*1000,
                 worker_total=(finished-start)*1000,**backend_ms))
 
     def close(self):

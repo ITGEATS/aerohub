@@ -37,7 +37,8 @@ runtime:
       schema: uav_target_tracking_interfaces/msg/AssociatedPosition3D
   python_entry: drone.target_tracking.track
   timeout_clock: monotonic-wall-clock
-  persistent_state: none; each goal starts a new EKF and UUID
+  persistent_state: none; each goal owns a new EKF, UUID and optional ByteTrack history; all released at session end
+  bytetrack: optional CPU association in Tracking; requires observation_mode=stream and requirements-bytetrack.txt
   rollback: cancel, stop owned process, restore source and rebuild overlay, restart with empty state
   coupling: one EKF per active action, Python client separate; shares external detection worker
 resources:
@@ -45,12 +46,12 @@ resources:
   writes: [target-state-action-feedback, target-state-stream, associated-position-stream]
   exclusive: [local-tracking-session]
   enforcement: local lock; serial detection request occupancy persists until actual reply
-  motion_authority: follow=false none; follow=true delegated to Navigation Tool
+  motion_authority: none; follow=true rejected
   clock: caller-selected ROS clock; rollback aborts session
   ports: DDS only; inherits domain/network; no HTTP listener
 validation:
   stage: partial
   evidence: deployment/target_tracking/VALIDATION.md
   unfinished: [moving-target-accuracy, occlusion-and-identity, platform-fault-recovery, following-Mission]
-  follow_contract: deployment/target_tracking/VALIDATION-follow.md
+  historical_follow_validation: deployment/target_tracking/VALIDATION-follow.md
   query_contract: deployment/object_detection/VALIDATION-query.md

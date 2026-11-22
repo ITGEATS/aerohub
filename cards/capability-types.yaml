@@ -740,8 +740,8 @@ capability_types:
       timestamp: measurement_time
 
   - id: perception/object/detection/instances
-    name: Image detections with optional 3D positions and scoped 2D association
-    description: A detection stream with original boxes and optional 3D positions. With ByteTrack enabled, IDs are scoped to the source generation.
+    name: Image detections with optional 3D positions
+    description: Independent detections with original boxes and optional 3D positions. Cross-frame association is owned by Tracking.
     transport:
       protocol: ros2_topic
       schema: uav_object_detection_interfaces/msg/ObjectDetectionFrame

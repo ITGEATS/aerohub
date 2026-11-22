@@ -47,13 +47,11 @@ class StreamTests(unittest.TestCase):
         self.client.destroy();self.tool.destroy_node();self.peer.destroy_node()
 
     def publish(self,worker=1):
-        msg=ObjectDetectionFrame(valid=True,tool_generation=1,worker_generation=worker,model_version='test',
-                                 tracking_generation=3)
+        msg=ObjectDetectionFrame(valid=True,tool_generation=1,worker_generation=worker,model_version='test')
         msg.header.stamp=self.peer.get_clock().now().to_msg();msg.header.frame_id='map'
         msg.image_header=msg.header
         detection=ObjectDetection(position_valid=True)
         detection.position.x=8.;detection.position.z=1.
-        detection.detection.track_id = 1
         msg.detections=[detection];self.publisher.publish(msg)
         return msg.header.stamp
 

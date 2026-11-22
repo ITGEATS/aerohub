@@ -1,0 +1,4 @@
+# Optional CPU association dependency for Tracking, installed into its ROS Python environment.
+# No detector weights or model worker environment are used.
+ultralytics==8.4.210
+lap==0.5.13

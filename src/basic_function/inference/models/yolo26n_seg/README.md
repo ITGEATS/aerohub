@@ -1,8 +1,8 @@
 # YOLO26n-seg Inference
 
 This component migrates only YOLO26n-seg. It returns original-image pixel boxes,
-categories, confidence and binary instance masks. Stream requests can add 2D
-ByteTrack association IDs in the same worker. The separate
+categories, confidence and binary instance masks. Inference holds no cross-frame
+identity or tracking history. The separate
 [Object Detection Tool](../../../../tool/object_detection/README.md) combines
 these results with ROS depth, CameraInfo and capture-time TF to report positions.
 
@@ -53,9 +53,6 @@ Start the worker and wait for `/health/ready` before the facade. The service
 `uav_inference_interfaces/srv/InferDetections`. It accepts an RGB8/BGR8 ROS Image,
 request_id and generation, preserves the original acquisition header and geometry,
 and reports worker/model identity. Masks are mono8 0/1 in original image geometry.
-Object Detection can request ByteTrack with a nonempty `tracking_stream` on stream
-inference. The worker returns the 2D ID on the original detection and a
-`tracking_generation` that defines its lifetime. Leave the key empty for snapshots.
 No target-age policy is applied here. One request can run at a time; BUSY and
 communication timeout do not cancel an active GPU kernel or trigger auto-retry.
 `inference/yolo/status` checks worker readiness and rejects changed worker identity;
@@ -81,6 +78,5 @@ implementation bit for bit. It can report a difference after the numerical align
 See validation.json for the scope and gaps of the historical migration checks. Numerical/interface checks are not live RGB-D accuracy,
 30-second tracking, physical hardware or flight acceptance.
 
-Run `test_stream_tracking.py /path/to/real-image.jpg` in the same CUDA environment
-with a detectable object from the configured class map. It checks ID continuity
-across a missed frame, generation changes and exact preservation of boxes and masks.
+Optional cross-frame ByteTrack association belongs to the Target Tracking Tool,
+with one history per action session; it does not run inside this worker.

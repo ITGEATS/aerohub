@@ -1,4 +1,4 @@
-"""Serial target-state Tool, optionally requesting turn-only Navigation."""
+"""Observation-only target tracking with session-owned association state."""
 import math
 import os
 import itertools
@@ -15,16 +15,13 @@ from rclpy.node import Node
 from rclpy.clock import JumpThreshold
 from rclpy.duration import Duration
 from builtin_interfaces.msg import Time
-from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
-from as2_msgs.msg import PlatformInfo, PlatformStatus
-from rclpy.qos import qos_profile_sensor_data
-from .facing import FacingError, FacingSession, facing_yaw
 from uav_object_detection_interfaces.srv import DetectSnapshot
 from uav_object_detection_interfaces.msg import ObjectDetectionFrame
 from uav_target_tracking_interfaces.action import TrackObject
 from uav_target_tracking_interfaces.msg import AssociatedPosition3D, TargetState
 from .core import Tracker, load_ekf
+from .stream_tracker import StreamTracker
 
 
 def stamp_value(stamp):
@@ -43,6 +40,9 @@ class TrackingNode(Node):
         if self._observation_mode not in ('snapshot','stream'):
             raise ValueError('unknown observation_mode')
         self._stream_query=self.declare_parameter('stream_query','person').value.strip().lower()
+        self._bytetrack = self.declare_parameter('bytetrack_enabled', False).value
+        if self._bytetrack and self._observation_mode != 'stream':
+            raise ValueError('bytetrack_enabled requires observation_mode=stream')
         self._stream_lock=threading.Lock()
         self._latest_frame=None
         self._stream_sequence=0
@@ -81,9 +81,6 @@ class TrackingNode(Node):
         self.state_publisher = self.create_publisher(TargetState, 'tools/target_tracking/state', 10)
         self.observation_publisher = self.create_publisher(
             AssociatedPosition3D, 'tools/target_tracking/associated_position', 10)
-        self._navigation = None
-        self._own = self._platform = None
-        self._follow_blocked = False
         self._ekf_class = load_ekf()  # fail startup before accepting goals if provenance is unavailable
         self._stopping = threading.Event()
         self._slot = threading.Lock()
@@ -115,29 +112,6 @@ class TrackingNode(Node):
             node=self.get_name(),pid=os.getpid(),seq=next(self.timing_sequence),**details)
         publisher.publish(String(data=json.dumps(event,separators=(',',':'))))
 
-    def _ensure_facing_inputs(self):
-        if self._navigation is not None:
-            return
-        from .navigation_transport import NavigationTransport
-        self.create_subscription(PoseStamped, 'self_localization/pose',
-            lambda msg:setattr(self, '_own', (msg, time.monotonic())), qos_profile_sensor_data)
-        self.create_subscription(PlatformInfo, 'platform/info',
-            lambda msg:setattr(self, '_platform', (msg, time.monotonic())), qos_profile_sensor_data)
-        self._navigation = NavigationTransport(self, self._group)
-
-    def _facing_own(self, state, now):
-        wall = time.monotonic()
-        for entry in (self._own, self._platform):
-            if entry is None or not 0 <= wall-entry[1] <= .5 or not 0 <= now-stamp_value(entry[0].header.stamp) <= .5:
-                raise FacingError('OWN_STATE_NOT_READY', 'fresh own pose and platform required for turning')
-        pose, platform = self._own[0], self._platform[0]
-        if pose.header.frame_id != state.header.frame_id:
-            raise FacingError('FRAME_MISMATCH', 'own pose and target must share a fixed frame')
-        if not (platform.connected and platform.armed and platform.offboard and platform.status.state==PlatformStatus.FLYING):
-            raise FacingError('NOT_FLYING', 'follow=true requires an armed offboard flying platform')
-        p = pose.pose.position
-        return (p.x,p.y,p.z)
-
     def _clock_jump(self, jump):
         self._clock_epoch += 1
         self.get_logger().warning(
@@ -154,7 +128,8 @@ class TrackingNode(Node):
     def goal(self, request):
         if self._observation_mode=='stream' and request.query.strip().lower()!=self._stream_query:
             return GoalResponse.REJECT
-        if request.follow and self._follow_blocked:
+        if request.follow:
+            self.get_logger().warning('TrackObject is observation-only; turning belongs to Following')
             return GoalResponse.REJECT
         if not request.query.strip() or not math.isfinite(request.timeout) or request.timeout <= 0:
             return GoalResponse.REJECT
@@ -162,22 +137,19 @@ class TrackingNode(Node):
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
-    def observe(self, tracker, frame, stamp, *, stream=False):
+    def observe(self, tracker, frame, stamp, *, stream=False, image_tracker=None):
         if self._world_frame and frame.header.frame_id != self._world_frame:
             raise ValueError('unexpected observation frame')
+        image_ids, scope = (image_tracker.attach(frame) if image_tracker is not None
+                            else ((0,) * len(frame.detections), None))
         points, ids = [], []
-        for detection in frame.detections:
+        for index, detection in enumerate(frame.detections):
             point = (detection.position.x, detection.position.y, detection.position.z)
             if detection.position_valid and all(math.isfinite(value) for value in point):
                 points.append(point)
-                ids.append(detection.detection.track_id if stream else 0)
+                ids.append(image_ids[index])
         if not points and (frame.detections or (stream and not frame.valid)):
             raise ValueError('observation has no usable 3D positions')
-        scope = None
-        if (stream and frame.tracking_generation and frame.tool_generation
-                and frame.worker_generation and frame.model_version):
-            scope = (frame.tool_generation, frame.worker_generation, frame.model_version,
-                     frame.tracking_generation)
         status = tracker.observe(points, stamp, frame.header.frame_id, ids=ids, scope=scope)
         self.filter_publisher.publish(String(data=json.dumps(tracker.measurement_audit)))
         return status, bool(points) and tracker.observation_stamp == stamp
@@ -210,12 +182,9 @@ class TrackingNode(Node):
         stream_sequence=0
         producer_identity = None
         observation_stamp = None
-        facing = None
-        stop_confirmed = True
+        image_tracker = None
         try:
-            if handle.request.follow:
-                self._ensure_facing_inputs()
-                facing = FacingSession(self._navigation)
+            image_tracker = StreamTracker() if self._bytetrack else None
             while rclpy.ok() and not self._stopping.is_set():
                 now = self.get_clock().now().nanoseconds * 1e-9
                 if handle.is_cancel_requested:
@@ -253,7 +222,7 @@ class TrackingNode(Node):
                                 producer_identity = identity
                             attempt += 1
                             try:
-                                reason, accepted = self.observe(tracker, frame, stamp, stream=True)
+                                reason, accepted = self.observe(tracker, frame, stamp, stream=True, image_tracker=image_tracker)
                                 capture = attempt
                                 if accepted:
                                     accepted_header = frame.header
@@ -334,43 +303,28 @@ class TrackingNode(Node):
                         capture_id=capture, track_epoch=tracker.track_epoch)
                     observation.position.x, observation.position.y, observation.position.z = tracker.associated_position
                     self.observation_publisher.publish(observation)
-                if facing is not None:
-                    if state.valid:
-                        # Wait briefly for new subscriptions, without issuing motion.
-                        if facing.started or (self._own is not None and self._platform is not None):
-                            own = self._facing_own(state, now)
-                            target = (state.position.x,state.position.y,state.position.z)
-                            facing.step(own, state.header.frame_id, facing_yaw(own,target),
-                                        max(.01, deadline-time.monotonic()))
-                    elif facing.started:
-                        raise FacingError('TARGET_LOST', 'target expired; stop turning')
                 self.state_publisher.publish(state)
                 handle.publish_feedback(TrackObject.Feedback(state=state))
                 time.sleep(.02)
             else:
                 code = 'SHUTDOWN'
         except Exception as exc:
-            code = exc.code if isinstance(exc, FacingError) else 'ERROR'
+            code = 'ERROR'
             reason = str(exc)
         finally:
-            if facing is not None:
-                stop_confirmed = facing.close()
-                if not stop_confirmed:
-                    self._follow_blocked = True
-                    code = 'STOP_UNCONFIRMED'
-                    reason += '; owned navigation stop unconfirmed'
+            if image_tracker is not None:
+                image_tracker.close()
             self._generation += 1  # invalidate outstanding calls before releasing slot
         state.valid = state.velocity_valid = False
         state.reason = reason
         self.state_publisher.publish(state)
-        # Terminal status follows Navigation cleanup, never precedes it.
         if code == 'TIMEOUT':
             handle.succeed()
         elif code == 'CANCELED':
             handle.canceled()
         elif handle.is_active:
             handle.abort()
-        return TrackObject.Result(code=code, reason=reason, stop_confirmed=stop_confirmed, state=state)
+        return TrackObject.Result(code=code, reason=reason, stop_confirmed=True, state=state)
 
 
 def main(args=None):

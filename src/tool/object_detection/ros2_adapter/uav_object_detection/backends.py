@@ -30,10 +30,9 @@ class YoloBackend:
             raise QueryError('UNSUPPORTED_QUERY', 'deployed YOLO supports: '+', '.join(self.supported_queries))
         return normalized
 
-    def request(self, task, query, *, tracking_stream=''):
+    def request(self, task, query):
         self.resolve(query)
-        return self.service_type.Request(request_id=task.request_id, generation=task.generation,
-                                         image=task.image, tracking_stream=tracking_stream)
+        return self.service_type.Request(request_id=task.request_id, generation=task.generation, image=task.image)
 
     def frame(self, response, task, query):
         frame = response.result

@@ -2,8 +2,8 @@ schema_version: '1.0'
 id: planner.yopo-tracker
 version: '0.1.0'
 type: tool
-name: YOPO-Tracker visual tracking
-description: Tracks a visual target selected by the native RGB-D model and submits rolling motion trajectories with a braking tail through FollowTimedPath.
+name: YOPO-Tracker visual target following
+description: Following implementation that selects its own target from RGB-D and submits rolling trajectories with a braking tail through FollowTimedPath. The existing start and stop services are validation interfaces and do not accept a target query or identity.
 
 implementation:
   component_id: aerohub.planner.yopo-tracker

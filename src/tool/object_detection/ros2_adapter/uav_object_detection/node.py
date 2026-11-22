@@ -41,9 +41,6 @@ class ObjectDetectionTool(Node):
         self.timeout=self.declare_parameter('timeout_s',.4).value
         if not 0 < self.timeout < float('inf'):raise ValueError('timeout_s must be positive finite')
         self.streaming=self.declare_parameter('stream_enabled',False).value
-        self.bytetrack = self.declare_parameter('bytetrack_enabled', False).value
-        if self.bytetrack and (not self.streaming or self.backend_name != 'yolo'):
-            raise ValueError('bytetrack_enabled requires a YOLO detection stream')
         image_topic=self.declare_parameter('image_topic','sensor_measurements/FrontCamera/rgb/image').value
         self.camera_qos = (QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
                            if self.declare_parameter('camera_reliable', False).value
@@ -174,7 +171,7 @@ class ObjectDetectionTool(Node):
             self.frame_available.set()
         self.trace('buffer_put',msg,overwritten_ns=overwritten_ns)
 
-    def infer(self, request, query=None, observation_active=None, estimate_position=True, *, tracking_stream=''):
+    def infer(self, request, query=None, observation_active=None, estimate_position=True):
         query = self.query if query is None else query
         self.backend.resolve(query)
         if estimate_position and self.position_method == 'known_height_vertical_v1' and query.strip().lower() != 'person':
@@ -191,8 +188,7 @@ class ObjectDetectionTool(Node):
             started=time.perf_counter();done=threading.Event()
             self.last_call=dict(request_id=request.request_id,send_monotonic_s=started,
                 request_age_s=self.now()-seconds(request.image.header.stamp))
-            inference_request = (self.backend.request(request, query, tracking_stream=tracking_stream)
-                                 if tracking_stream else self.backend.request(request, query))
+            inference_request = self.backend.request(request, query)
             self.trace('model_request',request.image)
             future=self.client.call_async(inference_request);future.add_done_callback(lambda _:done.set())
             if not done.wait(self.timeout+.15):
@@ -206,8 +202,6 @@ class ObjectDetectionTool(Node):
             with self.lock:
                 if not self.enabled or token!=self.generation:raise ValueError('CANCELLED_GENERATION')
             frame=self.backend.frame(result,request,query)
-            if bool(frame.tracking_generation) != bool(tracking_stream):
-                raise ValueError('inference returned an unexpected ByteTrack scope')
             identity=(frame.model_version,frame.worker_generation)
             if not frame.worker_generation or (self.backend_identity is not None and identity!=self.backend_identity):
                 raise ValueError('MODEL_GENERATION_CHANGED; restart Tool')
@@ -252,10 +246,7 @@ class ObjectDetectionTool(Node):
             try:
                 self.trace('infer_begin',msg)
                 request = DetectObjects.Request(request_id=uuid.uuid4().hex, generation=generation, image=msg)
-                if self.bytetrack:
-                    frame = self.infer(request, tracking_stream=self.get_fully_qualified_name())
-                else:
-                    frame = self.infer(request)
+                frame = self.infer(request)
                 self.trace('infer_end',msg,valid=frame.valid,error=frame.error)
                 with self.lock:
                     if generation!=self.generation:continue
@@ -263,9 +254,9 @@ class ObjectDetectionTool(Node):
                     self.frames.publish(frame)
                 self.trace('result_publish',frame)
                 boxes=[dict(xyxy=list(m.detection.xyxy),category=m.detection.category,confidence=m.detection.confidence,
-                    track_id=m.detection.track_id,position_valid=m.position_valid,position=[m.position.x,m.position.y,m.position.z]) for m in frame.detections]
+                    position_valid=m.position_valid,position=[m.position.x,m.position.y,m.position.z]) for m in frame.detections]
                 self.debug.publish(String(data=json.dumps(dict(stamp=seconds(msg.header.stamp),boxes=boxes,
-                    generation=generation,model_version=frame.model_version,tracking_generation=frame.tracking_generation,
+                    generation=generation,model_version=frame.model_version,
                     timings=json.loads(frame.timings_json)))))
                 if self.overlay.get_subscription_count()>0:
                     image=array_image(msg)
@@ -294,7 +285,7 @@ class ObjectDetectionTool(Node):
             self.last_clock=now
             self.health.publish(String(data=json.dumps(dict(healthy=self.enabled and self.worker.is_alive() and
                 not self.error,error=self.error,generation=self.generation,
-                model=self.model,last_call=self.last_call,query=self.query,detector_backend=self.backend_name,bytetrack_enabled=self.bytetrack,processed=self.processed,dropped=self.dropped,rejected=self.rejected))))
+                model=self.model,last_call=self.last_call,query=self.query,detector_backend=self.backend_name,processed=self.processed,dropped=self.dropped,rejected=self.rejected))))
 
 
 def main(args=None):

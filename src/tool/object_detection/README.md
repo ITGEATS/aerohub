@@ -1,15 +1,13 @@
 # Object Detection Tool
 
-The YOLO backend can attach optional 2D ByteTrack IDs in streaming mode. Set
-`stream_enabled:=true bytetrack_enabled:=true` and select a fixed `query`.
-Snapshot and Grounding DINO callers continue to use independent detections.
-A positive `Detection.track_id` is local to the detection stream and its
-`tracking_generation`. The original boxes, masks and 3D positions remain in the
-message, even when there is no associated track or the depth is invalid.
+Detection publishes independent boxes, masks and optional 3D positions. Set
+`stream_enabled:=true` and select a fixed `query` for a continuous detection stream.
+Cross-frame IDs and tracking history belong to Target Tracking sessions;
+neither this Tool nor its Inference worker retains target identities.
 
 For YOLO masks, `position_method:=yolo_mask_gemini2_point_center` optionally
 uses the existing depth cluster's pixel coordinates to compute the lateral 3D
-center. The existing depth mode is selected by default.: public single observation
+center. The existing depth mode is selected by default.
 
 Version 0.4.0 provides query-based RGB detection and optional RGB-D positioning
 through the AS2 Module, using deployment-selected YOLO or Grounding DINO. Current

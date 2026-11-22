@@ -36,7 +36,6 @@ runtime:
   sharing: public-observations-legacy-service-and-stream-share-one-adapter-and-inference-worker
   readiness: RGB and inference for 2D; positioning additionally needs depth, calibration and historical TF
   stream_default: false
-  bytetrack: opt-in with bytetrack_enabled; applies to streaming YOLO only
   estimate_position_default: false
   optional_position_inputs:
     when: estimate_position=true

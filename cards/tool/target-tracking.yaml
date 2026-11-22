@@ -3,7 +3,7 @@ id: tool.target-tracking
 version: "0.4.0"
 type: tool
 name: Target Tracking Tool
-description: Maintains one query-selected 3D target state using serial positioned observations and the locked YOPO-Tracker EKF. Default follow=false is observation-only; optional follow=true requests turn-only Navigation TARGET_YAW with frozen own position (current SUPER/YOPO reject this mode); scoped ByteTrack IDs optionally guide 3D association in supported streams, without a semantic identity guarantee. Consumes only valid 3D positions; box-based surface measurements are not object centers. Requires the separately deployed detector and its calibrated RGB-D and historical TF.
+description: Observation-only tracking of one query-selected 3D target using the locked YOPO-Tracker EKF. The reserved follow field must be false. Following owns turning and other following motion. Optional ByteTrack association state belongs to each Tracking session. Consumes valid 3D positions; scoped IDs do not guarantee semantic identity. Requires the separately deployed detector and calibrated RGB-D and historical TF.
 implementation:
   component_id: aerohub.tool.target-tracking
   manifest: deployment/target_tracking/component.yaml
@@ -30,4 +30,4 @@ hardware_requirements:
 resource_access:
   reads: [tools/object_detection/observe, perception/object_detection/detections]
   shared_writes: []
-  exclusive_writes: [local/target-tracking-session, delegated/vehicle.motion]
+  exclusive_writes: [local/target-tracking-session]
