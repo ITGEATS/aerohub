@@ -5,6 +5,7 @@
   <maintainer email="dev@example.com">Aerohub</maintainer><license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>as2_msgs</exec_depend><exec_depend>action_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend><exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend><exec_depend>std_srvs</exec_depend>
   <exec_depend>uav_planner_interfaces</exec_depend><exec_depend>uav_inference_interfaces</exec_depend>

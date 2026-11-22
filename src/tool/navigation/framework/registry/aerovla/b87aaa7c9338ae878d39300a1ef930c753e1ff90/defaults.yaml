@@ -1,8 +1,6 @@
-trajectory_timeout: 8.0
 rate_hz: 0.5
 max_input_skew_s: 0.30
 inference_timeout_s: 30.0
-valid_from_lead_s: 0.30
 max_consecutive_failures: 3
 service_name: inference/aerovla/infer
 prompt_table: /data/aerohub/lib/aerovla/prompt_ids_blocks.json
@@ -13,3 +11,5 @@ down_topic: /drone0/sensor_measurements/DownCamera/rgb/image
 pose_topic: /drone0/self_localization/pose
 obj_desc: ''
 target_position_enu: [0.0, 0.0, 0.0]
+land_timeout_s: 60.0
+land_speed_mps: 0.0

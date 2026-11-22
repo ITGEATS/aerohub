@@ -6,6 +6,7 @@ import math
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import rclpy
@@ -36,6 +37,7 @@ from .ros_conversions import fill_setpoint_message, seconds_to_time, segment_fro
 from .trajectory import OutputGateway, Setpoint, Vector3
 from .processes import terminate_session
 from .follow_path_client import FleetFollowPathClient
+from .tool_execution import ToolExecution
 
 
 def _read_yaml(path: str) -> dict:
@@ -57,6 +59,7 @@ class PlannerFrameworkNode(Node):
         self.execution_backend = self.get_parameter("execution_backend").value
         if self.execution_backend not in ("follow_path", "legacy_setpoint"):
             raise RuntimeError("unknown execution_backend")
+        self.tool_execution = None
         self.execution = None
         self.retired_executions = []
         registry_root = self.get_parameter("registry_root").value
@@ -97,7 +100,9 @@ class PlannerFrameworkNode(Node):
 
     def _on_control(self, request, response):
         try:
-            if request.command == request.START:
+            if self.tool_execution is not None and request.command != request.START:
+                self._control_tool(request)
+            elif request.command == request.START:
                 self._start(request.task_config_path, request.deployment_config_path)
             elif request.command == request.PAUSE:
                 self._freeze_active_time()
@@ -145,6 +150,8 @@ class PlannerFrameworkNode(Node):
             raise TransitionError("CLOCK_NOT_READY")
 
     def _start(self, task_path: str, deployment_path: str) -> None:
+        if self.tool_execution is not None and not self.tool_execution.quiescent:
+            raise TransitionError("waiting for Tool stop confirmation")
         # DDS service discovery can precede this process's first /clock sample.
         self._require_clock()
         if self.execution is not None and not self.execution.quiescent and self.execution.cancel_started:
@@ -169,6 +176,9 @@ class PlannerFrameworkNode(Node):
             for vehicle, item in resolved["deployment"].items()
         }
         self.resolved = resolved
+        if resolved['planner']['output']['type'] == 'BehaviorExecution':
+            self._start_tool(resolved)
+            return
         if self.execution_backend == "follow_path":
             self._new_execution()
         self.gateway = OutputGateway(task_id, origins)
@@ -207,6 +217,8 @@ class PlannerFrameworkNode(Node):
         self._start_runtime(output)
 
     def _on_trajectory(self, message: TimedTrajectorySegmentMsg) -> None:
+        if self.tool_execution is not None:
+            return
         snapshot = self.lifecycle.snapshot
         if snapshot is None or snapshot.status != BehaviorStatus.RUNNING:
             return
@@ -232,6 +244,9 @@ class PlannerFrameworkNode(Node):
         self._fail(reason, message.detail)
 
     def _tick(self) -> None:
+        if self.tool_execution is not None:
+            self._tick_tool()
+            return
         snapshot = self.lifecycle.snapshot
         if (
             snapshot is not None
@@ -349,6 +364,12 @@ class PlannerFrameworkNode(Node):
         self.setpoint_publisher.publish(message)
 
     def _fail(self, reason: str, detail: str = "") -> None:
+        if self.tool_execution is not None:
+            self._freeze_active_time()
+            self.lifecycle.fail(reason)
+            self.tool_execution.stop()
+            self.status_publisher.publish(self._result_message(detail))
+            return
         self.get_logger().error(f"Planner failed: {reason}: {detail}")
         if self.resolved and self.resolved['planner']['id'] in ('cat_ora','swarm_formation'):
             self.lifecycle.fail(reason)
@@ -421,6 +442,9 @@ class PlannerFrameworkNode(Node):
         self.planner_process = None
 
     def _stop_runtime(self) -> None:
+        if self.tool_execution is not None:
+            self.tool_execution.close()
+            self.tool_execution = None
         if self.execution is not None:
             self.execution.close()
         self._stop_planner_adapter()
@@ -429,6 +453,94 @@ class PlannerFrameworkNode(Node):
         for log in self.process_logs:
             log.close()
         self.process_logs = []
+
+    def _start_tool(self, resolved):
+        self.gateway = self.completion = None
+        self.execution = None
+        self.trajectory_wait_started_at = None
+        self.active_started_at = self._now()
+        self.active_elapsed = 0.0
+        for subscription in self.pose_subscriptions:
+            self.destroy_subscription(subscription)
+        self.pose_subscriptions = []
+        task_id = resolved['task']['task_id']
+        self.tool_execution = ToolExecution(self, task_id)
+        self.tool_started = time.monotonic()
+        self.tool_resume_future = None
+        output = Path(self.get_parameter('resolved_dir').value) / f'{task_id}.yaml'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(yaml.safe_dump(resolved, sort_keys=False), encoding='utf-8')
+        self._start_planner_adapter(output)
+
+    def _control_tool(self, request):
+        tool = self.tool_execution
+        if request.command == request.GET_STATUS:
+            return
+        if request.command == request.PAUSE:
+            self.lifecycle.pause()
+            self._freeze_active_time()
+            tool.stop()
+        elif request.command == request.CANCEL:
+            self.lifecycle.cancel()
+            self._freeze_active_time()
+            tool.stop()
+        elif request.command == request.RESUME:
+            self._require_clock()
+            if self.lifecycle.snapshot.status != BehaviorStatus.PAUSED:
+                raise TransitionError('Tool is not paused')
+            try:
+                self.tool_resume_future = tool.resume()
+            except ValueError as error:
+                raise TransitionError(str(error)) from error
+            self.lifecycle.resume()
+            self.active_started_at = self._now()
+        else:
+            raise TransitionError('unknown command')
+
+    def _tick_tool(self):
+        tool = self.tool_execution
+        snapshot = self.lifecycle.snapshot
+        if tool.stop_requested:
+            tool.stop()  # service discovery may complete after the request
+        status = tool.status or {}
+        self.execution_publisher.publish(String(data=json.dumps({
+            'task_id': snapshot.task_id, 'status': int(snapshot.status),
+            'failure_reason': snapshot.failure_reason, 'backend': 'tool',
+            'prepared': tool.last_received is not None,
+            'stop_requested': tool.stop_requested,
+            'stop_confirmed': {v: tool.quiescent for v in self.resolved['vehicles']},
+            'land_requested': status.get('phase') in ('LAND_READY', 'LANDING'),
+            'land_success': status.get('land_success') is True,
+        })))
+        if snapshot.status != BehaviorStatus.RUNNING:
+            # Keep the process alive until its native Behavior stop is confirmed.
+            if tool.quiescent and snapshot.status != BehaviorStatus.PAUSED:
+                self._stop_planner_adapter()
+            return
+        if self.tool_resume_future is not None and self.tool_resume_future.done():
+            try:
+                if not self.tool_resume_future.result().success:
+                    raise ValueError('Tool rejected resume')
+            except Exception as error:
+                self._fail('TOOL_RESUME_FAILED', str(error))
+                return
+            self.tool_resume_future = None
+        if self.planner_process is None or self.planner_process.poll() is not None:
+            self._fail('PLANNER_ERROR', 'Tool adapter exited')
+            return
+        now = time.monotonic()
+        timeout = max(5.0, float(self.get_parameter('runtime_startup_timeout').value))
+        if now - (tool.last_received or self.tool_started) > timeout:
+            self._fail('TOOL_STATUS_TIMEOUT')
+        elif self._active_time() >= float(self.resolved['completion']['task_timeout']):
+            self._fail('TASK_TIMEOUT')
+        elif status.get('state') == 'PAUSED' or status.get('phase') == 'STOP_FAILED':
+            self._fail('PLANNER_ERROR', status.get('last_error', ''))
+        elif status.get('state') == 'SUCCEEDED' and status.get('land_success') is True:
+            self._freeze_active_time()
+            self.lifecycle.succeed()
+            tool.stop()
+            self.status_publisher.publish(self._result_message())
 
     def _new_execution(self) -> None:
         if self.execution is not None:

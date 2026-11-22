@@ -47,4 +47,5 @@ def load_resolved(path):
         "vehicle_id": vehicles[0],
         "namespace": namespace,
         "parameters": parameters,
+        "output": planner.get("output", {"type": "TimedTrajectorySegment", "interface_version": 1}),
     }

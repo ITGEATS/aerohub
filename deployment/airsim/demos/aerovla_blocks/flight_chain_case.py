@@ -1,12 +1,12 @@
 """Stage-5 AeroVLA case client (degraded topology, PX4 SITL).
 
 CHAIN_CASE selects the case matrix entry (formal/cancel/fault); thresholds are
-locked before runs in validation.md. Topology: real NPU inference stays on the
+described in README.md; flight validation of this entry is pending. Topology: real NPU inference stays on the
 RoboPi HTTP worker; AS2/framework/planner/inference-adapter run in the PC
 onboard_computer container; flight_board provides PX4 SITL/clock; DDS is PC-side
 loopback only (no cross-machine DDS). Sequence: preflight -> arm -> offboard ->
 takeoff -> FLYING -> framework START -> AeroVLA planner on real Blocks cameras ->
-TimedTrajectorySegment -> FollowTimedPath -> execution feedback -> case-specific
+native GoTo/Land -> execution feedback -> case-specific
 branch (formal: observe then CANCEL; cancel: CANCEL at goal acceptance; fault:
 wait for planner FAILED with unreachable NPU endpoint) -> land -> disarm.
 
@@ -37,7 +37,7 @@ TASK_PATH = '/work/cfg/task.json'
 DEPLOYMENT_PATH = '/work/cfg/deployment.yaml'
 CMD_ARM = 400
 CMD_OFFBOARD = 176
-# Stage-5 case matrix (OOD thresholds locked in validation.md before runs).
+# GoTo/Land smoke scenarios; historical Stage-5 thresholds are not current acceptance.
 # formal: full chain; cancel: early cancel after goal accepted; fault: NPU HTTP
 # endpoint unreachable -> planner reports failure and recovery closes the loop.
 CASE = os.environ.get('CHAIN_CASE', 'formal').strip().lower()
@@ -76,7 +76,7 @@ class FlightChain(Node):
         self.create_subscription(String, 'status', self.on_planner_status, 10)
         self.create_subscription(BehaviorResult, 'planner/status', self.on_status, 10)
         self.create_subscription(GoalStatusArray,
-                                 '/drone0/follow_timed_path/_action/status',
+                                 '/drone0/GoToBehavior/_action/status',
                                  self.on_goal_status, 10)
         self.create_subscription(ControllerInfo, '/drone0/controller/info',
                                  self.on_motion_reference, qos_profile_sensor_data)
@@ -155,10 +155,17 @@ def recover(node):
     try:
         request = ControlPlanner.Request()
         request.command = ControlPlanner.Request.CANCEL
-        node.control_client.call_async(request)
-        time.sleep(2)
-    except Exception:
-        pass
+        future = node.control_client.call_async(request)
+        node.wait_for(future.done, 20, 'recovery CANCEL response')
+        def stopped():
+            return any(
+                state.get('stop_requested') and state.get('stop_confirmed')
+                and all(state['stop_confirmed'].values())
+                for state in map(json.loads, node.execution_states))
+        node.wait_for(stopped, 30, 'recovery Tool stop confirmation')
+    except Exception as error:
+        print('RECOVERY stop unconfirmed; retaining current execution:', error, flush=True)
+        return
     try:
         node.as2_action(Land, 'LandBehavior', Land.Goal(land_speed=0.4), 'land_success')
     except Exception as error:
@@ -226,7 +233,7 @@ def main():
                     state = json.loads(payload)
                 except ValueError:
                     continue
-                if state.get('backend') == 'follow_path' and state.get('prepared'):
+                if state.get('backend') == 'tool' and state.get('prepared'):
                     return True
             return False
         node.wait_for(prepared, 30, 'execution clients prepared')
@@ -250,14 +257,14 @@ def main():
             print('FAULT_CANCEL_RESPONSIVE accepted=%s'
                   % (resp.accepted if resp else None), flush=True)
         else:
-            # formal / cancel: require real inference + accepted timed goal.
+            # formal / cancel: require real inference + accepted native GoTo goal.
             def planner_stepped():
                 return any('"step": 1' in payload for payload in node.planner_states)
             node.wait_for(planner_stepped, 60, 'planner inference step 1 (real Blocks cameras)')
             print('PLANNER_RUNNING', flush=True)
 
             node.wait_for(lambda: node.goal_statuses, 60,
-                          'FollowTimedPath goal accepted by the action server')
+                          'GoTo goal accepted by the action server')
             print('GOAL_ACCEPTED status=%d' % node.goal_statuses[-1], flush=True)
 
             if CASE == 'formal':
@@ -270,7 +277,9 @@ def main():
             # cancel case: inject CANCEL immediately after goal accepted; formal
             # case injects it after the 12s observation window above.
 
-        if CASE != 'fault':
+        landed_by_tool = any(json.loads(payload).get('land_success') is True
+                             for payload in node.execution_states)
+        if CASE != 'fault' and not landed_by_tool:
             request = ControlPlanner.Request()
             request.command = ControlPlanner.Request.CANCEL
             future = node.control_client.call_async(request)
@@ -285,13 +294,21 @@ def main():
                         state = json.loads(payload)
                     except ValueError:
                         continue
-                    if state.get('stop_requested') and state.get('stop_confirmed'):
+                    if (state.get('stop_requested') and state.get('stop_confirmed')
+                            and all(state['stop_confirmed'].values())):
                         return True
                 return False
-            node.wait_for(stopped, 30, 'FollowPath stop confirmation')
+            node.wait_for(stopped, 30, 'Tool stop confirmation')
             print('STOP_CONFIRMED', flush=True)
 
-        node.as2_action(Land, 'LandBehavior', Land.Goal(land_speed=0.4), 'land_success')
+        if CASE == 'fault':
+            node.wait_for(
+                lambda: any(state.get('stop_requested') and state.get('stop_confirmed')
+                            and all(state['stop_confirmed'].values())
+                            for state in map(json.loads, node.execution_states)),
+                30, 'fault Tool stop confirmation')
+        if not landed_by_tool:
+            node.as2_action(Land, 'LandBehavior', Land.Goal(land_speed=0.4), 'land_success')
         node.wait_for(lambda: not node.latest['/drone0/fmu/out/vehicle_control_mode'].flag_armed,
                       30, 'disarm after landing')
         print('DISARMED_OK', flush=True)

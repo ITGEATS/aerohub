@@ -1,13 +1,13 @@
-# Stage-5 AeroVLA case runner (degraded topology, PX4 SITL).
+# AeroVLA GoTo/Land case runner (degraded topology, PX4 SITL).
 # Usage:  .\run_case.ps1 -Case formal|cancel|fault
-# Thresholds are locked in validation.md BEFORE running.
+# Current flight acceptance is pending; see README.md.
 #
 # Local harness (Windows Blocks launcher, WSL native-docker stack scripts) is
 # machine-specific and is NOT part of the repo. Supply it via -HarnessRoot
 # (Windows path to a directory containing launch_blocks.ps1) and the matching
 # WSL path via -HarnessWslRoot (directory containing cleanup_all.sh and
 # run_case.sh). Board endpoint comes from -BoardIp / $env:ROBOPI_IP.
-# Evidence is written under <repo>/log/aerovla/stage5/ (gitignored).
+# Evidence is written under <repo>/dev/aerovla-goto/evidence/ (gitignored).
 param(
   [Parameter(Mandatory=$true)]
   [ValidateSet('formal','cancel','fault')]
@@ -24,7 +24,7 @@ if (-not $HarnessRoot -or -not $HarnessWslRoot) {
 if (-not $BoardIp) { throw 'Set ROBOPI_IP or -BoardIp (board NPU HTTP host).' }
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
-$EVD = Join-Path $RepoRoot "log\aerovla\stage5\$Case-$(Get-Date -Format yyyyMMdd-HHmmss)"
+$EVD = Join-Path $RepoRoot "dev\aerovla-goto\evidence\$Case-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # Convert <drive>:\path to /mnt/<drive_lower>/path for the WSL runner.
 $EvdWsl = $EVD.Replace('\','/')
 $EvdWsl = '/mnt/' + $EvdWsl.Substring(0,1).ToLower() + $EvdWsl.Substring(2)

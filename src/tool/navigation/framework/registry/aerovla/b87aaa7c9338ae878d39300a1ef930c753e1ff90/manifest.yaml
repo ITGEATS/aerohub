@@ -5,11 +5,10 @@ runtime:
   # the resolved task config. Runs under the aerovla overlay environment
   # (uav_aerovla_planner + uav_planner_framework on PYTHONPATH).
   image: board-native:/data/aerohub/lib/aerovla
-  adapter: uav_aerovla_planner.planner_node
-  command: [python3, -m, uav_aerovla_planner.planner_node, --ros-args,
+  adapter: uav_aerovla_planner.goto_node
+  command: [python3, -m, uav_aerovla_planner.goto_node, --ros-args,
             -p, "resolved_config:={resolved_config}",
             -p, "use_sim_time:={use_sim_time}",
-            -p, "trajectory_topic:=/planner/trajectory",
             -p, "failure_topic:=/planner/failure"]
 parameters:
   defaults: defaults.yaml
@@ -18,7 +17,7 @@ capabilities:
   planning_mode: single
   min_vehicles: 1
   max_vehicles: 1
-  required_inputs: [front_image, down_image, vehicle_state]
-output: {type: TimedTrajectorySegment, interface_version: 1}
+  required_inputs: [front_image, down_image, vehicle_state, vehicle_twist]
+output: {type: BehaviorExecution, interface_version: 1}
 resources: {gpu_required: false}
 platforms: [linux/arm64]

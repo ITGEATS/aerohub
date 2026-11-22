@@ -7,8 +7,7 @@
       "obj_desc": "The orange ball is situated on the ground in an open area, with buildings and road markings visible around it under a clear sky.",
       "target_position_enu": [34.25, 33.1, -3.68],
       "prompt_table": "/data/aerohub/lib/aerovla/prompt_ids_blocks.json",
-      "rate_hz": 2.0,
-      "trajectory_timeout": 8.0
+      "rate_hz": 2.0
     }
   },
   "vehicles": ["drone0"],

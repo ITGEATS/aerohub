@@ -3,7 +3,7 @@ id: planner.aerovla
 version: "0.1.0"
 type: tool
 name: AeroVLA vision-language navigation planner
-description: Accepts a single-vehicle navigation goal described by a text object description and target position, runs AeroVLA vision-language inference on front/down RGB observations through a remote NPU worker, and converts each policy action into rolling NED timed trajectory segments executed by the existing FollowTimedPath chain. The upstream policy stays verbatim; frame conversion, rolling horizon and reference handoff live in the ROS adapter.
+description: Accepts a single-vehicle navigation goal described by a text object description and target position, runs AeroVLA vision-language inference on front/down RGB observations through a remote NPU worker, and executes discrete policy actions through native GoTo and Land. The Tool preserves action branch ordering and waits for measured position/yaw/speed convergence. The Registry entry uses BehaviorExecution; flight validation of this entry is pending, and historical timed-path evidence does not validate it.
 
 implementation:
   component_id: aerohub.planner.aerovla
@@ -18,12 +18,14 @@ inputs:
     capability_type: sensor/camera/rgb/image
   - id: self_pose
     capability_type: state/self/pose/3d
+  - id: self_twist
+    capability_type: state/self/twist/3d
   - id: controller_status
     capability_type: control/controller/status
 
 outputs:
-  - id: timed_trajectory
-    capability_type: planning/trajectory/timed-segment/3d
+  - id: execution_status
+    capability_type: task/aerovla/status
   - id: planner_failure
     capability_type: planning/failure
 
@@ -64,8 +66,8 @@ resource_access:
 
 demo:
   representations:
-    - id: rolling_timed_segments
-      stage: final
-      description: Rolling NED timed trajectory segments published by the adapter and executed through FollowTimedPath.
-      interface: {protocol: ros2_topic, schema: uav_planner_interfaces/msg/TimedTrajectorySegment}
-      renderer: trajectory_3d
+    - id: goto_execution_status
+      stage: intermediate
+      description: Task-scoped GoTo execution status; native ROS lifecycle verified, flight validation pending.
+      interface: {protocol: ros2_topic, schema: std_msgs/msg/String}
+      renderer: json
