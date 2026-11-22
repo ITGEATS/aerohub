@@ -35,7 +35,9 @@ python3 -m uav_aerovla_planner.planner_node
 `policy.py`/`prompts.py` 零 ROS 依赖，主机可直接 pytest：
 
 ```bash
-python -m pytest tests -q
+cd src/tool/navigation/planner/aerovla/ros2_adapter
+uv sync --locked
+uv run --locked pytest -q
 ```
 
 依赖：`rclpy`、`sensor_msgs`、`geometry_msgs`、`std_msgs`、`std_srvs`、
@@ -43,3 +45,9 @@ python -m pytest tests -q
 input_ids 两条路径：`prompt_table` 预分词表（板端标准，表来自
 `log/aerovla/stage1` 验证约定，见 `deployment/airsim/config/aerovla/`），
 或 openvla-7b tokenizer（需 `transformers`，`AEROVLA_TOKENIZER_PATH` 可配）。
+
+主机测试依赖由本目录 `pyproject.toml` / `uv.lock` 管理，复用本目录 `.venv`；ROS 节点仍在已有 Humble 环境运行。
+
+坐标边界：输入姿态为 ROS ENU←FLU，策略使用 NED←FRD。完整姿态转换为
+`R_ned_frd = W_enu_to_ned @ R_enu_flu @ diag(1,-1,-1)`；水平航向为
+`yaw_ned = wrap(pi/2-yaw_enu)`。输出时间化段保留 NED，由框架统一转换为 Behavior 的 ENU。

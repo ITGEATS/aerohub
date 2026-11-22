@@ -47,7 +47,6 @@ import math
 import time
 import uuid
 
-import numpy as np
 from scipy.spatial.transform import Rotation as R
 import rclpy
 from rclpy.duration import Duration
@@ -64,6 +63,7 @@ from uav_planner_interfaces.msg import (PlannerFailure, TimedTrajectoryPoint,
                                         VehicleTrajectory)
 
 from . import policy, prompts, resolved as resolved_config_module
+from .frames import enu_ned_vector, enu_to_ned_quat, enu_to_ned_yaw
 
 
 def stamp_to_s(stamp):
@@ -76,24 +76,6 @@ def duration_msg(seconds):
     return Duration(seconds=int(sec), nanoseconds=nanosec).to_msg()
 
 
-# ENU<->NED frame change: swap x/y and negate z (involutory for vectors).
-_ENU_TO_NED = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])
-
-
-def enu_ned_vector(v):
-    """Applies the involutory ENU<->NED vector map (x,y,z)_enu=(y,x,-z)_ned."""
-    return [float(v[1]), float(v[0]), -float(v[2])]
-
-
-def enu_to_ned_quat(orientation):
-    """Attitude quaternion re-expressed in the NED basis: R_ned = W R_enu W^T."""
-    q = orientation
-    if isinstance(q, dict):
-        quat = [q['x'], q['y'], q['z'], q['w']]
-    else:
-        quat = list(map(float, q))
-    matrix = R.from_quat(quat).as_matrix()
-    return R.from_matrix(_ENU_TO_NED @ matrix @ _ENU_TO_NED.T).as_quat().tolist()
 
 
 class AerovlaPlannerNode(Node):
@@ -477,7 +459,7 @@ class AerovlaPlannerNode(Node):
                  'position': enu_ned_vector([pose.position.x, pose.position.y,
                                              pose.position.z]),
                  'velocity': [0.0, 0.0, 0.0],
-                 'yaw': (math.pi / 2 - yaw_enu)}
+                 'yaw': enu_to_ned_yaw(yaw_enu)}
         self.publish_trajectory([point], is_final=True)
 
     def publish_empty_trajectory(self):
