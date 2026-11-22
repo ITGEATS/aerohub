@@ -702,3 +702,57 @@ capability_types:
       coordinate_frame: vehicle_fixed_odom
       axes: ENU
       timestamp: simulation_event_time
+
+  - id: perception/target/state/3d
+    name: Single-session 3D target state
+    description: Estimated target position, velocity, covariance, and session validity.
+    transport:
+      protocol: ros2_topic
+      schema: uav_target_tracking_interfaces/msg/TargetState
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s}
+      coordinate_frame: fixed_world_frame
+      axes: frame_defined
+      timestamp: state_sample_time
+
+  - id: perception/target/associated-position/3d
+    name: Associated 3D target measurement
+    description: Original 3D position accepted by a confirmed track, with session and track epoch.
+    transport:
+      protocol: ros2_topic
+      schema: uav_target_tracking_interfaces/msg/AssociatedPosition3D
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: SI
+      units: {position: m}
+      coordinate_frame: fixed_world_frame
+      axes: frame_defined
+      timestamp: measurement_time
+
+  - id: perception/object/detection/instances
+    name: Image detections with optional 3D positions
+    description: Independent detections with original boxes and optional 3D positions. Cross-frame association is owned by Tracking.
+    transport:
+      protocol: ros2_topic
+      schema: uav_object_detection_interfaces/msg/ObjectDetectionFrame
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 10
+    semantics:
+      unit_system: mixed
+      units: {bounding_box: px, position: m}
+      coordinate_frame: image_and_configured_world_frame
+      axes: frame_defined
+      timestamp: image_and_depth_measurement_times

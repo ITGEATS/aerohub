@@ -8,6 +8,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from uav_target_tracking.node import TrackingNode
 from uav_target_tracking_interfaces.action import TrackObject
+from uav_target_tracking_interfaces.msg import AssociatedPosition3D
 from uav_object_detection_interfaces.msg import ObjectDetectionFrame, ObjectDetection
 
 
@@ -32,6 +33,9 @@ class StreamTests(unittest.TestCase):
         self.tool=TrackingNode();self.peer=Node('stream_peer')
         self.publisher=self.peer.create_publisher(ObjectDetectionFrame,'perception/object_detection/detections',1)
         self.client=ActionClient(self.peer,TrackObject,'tools/target_tracking/track')
+        self.observations = []
+        self.peer.create_subscription(AssociatedPosition3D, 'tools/target_tracking/associated_position',
+                                      self.observations.append, 10)
         self.executor=MultiThreadedExecutor(num_threads=6)
         for node in(self.tool,self.peer):self.executor.add_node(node)
         self.thread=threading.Thread(target=self.executor.spin,daemon=True);self.thread.start()
@@ -49,6 +53,7 @@ class StreamTests(unittest.TestCase):
         detection=ObjectDetection(position_valid=True)
         detection.position.x=8.;detection.position.z=1.
         msg.detections=[detection];self.publisher.publish(msg)
+        return msg.header.stamp
 
     def start(self):
         handle=wait(self.client.send_goal_async(TrackObject.Goal(query='person',timeout=3.),
@@ -58,12 +63,28 @@ class StreamTests(unittest.TestCase):
 
     def test_stream_tracks_without_snapshot_and_expires_when_producer_stops(self):
         handle=self.start()
-        for _ in range(16):self.publish();time.sleep(.05)
+        stamps = []
+        for _ in range(16):
+            stamps.append(self.publish())
+            time.sleep(.05)
         time.sleep(.1)  # drain the final publication before measuring absence
         self.assertTrue(any(s.valid for s in self.feedback))
         last_valid=[s for s in self.feedback if s.valid][-1]
+        self.assertTrue(last_valid.velocity_valid)
+        self.assertTrue(self.observations)
+        captured = len(self.observations)
+        for event in self.observations:
+            self.assertIn(event.header.stamp, stamps)
+            self.assertEqual(event.header.frame_id, 'map')
+            self.assertEqual(event.position.x, 8.)
+            self.assertEqual(event.session_id, last_valid.session_id)
+            self.assertEqual(event.generation, last_valid.generation)
+            self.assertEqual(event.track_epoch, 1)
+        self.assertEqual(self.observations[-1].capture_id, last_valid.capture_id)
         time.sleep(.65)
         self.assertFalse(self.feedback[-1].valid)
+        self.assertFalse(self.feedback[-1].velocity_valid)
+        self.assertEqual(len(self.observations), captured)
         self.assertEqual(self.feedback[-1].observation_stamp,last_valid.observation_stamp)
         wait(handle.cancel_goal_async())
         self.assertTrue(wait(handle.get_result_async()).result.stop_confirmed)

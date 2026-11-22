@@ -115,3 +115,13 @@ Tracking 仅提供目标状态，保留的 `follow` 字段必须为 false；true
 原地转向与移动跟随均由 Following 的具体实现负责，不新增独立转向入口。
 构建和回归见[源码说明](../../src/tool/target_tracking/README.md#纯观测接口030)。
 [旧转向验证](VALIDATION-follow.md)仅保留为历史记录，不是现行接口契约。
+
+## Optional session-owned ByteTrack
+
+Detection publishes independent measurements with `stream_enabled:=true`. Enable
+`observation_mode:=stream bytetrack_enabled:=true` on Tracking, with `stream_query`
+matching Detection. Install `src/tool/target_tracking/requirements-bytetrack.txt`
+in the Tracking ROS Python environment at build time. This optional CPU association
+loads no detector weights and does not use the Inference model environment.
+Each accepted action owns a fresh ID history; cancel, timeout, clock reset and
+errors release it. Tracking remains observation-only and rejects `follow=true`.

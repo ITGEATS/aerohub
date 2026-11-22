@@ -11,7 +11,9 @@ esac
 if (( $# > 1 )); then echo 'Unexpected extra arguments' >&2; exit 2; fi
 command -v uv >/dev/null || { echo 'Install uv first' >&2; exit 1; }
 python3 "$model_dir/prepare_artifacts.py"
-UV_PROJECT_ENVIRONMENT="$model_dir/.venv" uv sync --locked --project "$model_dir"
+# Refresh the local runtime wheel when backend source changes without a version bump.
+UV_PROJECT_ENVIRONMENT="$model_dir/.venv" uv sync --locked --project "$model_dir" \
+   --reinstall-package aerohub-inference-runtime
 export PYTHONDONTWRITEBYTECODE=1
 export YOLO_CONFIG_DIR="$model_dir/artifacts/ultralytics"
 cd "$model_dir"

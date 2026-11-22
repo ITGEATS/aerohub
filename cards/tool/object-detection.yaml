@@ -1,9 +1,9 @@
 schema_version: "1.0"
 id: tool.object-detection
-version: "0.4.0"
+version: "0.5.0"
 type: tool
 name: Object Detection Tool
-description: Detects instances from a query in a fresh RGB capture using a deployment-selected YOLO or Grounding DINO backend. Preserves model labels separately from the query. Optional registered RGB-D and historical TF provide positions; DINO has boxes only and measures foreground surface support, not object centers.
+description: Detects instances from a query in a fresh RGB capture using a deployment-selected YOLO or Grounding DINO backend. Preserves model labels separately from the query. Optional registered RGB-D and historical TF provide positions; DINO has boxes only and measures foreground surface support, not object centers. Cross-frame tracking state belongs to Target Tracking.
 
 implementation:
   component_id: aerohub.tool.object-detection
@@ -15,7 +15,9 @@ inputs:
   - id: rgb
     capability_type: sensor/camera/rgb/image
 
-outputs: []
+outputs:
+  - id: detections
+    capability_type: perception/object/detection/instances
 
 interfaces:
   - id: detect

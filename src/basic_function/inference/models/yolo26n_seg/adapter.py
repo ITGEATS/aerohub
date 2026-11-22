@@ -28,13 +28,14 @@ class TensorNetwork(torch.nn.Module):
             self.network.model[-1].end2end = False
 
     def forward(self, image):
+        # Match Ultralytics: transfer uint8, then normalize as float32 on the device.
+        image = image.float().div_(255)
         output=self.network(image)[0]
         return dict(raw=output[0],proto=output[1]) if self.segment else output
 
     def load_state_dict(self, state_dict, strict=True, assign=False):
         result=super().load_state_dict(state_dict,strict=strict,assign=assign)
-        # Same supported Conv/BN fusion used by the official inference predictor.
-        # Fuse only after the public backend loads the original state_dict.
+        # Fuse the loaded weights on CPU before the backend transfers the model.
         self.network.fuse(verbose=False)
         return result
 
@@ -76,14 +77,15 @@ class Predictor:
             if model.network.model[-1].nm!=32:raise ValueError('unsupported segmentation prototype count')
             outputs['proto']=dict(shape=[1,32,size//4,size//4],dtype='float32')
         self.backend = TorchBackend(lambda:model, state, name,
-            {'image':dict(shape=[1,3,size,size],dtype='float32')},
+            {'image':dict(shape=[1,3,size,size],dtype='uint8')},
             outputs,
-            device='cpu' if c['device']=='cpu' else 'cuda:0')
-        self.backend.warmup({'image':np.zeros((1,3,size,size),np.float32)})
+            device='cpu' if c['device']=='cpu' else 'cuda:0', load_on_cpu=True)
+        self.backend.warmup({'image':np.zeros((1,3,size,size),np.uint8)})
         self.generation = time.time_ns()
         version = dict(weights=expected['sha256'], state=converted['state_sha256'],
                        model=name, size=size, confidence=c['confidence'], classes=c['class_map'],
-                       ultralytics=ultralytics.__version__, head='one-to-many+nms',fusion='official-ConvBN',
+                       ultralytics=ultralytics.__version__, head='one-to-many+nms',
+                       fusion='official-ConvBN-before-device-transfer', normalization='device-float32-div255',
                        task='segment' if self.segment else 'detect',masks='official-retina-original-pixels-png' if self.segment else 'none')
         self.metadata = dict(self.backend.metadata, worker_generation=self.generation,
             model_version=hashlib.sha256(json.dumps(version,sort_keys=True).encode()).hexdigest(),
@@ -109,7 +111,7 @@ class Predictor:
         resized=[round(w*gain),round(h*gain)]
         pad=[(size-resized[0])/2,(size-resized[1])/2]
         letterbox=LetterBox(new_shape=(size,size),auto=False,stride=32)(image=image)
-        tensor=np.ascontiguousarray(letterbox[:,:,::-1].transpose(2,0,1)[None],dtype=np.float32)/255.
+        tensor=np.ascontiguousarray(letterbox[:,:,::-1].transpose(2,0,1)[None],dtype=np.uint8)
         prepared=time.perf_counter()
         outputs, backend_ms=self.backend.infer({'image':tensor})
         forwarded=time.perf_counter()
