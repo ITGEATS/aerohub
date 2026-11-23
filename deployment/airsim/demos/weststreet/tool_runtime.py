@@ -3,6 +3,7 @@
 import json
 import base64
 from pathlib import Path
+from weststreet_ports import PORTS
 import signal
 import threading
 import time
@@ -25,7 +26,7 @@ def main():
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     rclpy.init(args=['--ros-args', '-r', '__ns:=/drone0', '-p', 'use_sim_time:=true',
-        '-p', 'endpoint:=http://127.0.0.1:18002', '-p', 'timeout_s:=2.0',
+        '-p', f"endpoint:=http://127.0.0.1:{PORTS['inference']}", '-p', 'timeout_s:=2.0',
         '-p', 'detector_backend:=yolo', '-p', 'query:=person', '-p', 'stream_enabled:=true',
         '-p', 'observation_mode:=stream', '-p', 'stream_query:=person', '-p', 'timing_enabled:=true',
         '-p', 'registered_depth:=true', '-p', 'depth_is_perspective:=false',

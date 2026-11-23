@@ -17,7 +17,10 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--listen-host',default='127.0.0.1')
     args=parser.parse_args();out=args.output
-    relay=StartupRelay((args.listen_host,4981),('127.0.0.1',4881))
+    settings = json.loads((out/'settings.json').read_text())
+    px4_settings = json.loads((out/'px4-settings.json').read_text())
+    relay=StartupRelay((args.listen_host,px4_settings['Vehicles']['PX4']['TcpPort']),
+                       ('127.0.0.1',settings['Vehicles']['PX4']['TcpPort']))
     text=Path('/proc/self/stat').read_text();ticks=text[text.rfind(')')+2:].split()[19]
     state={'pid':os.getpid(),'ticks':ticks,'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
     (out/'relay-state.json').write_text(json.dumps(state)+'\n')

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Install the native SDK from configured development resources."""
 import argparse
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -23,8 +24,20 @@ def main():
     if not python.is_file():
         parser.error(f'Create the configured Python virtual environment first: {python}')
     print(f'SDK source: {sdk}\nPython environment: {python}', flush=True)
+
     if not args.check:
-        subprocess.run(['uv', 'pip', 'install', '--python', str(python), '--editable', str(sdk)], check=True)
+        if not (python.parent.parent / 'pyvenv.cfg').is_file():
+            parser.error(f'Configured Python must belong to a virtual environment: {python}')
+        root = Path(__file__).resolve().parents[2]
+        environment = dict(os.environ, UV_PROJECT_ENVIRONMENT=str(python.parent.parent))
+        subprocess.run([
+            'uv', 'sync', '--project', str(root), '--locked', '--inexact',
+            '--extra', 'projectairsim', '--no-install-package', 'projectairsim',
+        ], env=environment, check=True)
+        subprocess.run([
+            'uv', 'pip', 'install', '--python', str(python), '--no-deps',
+            '--no-build-isolation', '--editable', str(sdk),
+        ], check=True)
         subprocess.run(['uv', 'pip', 'check', '--python', str(python)], check=True)
 
 

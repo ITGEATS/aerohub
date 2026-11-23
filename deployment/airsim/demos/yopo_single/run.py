@@ -101,7 +101,10 @@ def launch(output, role, image, args, env=(), mounts=(), entrypoint=None):
 def relay(output):
     sys.path.insert(0, str(ROOT/'deployment/airsim/demos/catora_open_field'))
     from sim_startup import StartupRelay
-    service = StartupRelay(('127.0.0.1',4790), ('127.0.0.1',4780))
+    settings = json.loads((output/'settings.json').read_text())
+    px4_settings = json.loads((output/'px4-settings.json').read_text())
+    service = StartupRelay(('127.0.0.1',px4_settings['Vehicles']['PX4']['TcpPort']),
+                           ('127.0.0.1',settings['Vehicles']['PX4']['TcpPort']))
     stopping = False
     def stop(*_):
         nonlocal stopping
@@ -128,23 +131,29 @@ def start(output, scene):
     if not available:
         raise RuntimeError('no unused validation DDS domain available')
     (output/'domain.json').write_text(json.dumps({'domain':available[0]})+'\n')
-    for kind, ports in [(socket.SOCK_STREAM, [45471,4780,4790]), (socket.SOCK_DGRAM,[8961,14840,14880])]:
+    profile_path = Path(__file__).with_name('profile.json')
+    profile = json.loads(profile_path.read_text())
+    settings = json.loads((profile_path.parent / profile['settings']).read_text())
+    vehicle = settings['Vehicles']['PX4']
+    rpc_port = settings['ApiServerPort']
+    relay_port = vehicle['TcpPort'] + 10
+    agent_port = 8961
+    for kind, ports in [(socket.SOCK_STREAM, [rpc_port, vehicle['TcpPort'], relay_port]),
+                        (socket.SOCK_DGRAM, [agent_port, vehicle['ControlPortLocal'], vehicle['ControlPortRemote']])]:
         for port in ports:
             with socket.socket(socket.AF_INET, kind) as probe:
                 probe.bind(('127.0.0.1',port))
     for image in [ONBOARD, GROUND, FLIGHT]:
         run(['docker','image','inspect',image],stdout=subprocess.DEVNULL)
-    settings = json.loads((APP/'settings.json').read_text())
     if scene == 'forest':
         forest = json.loads((ROOT/'simulator/airsim/scenarios/super_forest/settings.json').read_text())['Vehicles']['PX4']
         for key in ['X','Y','Z','Yaw']:
             settings['Vehicles']['PX4'][key] = forest.get(key,0)
     (output/'scenario.json').write_text(json.dumps({'scene':scene})+'\n')
     (output/'settings.json').write_text(json.dumps(settings, indent=2)+'\n')
-    px4 = json.loads(json.dumps(settings)); px4['Vehicles']['PX4']['TcpPort']=4790
+    px4 = json.loads(json.dumps(settings)); px4['Vehicles']['PX4']['TcpPort']=relay_port
     (output/'px4-settings.json').write_text(json.dumps(px4, indent=2)+'\n')
     (output/'fleet.yaml').write_text('vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: 71\n')
-    profile = json.loads((ROOT/'simulator/airsim/scenarios/catora_open_field/profile.json').read_text())
     profile['settings'] = str(output/'settings.json')
     (output/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     images = {image:capture(['docker','image','inspect',image,'--format','{{.Id}}']).strip() for image in [ONBOARD,GROUND,FLIGHT]}
@@ -174,10 +183,10 @@ def start(output, scene):
     (output/'relay.json').write_text(json.dumps(dict(pid=process.pid,ticks=fields[19],boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))+'\n')
     launch(output,'vehicle',FLIGHT,['vehicle'],
            env=['-e','VEHICLE_NAME=PX4','-e','VEHICLE_NAMESPACE=drone0','-e','PX4_INSTANCE=70',
-                '-e','PX4_SYSTEM_ID=71','-e','XRCE_AGENT_PORT=8961','-e','AIRSIM_RPC_PORT=45471',
+                '-e','PX4_SYSTEM_ID=71','-e',f'XRCE_AGENT_PORT={agent_port}','-e',f'AIRSIM_RPC_PORT={rpc_port}',
                 '-e','FLIGHT_BOARD_SENSORS=0','-e','FLIGHT_BOARD_CAMERAS=0'],
            mounts=['-v',str(output/'px4-settings.json')+':/config/settings.json:ro'])
-    launch(output,'clock',FLIGHT,['clock'],env=['-e','VEHICLE_NAME=PX4','-e','AIRSIM_RPC_PORT=45471'])
+    launch(output,'clock',FLIGHT,['clock'],env=['-e','VEHICLE_NAME=PX4','-e',f'AIRSIM_RPC_PORT={rpc_port}'])
     deadline=time.monotonic()+60
     while 'Ready for takeoff!' not in capture(['docker','logs',prefix(output)+'vehicle']):
         if time.monotonic()>deadline: raise RuntimeError('PX4 preflight timeout; preserve resources for diagnosis')
@@ -185,7 +194,7 @@ def start(output, scene):
     launch(output,'sensor',FLIGHT,['-lc',
            'source /opt/ros/humble/setup.bash && source /opt/platform_sensors/install/setup.bash && '
            'exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args '
-           '-p settings_file:=/config/settings.json -p rpc_host:=127.0.0.1 -p rpc_port:=45471 '
+           f'-p settings_file:=/config/settings.json -p rpc_host:=127.0.0.1 -p rpc_port:={rpc_port} '
            '-p vehicle_name:=PX4 -p vehicle_namespace:=drone0 -p camera_rate_hz:=15.0 -p use_sim_time:=true'],
            mounts=['-v',str(output/'settings.json')+':/config/settings.json:ro'],entrypoint='bash')
     launch(output,'compute',ONBOARD,['-lc','exec bash /repo/deployment/airsim/demos/yopo_single/compute.sh'],
@@ -193,6 +202,7 @@ def start(output, scene):
 
 
 def mission(output, args):
+    rpc_port = json.loads((output/'settings.json').read_text())['ApiServerPort']
     case_path=output/args.case
     if case_path.exists():
         raise RuntimeError('use a fresh case name; evidence must not be overwritten')
@@ -203,6 +213,7 @@ def mission(output, args):
              '--entrypoint','bash',GROUND,'-lc',
              'source /opt/ros/humble/setup.bash && source /repo/log/yopo-single/workstation/ws/install/setup.bash && '
              'exec python3 /repo/deployment/airsim/demos/yopo_single/mission.py --output /evidence/'+args.case+
+             f' --rpc-port {rpc_port}'+
              (' --require-obstacle' if json.loads((output/'scenario.json').read_text())['scene']=='forest' else '')+(' --ground-only' if args.ground_only else '')+(' --recover-only' if args.recover_only else '')+' --timeout '+str(args.timeout)+' --fault '+args.fault+' --goal '+' '.join(str(v) for v in args.goal)]
     if args.fault not in ('stale', 'worker-exit'):
         run(command)

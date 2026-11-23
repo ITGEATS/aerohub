@@ -17,6 +17,35 @@
 - `onboard_computer` 共享镜像作为复现镜像的固定基础环境。算法交付镜像必须在构建阶段复制锁定源码并编译依赖、算法和适配层，运行时不得挂载仓库、源码 workspace、build/install overlay 或宿主依赖目录。易于为目标架构构建的依赖直接编入镜像；难以迁移的 ROS 1 依赖不能通过额外挂载规避，应按板端已有 ROS 2 Humble、Python 和系统工具完成源码迁移。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用旧插件。
 - 本地开发迭代复用共享 Docker 镜像，普通 AS2/算法/适配修改优先在各自外部工作区补编译，并显式加载对应 install overlay；不因源码迭代默认重建或替换镜像。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用镜像旧插件。新增依赖先核查现有环境及工作区局部依赖；确需升级基础环境时作为单独的团队版本变更处理。
 
+- 仿真场景安装统一通过 `config/resources.yaml` 登记。新增或修改 Demo 时，显式绑定默认场景资源与 AirSim settings 或 ProjectAirSim scene/robot 配置，按[场景资源与 Demo 配置](docs/开发者贡献指导.md#simulator-resources)管理本机路径及运行配置。
+
+## 配置归属
+
+配置随使用范围放置。共享配置放 `config/`，其余随 Deploy、仿真器或组件。默认值只声明一次，由启动入口传给消费者。本机配置与密钥放入已忽略的 local 文件，或使用组件支持的环境变量入口；共享 example 保留占位值。固定实现值留在代码。见[配置示例](config/README.md#配置归属)。
+
+## 外部源码与依赖
+
+仿真器支持基线为 ProjectAirSim 1.1.0 和 AirSim 1.8.1，使用已安装的场景包及配套 SDK，通过资源表定位。源码构建按场景开发或定制需要执行。
+
+外部源码以子模块 gitlink 锁定提交；外部安装的 SDK、工具链和二进制由使用组件记录来源与版本，路径通过资源或本机配置提供。Python 等包依赖由所属环境的声明和锁文件维护，下载产物校验哈希。准备和启动复用选定版本，升级时显式更新对应记录。见[外部依赖管理](docs/开发者贡献指导.md#external-dependencies)。
+
+## 组件工作区与构建
+
+- 组件自行管理所属工作区、构建产物和 overlay。组件入口负责加载所需环境，Deploy 通过组件入口编排运行。
+- 开发者和 Agent 按需编译，启动入口直接使用已有产物。遇到产物缺失或运行结果与源码不符时，可以主动补编、重启和验证。
+- 接口或 ABI 变化时，验证前重编受影响的消费者，并加载配套产物。具体构建工具、目录布局和启动命令由组件决定。
+
+## Python 环境
+
+按进程职责选择环境。同一 Demo 的 ROS adapter 和推理 worker 可以分别使用容器 Python 和模型 venv。
+
+- **ROS 容器 Python**。ROS 2 节点、Adapter 和 Mission 使用所在容器的 Humble Python，显式加载 ROS 和对应 install overlay。
+- **根目录 `.venv`**。共享宿主工具使用仓库根环境，涵盖 ModelScope、Simulator Manager、AirSim 宿主工具和 ProjectAirSim SDK；依赖由根 `pyproject.toml` 和 `uv.lock` 管理，准备入口为 `setup_python.sh`，SDK 通过仿真准备入口补装。
+- **模型目录 `.venv`**。每个 Inference 模型用自己的 `uv` 环境和锁文件。调用同一模型的 Demo 共用该模型的准备与启动入口。
+- **项目目录 `.venv`**。算法或组件确需独立 Python 版本或依赖时，在项目目录维护环境、依赖声明和准备入口。
+
+虚拟环境产物由本机生成。各类环境的使用入口见 [README 的 Python 环境](README.md#python-environments)。
+
 ## 目标架构
 
 ### 2026-11-09 四方部署职责（用户确认）
@@ -25,7 +54,7 @@
 
 - 以 `docs/项目简介.md` 的“四方部署职责”节（`#deployment-roles`）为职责及对应关系的主说明：仿真器对应 AirSim，飞控板对应物理 PX4 或 SITL PX4，算力板对应 RoboPi 自主算法与 AS2 执行链，工作站对应 ROS 任务脚本。镜像/容器可组合多个角色，不依据名称判定职责。
 - Demo 的 `mission.py` 在工作站通过 ROS 调用已部署、已就绪的算力板能力；自主算法、Adapter 与 AS2 执行链在算力板，高频控制不经工作站转发。
-- 工作站任务容器基线选用 `osrf/ros:humble-desktop-full-jammy`，复用现有 onboard ROS 底层；接口及任务依赖通过外部工作区补编译并显式加载；容器启动任务客户端，算法与 AS2 执行节点由算力板提供。
+- 工作站任务容器默认使用所选 onboard 镜像的本地 `workstation:<版本>` 别名，显式启动任务客户端并加载外部接口 overlay；各 Deploy 的镜像版本与迁移状态见[发布说明](deployment/releases/README.md)。
 - 仿真专有验收留在仿真器/工作站侧。SUPER 的 `four-part` 入口已按此边界接通；`robopi-all` 将任务也放在板端，保留为历史拓扑。运行与 Validation 见 `deployment/airsim/demos/super_forest/README.md`；Demo 任务脚本不代表通用 Mission/Agent 层已实现。
 
 ### 2026-11-07 目标架构补充（优先于下方早期分层描述）
@@ -117,5 +146,7 @@
 新增 `src/basic_function/inference/` 提供与 Perception、State Estimator 并列的 Inference Robotic Function：对外使用 ROS 2，内部 FastAPI runtime 与每模型独立 uv 环境隔离。`interfaces/`、`ros2_adapter/`、`runtime/` 保存公共服务设施，`models/<模型>/` 保存推理适配和环境。算法源码仍按功能归属原分类；Inference 模块只引用模型实现，不迁移或复制 Planner 算法，不承担轨迹重建或运动执行。
 
 CUDA 模型迁移、独立环境与模型文件准备按正式子 Skill [uav-prepare-cuda-inference](skill/uav-prepare-cuda-inference/SKILL.md) 执行；每模型 README/setup 及验证要求集中在该 Skill 维护。
+
+每个 Inference 模型在模型目录的 README 写清准备和启动步骤。按实际后端组织文件，准备脚本按需提供。见 [Inference 模型交付约定](src/basic_function/inference/README.md#model-delivery)。
 
 自建代码位于 `src/`，顶层按 `tool/`、`basic_function/`、`behavior/` 三类组织。导航算法位于 `tool/navigation/planner/`，共用协调与接口分别位于 `tool/navigation/framework/` 和 `tool/navigation/interfaces/`；Inference、State Estimator、Perception 位于 `basic_function/` 下。面向任务的目标检测 Tool 应放入 `tool/object_detection/`，其模型推理适配仍归 `basic_function/inference/models/`。ROS 2 迁移代码使用 `ros2_adapter/native/`，统一 AeroHub 接口使用同级 `ros2_adapter/bridge/`；`ros1_proxy/` 仅可保存带明确历史标识的对照实现，不得被活动部署入口引用。同类对象的目录规则见 `docs/开发者贡献指导.md` 和 `src/README.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。开发材料和产物按上文归属；部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。

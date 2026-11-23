@@ -34,3 +34,14 @@
 
 需要运动时证明指令经过 AS2 与 PX4，不用 AirSim 运动 API。使用真实模型和 GPU 的能力执行真实算法；合成输出、CPU mock、服务存活和视频均不能替代对应证据。
 
+
+可用随 Skill 提供的脚本检查结果索引。在仓库根目录执行以下命令，参数替换为本轮文件。
+
+```bash
+python3 skill/uav-repro-verify/scripts/check_matrix.py \
+  dev/<对象>/plan.json dev/<对象>/results.json dev/<对象>
+```
+
+`plan.json` 将用例名映射到非空字符串，描述命令或场景及通过标准。`results.json` 使用相同用例名，每项包含 `status`（`passed`、`failed`、`skipped` 或 `pending`）与 `evidence` 相对路径列表，路径相对第三个参数指定的证据目录。
+
+脚本检查全部声明用例的状态、额外结果项和证据文件是否存在且非空，并拒绝指向证据目录外的路径。返回码 0 表示这些检查通过，1 表示存在未通过项，2 表示输入格式或文件读取错误。指标是否达标、证据内容是否支持结论仍需结合本轮通过标准核查。

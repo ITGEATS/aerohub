@@ -15,8 +15,11 @@ import time
 from hud_port import choose_hud_port
 
 ROOT = Path(__file__).resolve().parents[4]
-PROFILE = ROOT / 'log/projectairsim/package-course-wmm/profile.json'
-RUNTIME = PROFILE.parent / 'runtime'
+sys.path.insert(0, str(ROOT))
+from simulator.manager.resources import resolve_resource
+
+PROFILE = None
+RUNTIME = ROOT / 'log/projectairsim/package-course-wmm/runtime'
 PX4 = 'aerohub-course-wmm-px4'
 IMAGE = 'uav/apps-super-forest:onboard-v0.1.1'
 SOURCE = Path(__file__).resolve().parent
@@ -38,12 +41,25 @@ def status():
     return capture(['docker', 'exec', PX4, '/opt/px4-gazebo/bin/px4-listener',
                     '--instance', '20', 'vehicle_status', '-n', '1'])
 
+def profile_path():
+    return PROFILE or resolve_resource('projectairsim_course_profile')
+
+
+def scene_binary():
+    override = os.environ.get('COURSE_BINARY')
+    return Path(override).expanduser().resolve() if override else resolve_resource('projectairsim_course_hud')
+
+
 def manager(action):
     global HUD_PORT
     # Keep the original PX4/robot configuration; replace only the packaged display runtime.
-    profile = json.loads(PROFILE.read_text())
-    binary = Path(os.environ.get('COURSE_BINARY', str(ROOT/'log/projectairsim/hud-v1/package/Linux/Blocks/Binaries/Linux/Blocks'))).expanduser().resolve()
     if action == 'start':
+        source = profile_path()
+        profile = json.loads(source.read_text())
+        binary = scene_binary()
+        for key in ('scene_config', 'client_path', 'client_python'):
+            if key in profile:
+                profile[key] = str(source.parent / Path(profile[key]).expanduser())
         if not binary.is_file():
             raise FileNotFoundError(f'新 HUD 场景包不存在：{binary}；可用 COURSE_BINARY 指定已构建的包')
         profile['binary'] = str(binary)
@@ -53,13 +69,13 @@ def manager(action):
         RUNTIME.mkdir(parents=True, exist_ok=True)
         launch_profile = RUNTIME/'hud-profile.json'
         launch_profile.write_text(json.dumps(profile, indent=2))
-    else:
-        launch_profile = PROFILE
-    run([sys.executable, ROOT/'simulator/manager/manager.py', action,
-         '--profile', launch_profile, '--run-dir', RUNTIME], env=ENV, cwd=ROOT)
+    command = [sys.executable, ROOT/'simulator/manager/manager.py', action, '--run-dir', RUNTIME]
+    if action == 'start':
+        command += ['--profile', launch_profile]
+    run(command, env=ENV, cwd=ROOT)
 
 def wait_ports_free(timeout=90):
-    profile = json.loads(PROFILE.read_text())
+    profile = json.loads(profile_path().read_text())
     ports = list(profile['ports'].values())
     # HUD uses a free per-launch port; only fixed simulator ports require waiting.
     deadline = time.monotonic() + timeout
@@ -112,8 +128,8 @@ def main():
         'runs': 1, 'speed_m_s': 5, 'acceleration_m_s2': 2,
         'goal_enu_m': [0,120,2], 'arrival_tolerance_m': 1.5,
         'collision_coverage': 'unverified native collision topic not bridged',
-        'package': str(Path(os.environ.get('COURSE_BINARY', str(ROOT/'log/projectairsim/hud-v1/package/Linux/Blocks/Binaries/Linux/Blocks'))).expanduser().resolve()),
-        'scene_profile': str(PROFILE)}, indent=2))
+        'package': str(scene_binary()),
+        'scene_profile': str(profile_path())}, indent=2))
     # Correct the local historical fallback's hardcoded system id for this vehicle.
     mission = out/'app/mission.py'
     mission.write_text(mission.read_text().replace('target_system=61,', 'target_system=21,'))

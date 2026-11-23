@@ -1,0 +1,7 @@
+# Copy to config/resources.local.yaml and edit only the installed resources you use.
+# Relative paths resolve from the config file; ~ expands to your home directory.
+resources:
+  projectairsim_source:
+    path: ~/ProjectAirSim
+  airsim_nh:
+    path: ~/AirSim/scenes/nh/AirSimNH/Binaries/Linux/AirSimNH

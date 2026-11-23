@@ -2,6 +2,7 @@
 """Workstation-only ROS mission. All motion is executed by onboard AS2 -> PX4."""
 import argparse,json,math,signal,sys,time
 from pathlib import Path
+from weststreet_ports import PORTS
 sys.path.insert(0,str(Path(__file__).resolve().parents[4]))
 import rclpy
 from rclpy.node import Node
@@ -122,7 +123,7 @@ class Mission(Node):
    self.record();self.stream.close();(self.out/'result.json').write_text(json.dumps(self.result,indent=2));print(json.dumps(self.result),flush=True)
 
 if __name__=='__main__':
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,required=True);p.add_argument('--ground-only',action='store_true');p.add_argument('--hud-port',type=int,default=19891);p.add_argument('--scene-port',type=int,default=19892);a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,required=True);p.add_argument('--ground-only',action='store_true');p.add_argument('--hud-port',type=int,default=PORTS['hud']);p.add_argument('--scene-port',type=int,default=PORTS['scene']);a=p.parse_args()
  rclpy.init();node=Mission(a)
  def stop(*_):raise RuntimeError('Mission canceled; native Land recovery requested')
  signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)

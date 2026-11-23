@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from weststreet_ports import PORTS
 import re
 import signal
 import socket
@@ -109,8 +110,8 @@ def main():
     running=subprocess.check_output(['docker','ps','--format','{{.Names}}'],text=True).splitlines()
     conflicts=[n for n in running if n.startswith('aerohub-west-tools-')]
     if conflicts:raise RuntimeError('Existing WestStreet runtime is active: '+', '.join(conflicts))
-    for port in (19889,19890,19891,19892,18002,20189,18991):
-        kind=socket.SOCK_DGRAM if port==18991 else socket.SOCK_STREAM
+    for port in PORTS.values():
+        kind=socket.SOCK_DGRAM if port==PORTS['xrce'] else socket.SOCK_STREAM
         with socket.socket(socket.AF_INET,kind)as sock:
             if kind==socket.SOCK_STREAM:sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
             try:sock.bind(('127.0.0.1',port))

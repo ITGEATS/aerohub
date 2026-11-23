@@ -55,7 +55,7 @@
 | 回退 | 旧源码/产物可核验；停机切换步骤存在 | 未执行跨版本飞行回退，不支持热回退 |
 | 发布/团队获取 | Fork提交`92d054f`已发布并可按提交获取；父仓通过`.gitmodules`与gitlink引用 | 历史飞行大体积原始记录仍由本地索引定位，不属于Fork源码发布包 |
 
-正式要求来自 [端到端验收Skill](../../../../skill/uav-sim-e2e-validation/SKILL.md)，具体20秒、机号、范围、位移和Land预算来自本Demo，不提升为AeroHub标准。完整任务指标应结合原项目目标和实际平台确定，不能以“消除休眠”替代探索效果指标。
+正式要求来自 [端到端验收Skill](../../../../skill/uav-validate-pc-runtime/SKILL.md)，具体20秒、机号、范围、位移和Land预算来自本Demo，不提升为AeroHub标准。完整任务指标应结合原项目目标和实际平台确定，不能以“消除休眠”替代探索效果指标。
 
 最新飞行与诊断分层结果见 [本轮报告](../../../../log/racer-ros2/20261119-frontier-flight/report.md)。本地核对结果/所有运行哈希/源码差异见 [审计数据](../../../../log/racer-ros2/20261119-delivery-review/audit.json)。大体积原始记录仍在原数据盘，由本地索引定位，不复制UE工程或旧bag。
 
@@ -72,7 +72,7 @@
 
 参考 [SUPER](../super_forest/README.md) 的四方/历史模式分开、版本化JSON与Validation、成功与失败同时保留；参考 [CAT-ORA](../catora_open_field/README.md) 和 [混合部署](../catora_open_field/hybrid/README.md) 的进程归属、唯一运行目录、清理和负载口径。CAT-ORA旧单采样桥、集中式规划、固定队形参数及历史板端任务布置不作为RACER当前规范。
 
-本轮实际使用 [构建Skill](../../../../skill/uav-reproducible-build/SKILL.md) 核对源码/产物、[组件Skill](../../../../skill/uav-component-deployment/SKILL.md) 核对运行依赖与回退、[验收Skill](../../../../skill/uav-sim-e2e-validation/SKILL.md) 分层判定，并用 [卡片Skill](../../../../skill/uav-capability-cards/SKILL.md) 核对planner分类与能力边界。
+本轮实际使用 [构建Skill](../../../../skill/uav-build-pc-runtime/SKILL.md) 核对源码/产物、[组件Skill](../../../../skill/uav-package-pc-runtime/SKILL.md) 核对运行依赖与回退、[验收Skill](../../../../skill/uav-validate-pc-runtime/SKILL.md) 分层判定，并用 [卡片Skill](../../../../skill/uav-create-capability-cards/SKILL.md) 核对planner分类与能力边界。
 
 以下只是有依据的改进候选，本轮不改正式Skill，也不创建新Skill：
 

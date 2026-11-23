@@ -1,7 +1,18 @@
 """Resolve the host inputs to the WestStreet Tool deployment."""
 import json
+import sys
 from pathlib import Path
 
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from simulator.manager.resources import resolve_resource
+
+
+SCENE_RESOURCES = {
+    'base_profile': 'projectairsim_course_profile',
+    'ue_root': 'ue5_root',
+    'project': 'projectairsim_weststreet_project',
+}
 
 DEFAULT_RUNTIME_CONFIG = Path(__file__).with_name('runtime.local.json')
 
@@ -19,7 +30,7 @@ OVERLAY_SETUP = {
 def load_runtime(path, *, require_acceptance=False):
     path = path.expanduser().resolve()
     config = json.loads(path.read_text())
-    required = {'base_profile', 'ue_root', 'project', *OVERLAY_SETUP}
+    required = set(OVERLAY_SETUP)
     if require_acceptance:
         required.add('acceptance_workspace')
     if not isinstance(config, dict):
@@ -28,8 +39,9 @@ def load_runtime(path, *, require_acceptance=False):
     if missing:
         raise ValueError(f"{path}: missing {', '.join(sorted(missing))}")
 
-    paths = {}
-    for key in required | (config.keys() & {'acceptance_workspace'}):
+    paths = {key: resolve_resource(resource) for key, resource in SCENE_RESOURCES.items()
+             if key not in config}
+    for key in required | (config.keys() & {'acceptance_workspace', *SCENE_RESOURCES}):
         value = config[key]
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f'{path}: {key} must be a nonempty path')

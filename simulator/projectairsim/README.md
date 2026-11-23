@@ -4,17 +4,18 @@
 
 ## 环境与依赖
 
-AirSim 管理器和传感器适配使用宿主 Python 的 PyYAML/msgpack 与项目自建 RPC；没有要求全仓库统一安装完整 AirSim SDK。ProjectAirSim 原生协议、场景加载及图像工具通过上游 SDK 接入，使用独立 Python 环境，不将其全部依赖加入算法环境或宿主系统 Python。
+AirSim 管理器和传感器适配使用宿主 Python 的 PyYAML/msgpack 与项目自建 RPC；没有要求全仓库统一安装完整 AirSim SDK。ProjectAirSim 原生协议、场景加载及图像工具通过上游 SDK 接入，使用仓库根 `.venv`，依赖由根 `pyproject.toml` 的 `projectairsim` 可选组和 `uv.lock` 管理。
 
 | 入口 | 用途 |
 | --- | --- |
 | `config/resources.yaml` 与本机覆盖 | 统一定位外部安装资源 |
 | `projectairsim_source` | 上游源码，包含原生 Python SDK |
-| `projectairsim_python` | 项目客户端使用的专用解释器 |
+| `projectairsim_python` | 项目客户端使用的解释器，默认是仓库根目录的 `.venv/bin/python` |
 | `setup_client.py` | 将配置中的上游 SDK 可编辑安装到配置中的环境 |
-| `requirements-client.txt` | 仅提供注册表版本回退，不能替代锁定源码的开发安装 |
 
-安装与资源查询见 [配置说明](../../config/README.md#python-客户端环境)。`setup_client.py --check` 只检查路径；不创建环境、不启动仿真。正式安装使用 uv，依据上游 pyproject 声明依赖。可编辑安装随上游文件变化，更新源码后须重新核对版本、依赖和实际服务版本。
+支持基线为 ProjectAirSim 1.1.0。运行使用已安装的场景包及配套 SDK，源码构建按场景开发或定制需要执行。安装路径通过资源表配置。
+
+安装与资源查询见 [配置说明](../../config/README.md#python-客户端环境)。`setup_client.py --check` 检查 SDK 和解释器路径。准备入口同步根锁文件中的 SDK 依赖和构建工具，再从所选源码可编辑安装 Python SDK，并检查依赖兼容性。SDK 依赖变化时更新根声明和锁文件。
 
 2026-11-14 已在配置中的环境完成 `projectairsim 1.1.0` 可编辑安装；移除 PYTHONPATH 后验证 SDK、World、Drone 和 ImageDisplay 导入指向资源源码，uv pip check 的 43 个包依赖兼容。该结果不代表飞行或完整图像接口验收。
 

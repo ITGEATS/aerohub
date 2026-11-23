@@ -22,6 +22,18 @@ resources:
   projectairsim_project:
     path: ~/ProjectAirSim/unreal/Blocks/Blocks.uproject
   projectairsim_python:
-    path: ~/ProjectAirSim/.venv/bin/python
+    path: ../.venv/bin/python
   projectairsim_ros2_setup:
     path: ~/ProjectAirSim/ros2-overlay/install/setup.bash
+  projectairsim_course_profile:
+    path: ~/aerohub-runtime/projectairsim/course/profile.json
+  projectairsim_course_hud:
+    path: ~/aerohub-runtime/projectairsim/course/package/Linux/Blocks/Binaries/Linux/Blocks
+  projectairsim_weststreet_project:
+    path: ~/UE_installed_build/WestStreet/PAirSim.uproject
+  airsim_blocks_windows:
+    path: ~/AirSim/scenes/blocks/WindowsNoEditor
+  airsim_town05:
+    path: ~/AirSim/scenes/town05/CarlaUE4/Binaries/Linux/CarlaUE4
+  racer_yolo_plant:
+    path: ~/AirSim/scenes/plant/SuperGridStarterpack/Binaries/Linux/SuperGridStarterpack-Linux-Shipping

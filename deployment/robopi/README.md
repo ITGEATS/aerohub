@@ -212,7 +212,7 @@ PX4 1.18 消息；首次准备目标工具链仍参考下文。
 - 设备：通过 `.env` 的 `HDC_TARGET` 指定；已验证系统为 OHOS Linux 6.6.86、aarch64。
 - 系统 ROS：`/sys_prod/robot/{install,out}`，Python 3.12。
 - 私有部署：`/data/local/tmp/aerohub-as2`；SDK/构建副本在仓库忽略目录
-  `log/airsim/ohos-as2`。
+  `deployment/robopi/workspace/ohos-as2`。
 
 AS2 基线沿用仓库锁定源码，Pixhawk 本轮使用原 v1.17 补丁；没有宣称完成
 PX4 1.18 的完整消息/控制适配。工作区其他同时开发的 v1.18 文件不属于本轮输入。
@@ -231,7 +231,7 @@ mocap4r2_msgs 为 `2bce86f38b7129d235d58ebd8977beadb0a83123`；PID 使用上游 
 本轮目录布局：
 
 ```text
-log/airsim/ohos-as2/
+deployment/robopi/workspace/ohos-as2/
   root/
     ohos-robot-toolchain/18/native/  # SDK 副本
     ros_ros2_base/                 # 官方源码与工具链副本

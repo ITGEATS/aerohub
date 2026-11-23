@@ -37,11 +37,11 @@ ProjectAirSim、场景配置、基础场景检查及 pairsim-build，不将回�
 
 ## 回归入口和本轮结果
 
-测试依赖单独放在 `simulator/manager/requirements-test.txt`，可安装到自选局部 venv：
+测试使用根目录共享环境，先运行 `bash setup_python.sh`：
 
 ```bash
-python -m unittest discover -s simulator/manager/tests -q
-python -m unittest discover -s deployment/swarm/tests -q
+.venv/bin/python -m unittest discover -s simulator/manager/tests -q
+.venv/bin/python -m unittest discover -s deployment/swarm/tests -q
 ```
 
 本轮局部环境使用 PyYAML 6.0.3、msgpack 1.2.4、Pillow 12.3.0；36 项 manager/client

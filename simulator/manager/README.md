@@ -30,6 +30,8 @@ platform、原生 Behavior 和控制器沿用现有部署。Manager 不提供运
                                        后端 adapter → ROS 传感器与 /clock
 ```
 
+从仓库根目录运行 `bash simulator/setup_python.sh`，统一准备 Manager、AirSim 跟踪器和 ProjectAirSim 原生客户端使用的 `.venv`。只用 AirSim 时可加 `--airsim-only`。
+
 ## 复用上游
 
 ProjectAirSim 场景由原生 Python `World` 加载，保留 JSONC、robot-config 展开和 schema

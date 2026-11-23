@@ -309,3 +309,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
 仿真重置范围（Docker/Manager操作使用mock）。端口测试需要本机socket权限。
 本次仓库整理未重跑飞行，也未验证YOPO标定适配的完整动力学闭环；
 不能将辅助测试通过提升为上述算法赛道复现成功。
+
+场景安装通过 `config/resources.yaml` 的 `projectairsim_course_profile` 和 `projectairsim_course_hud` 解析。本机覆盖分别指向课程包的 PX4 profile 和带 HUD 的 Blocks 可执行文件。PX4 profile 关联课程包的 scene 和 robot 配置，YOPO 与 DiffPhys 在此基础上准备各自配置。`COURSE_BINARY` 可临时覆盖可执行文件。

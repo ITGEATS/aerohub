@@ -119,7 +119,7 @@ def require_mounts(container, expected):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument("--binary", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--case", choices=("normal", "depth-loss", "planner-exit"),
@@ -144,10 +144,11 @@ def main():
             raise RuntimeError(
                 f"{image} was built from {embedded}, current source is "
                 f"{current_source_digest}; rebuild before acceptance")
-    binary = resolve_airsim_binary(args.binary)
+    profile_path = Path(__file__).with_name("profile.json")
+    profile = json.loads(profile_path.read_text())
     domain = free_domain()
     settings = json.loads((
-        ROOT / "simulator/airsim/scenarios/super_forest/settings.json").read_text())
+        profile_path.parent / profile["settings"]).read_text())
     settings["ApiServerPort"] = 43482
     vehicle = settings["Vehicles"]["PX4"]
     vehicle.update(TcpPort=4893, ControlPortLocal=15743, ControlPortRemote=15783)
@@ -166,13 +167,9 @@ def main():
     (output / "px4-settings.json").write_text(json.dumps(px4_settings, indent=2) + "\n")
     (output / "fleet.yaml").write_text(
         "vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: 71\n")
-    profile = {
-        "binary": str(binary),
-        "settings": str(output / "settings.json"),
-        "overhead_pose_source": "object",
-        "project": "AirSimNH",
-        "args": ["-vulkan", "-nosound", "-windowed", "-ResX=960", "-ResY=540"],
-    }
+    profile["settings"] = str(output / "settings.json")
+    if args.binary:
+        profile["binary"] = str(resolve_airsim_binary(args.binary))
     (output / "profile.json").write_text(json.dumps(profile, indent=2) + "\n")
 
     images = ("flight_board:v0.1.0", FALCON_IMAGE, FALCON_WORKSTATION_IMAGE)

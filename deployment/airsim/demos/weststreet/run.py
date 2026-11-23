@@ -3,8 +3,10 @@
 import argparse,copy,datetime,json,os,re,signal,socket,subprocess,sys,time
 from urllib.request import build_opener, ProxyHandler
 from pathlib import Path
+from weststreet_ports import PORTS
 ROOT=Path(__file__).resolve().parents[4]
 sys.path.insert(0,str(ROOT))
+from simulator.manager.resources import resolve_resource
 from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
 
 DOMAIN=197;INSTANCE=30;SYSTEM=31
@@ -18,7 +20,7 @@ def prepare(a,out):
  if robot['controller']['type']!='px4-api':raise RuntimeError('Base must be the existing verified PX4 scene')
  scene['id']='SceneWestStreetPx4';scene['actors']=[{'type':'robot','name':'Drone1','origin':{'xyz':'8 -45 -0.3','rpy-deg':'0 0 90'},'robot-config':'robot_px4.jsonc'}]
  (out/'robot_px4.jsonc').write_text(json.dumps(robot,indent=2));(out/'scene_px4.jsonc').write_text(json.dumps(scene,indent=2))
- profile.update(binary=str(a.ue_root/'Engine/Binaries/Linux/UnrealEditor'),scene_config=str(out/'scene_px4.jsonc'),editor_project=str(a.project),ports={'topics':19889,'services':19890})
+ profile.update(binary=str(a.ue_root/'Engine/Binaries/Linux/UnrealEditor'),scene_config=str(out/'scene_px4.jsonc'),editor_project=str(a.project),ports={'topics':PORTS['topics'],'services':PORTS['services']})
  profile['args']=[str(a.project),'/Game/Aerohub/WestStreetCircuit','-game','-windowed','-ResX=1280','-ResY=720','-nosound','-noraytracing']
  profile['vehicles']=[{'name':'Drone1','namespace':'drone0','px4':{'tcp_port':4572,'control_local_port':14552,'control_remote_port':14592,'lockstep':True}}]
  profile['sensor_options']={'Drone1':{'DownCamera':copy.deepcopy(profile['sensor_options']['Drone1']['DownCamera'])}}
@@ -29,9 +31,9 @@ def prepare(a,out):
   scene['actors'][0]['origin']={'xyz':'4 -48 -0.3','rpy-deg':'0 0 90'}
   (out/'scene_px4.jsonc').write_text(json.dumps(scene,indent=2))
   profile['sensor_options']={'Drone1':{'FrontCamera':{'enabled':True,'position':[.6,0,-.8],'rotation':[0,-10,0],'width':640,'height':480,'fov':90,'captures':['rgb','depth_planar']}}}
- profile['display'].update(port=19891,global_camera_tag='WestRunnerGlobalFollow')
+ profile['display'].update(port=PORTS['hud'],global_camera_tag='WestRunnerGlobalFollow')
  profile['adapter']['environment'].update(ROS_DOMAIN_ID=str(DOMAIN),PROJECTAIRSIM_DDS_PROFILE=str(ROOT/'deployment/airsim/config/dds/fastdds_udp.xml'))
- (out/'profile.json').write_text(json.dumps(profile,indent=2));(out/'scene-control.json').write_text('{"port":19892}')
+ (out/'profile.json').write_text(json.dumps(profile,indent=2));(out/'scene-control.json').write_text(json.dumps({'port':PORTS['scene']}))
  (out/'fleet.yaml').write_text('vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: 31\n')
  libraries=[a.ue_root/'Engine/Binaries/Linux',a.project.parent/'Plugins/ProjectAirSim/Binaries/Linux']
  libraries += [a.ue_root/'Engine/Plugins'/p/'Binaries/Linux' for p in ['Experimental/ChaosVehiclesPlugin','Media/PixelStreaming','Runtime/ProceduralMeshComponent','Runtime/SunPosition']]
@@ -44,12 +46,16 @@ def prepare(a,out):
 
 def main():
  p=argparse.ArgumentParser(description=__doc__)
- for name in ['base-profile','ue-root','project','workstation-overlay','output']:p.add_argument('--'+name,type=Path,required=True)
+ for name in ['base-profile','ue-root','project']:p.add_argument('--'+name,type=Path)
+ for name in ['workstation-overlay','output']:p.add_argument('--'+name,type=Path,required=True)
  p.add_argument('--query-workspace', type=Path, help='Detection overlay required for --perception-only')
  p.add_argument('--ground-only',action='store_true');p.add_argument('--perception-only',action='store_true');p.add_argument('--range-method',choices=['depth','height'],default='depth');p.add_argument('--target-height',type=float);a=p.parse_args()
  if a.perception_only and (a.query_workspace is None or not (a.query_workspace.expanduser()/'install/setup.bash').is_file()):p.error('--perception-only requires a built --query-workspace')
  if a.range_method=='height' and (not a.perception_only or a.target_height is None or a.target_height<=0):p.error('height mode requires --perception-only and explicit positive --target-height')
- for name in ['base_profile','ue_root','project','workstation_overlay','output']:setattr(a,name,getattr(a,name).absolute())
+ a.base_profile = a.base_profile or resolve_resource('projectairsim_course_profile')
+ a.ue_root = a.ue_root or resolve_resource('ue5_root')
+ a.project = a.project or resolve_resource('projectairsim_weststreet_project')
+ for name in ['base_profile','ue_root','project','workstation_overlay','output']:setattr(a,name,getattr(a,name).expanduser().absolute())
  out=a.output;out.mkdir(parents=True,exist_ok=False);runtime=out/'simulator';runtime.mkdir()
  tag=datetime.datetime.now().strftime('%Y%m%d-%H%M%S');names={k:'aerohub-weststreet-'+k+'-'+tag for k in ['px4','onboard','mission']}
  env=prepare(a,out)
@@ -64,12 +70,12 @@ def main():
    model=ROOT/'src/basic_function/inference/models/yolo26n_seg'
    worker_log=(out/'yolo-worker.log').open('w')
    worker_env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',HF_HUB_OFFLINE='1')
-   worker=subprocess.Popen([str(model/'.venv/bin/python'),'-m','uvicorn','serve:app','--host','127.0.0.1','--port','18002','--workers','1'],cwd=model,env=worker_env,stdout=worker_log,stderr=subprocess.STDOUT)
+   worker=subprocess.Popen([str(model/'.venv/bin/python'),'-m','uvicorn','serve:app','--host','127.0.0.1','--port',str(PORTS['inference']),'--workers','1'],cwd=model,env=worker_env,stdout=worker_log,stderr=subprocess.STDOUT)
    deadline=time.monotonic()+90;opener=build_opener(ProxyHandler({}))
    while time.monotonic()<deadline:
     if worker.poll() is not None:raise RuntimeError('YOLO worker failed; inspect yolo-worker.log')
     try:
-     with opener.open('http://127.0.0.1:18002/health/ready',timeout=2) as response:health=json.load(response)
+     with opener.open(f"http://127.0.0.1:{PORTS['inference']}/health/ready",timeout=2) as response:health=json.load(response)
      if health.get('device','').startswith('cuda'):break
     except Exception:pass
     time.sleep(.5)
@@ -78,7 +84,7 @@ def main():
   while True:
    reservations=[]
    try:
-    for port in (19889,19890,19891,19892):
+    for port in (PORTS[key] for key in ('topics','services','hud','scene')):
      reserved=socket.socket();reservations.append(reserved)
      reserved.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);reserved.bind(('0.0.0.0',port))
     break
@@ -90,7 +96,7 @@ def main():
   print('Starting existing simulator manager (PX4 scene, no SimpleFlight)...',flush=True)
   with (out/'manager-start.log').open('w') as f:call(manager+['start','--profile',out/'profile.json','--run-dir',runtime,'--timeout','120'],env=env,stdout=f,stderr=subprocess.STDOUT)
   sim_started=True
-  call(docker_base(names['px4'])+['-e','VEHICLE_NAME=Drone1','-e','VEHICLE_NAMESPACE=drone0','-e',f'PX4_INSTANCE={INSTANCE}','-e',f'PX4_SYSTEM_ID={SYSTEM}','-e','XRCE_AGENT_PORT=18991','-e','FLIGHT_BOARD_SENSORS=0','-e','SIMULATOR_RUNTIME_CONFIG=/evidence/simulator/runtime.json','flight_board:v0.1.1','vehicle']);started.append('px4')
+  call(docker_base(names['px4'])+['-e','VEHICLE_NAME=Drone1','-e','VEHICLE_NAMESPACE=drone0','-e',f'PX4_INSTANCE={INSTANCE}','-e',f'PX4_SYSTEM_ID={SYSTEM}','-e',f"XRCE_AGENT_PORT={PORTS['xrce']}",'-e','FLIGHT_BOARD_SENSORS=0','-e','SIMULATOR_RUNTIME_CONFIG=/evidence/simulator/runtime.json','flight_board:v0.1.1','vehicle']);started.append('px4')
   print('Waiting for isolated PX4 actual preflight...',flush=True);deadline=time.monotonic()+100
   while time.monotonic()<deadline:
    try:
