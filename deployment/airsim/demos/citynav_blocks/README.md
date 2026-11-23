@@ -48,7 +48,9 @@ python deployment/airsim/demos/citynav_blocks/run.py mission --output log/cityna
 python deployment/airsim/demos/citynav_blocks/run.py stop    --output log/citynav/pc-e2e/run-XXXX
 ```
 
-运行会话需设置 `CITYNAV_BLOCKS_PATH`，指向本机 Blocks `WindowsNoEditor` 目录。
+`prepare` 使用 Vision Language 模型的锁文件同步其目录下的 `.venv`，SPF 和 CityNav 从同一个环境启动推理 worker。
+
+运行会话从资源表解析 `airsim_blocks_windows`，指向本机 Blocks `WindowsNoEditor` 目录。临时覆盖可设 `CITYNAV_BLOCKS_PATH`。
 云模型、地址和凭据从本地 `config/inference.cloud.local.yaml` 的 `models.vlm.cloud`
 取得；配置引用的环境变量按名称转发，不从 legacy stub 读取。GPU 推理服务仍在宿主运行，
 `start` 的 host_probe 与 `health` 会检查其可达性；本 Demo 不启动也不停止它们。

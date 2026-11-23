@@ -1,0 +1,13 @@
+{
+  "binary_resource": "airsim_nh",
+  "settings": "../../simulator/airsim/scenarios/super_forest/settings.json",
+  "overhead_pose_source": "object",
+  "project": "AirSimNH",
+  "args": [
+    "-vulkan",
+    "-nosound",
+    "-windowed",
+    "-ResX=960",
+    "-ResY=540"
+  ]
+}

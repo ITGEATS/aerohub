@@ -20,7 +20,7 @@ def main():
     (ROOT/'log/projectairsim/diffphys-course-current.json').write_text(json.dumps(dict(output=str(out),compute=compute,flight=flight)))
     shutil.copyfile(APP/'diffphys-dds.xml',out/'diffphys-dds.xml')
     import yaml
-    c.run([json.loads(c.PROFILE.read_text())['client_python'],APP/'prepare_diffphys_scene.py'],cwd=ROOT)
+    c.run([json.loads(c.profile_path().read_text())['client_python'],APP/'prepare_diffphys_scene.py'],cwd=ROOT)
     c.PROFILE=ROOT/'log/projectairsim/diffphys-course-config/profile.json'
     (out/'diffphys-task.json').write_text(json.dumps(dict(target_speed_m_s=5,takeoff_height_m=2,policy_profile='high_speed',goal_lookahead_m=10,command_tilt_rad=.5),indent=2))
     (out/'predeclared.json').write_text(json.dumps(dict(target_speed_m_s=5,runs=1,goal_relative_enu_m=[0,120,3],collision_coverage='unverified',arrival_tolerance_m=1.5)))

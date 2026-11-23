@@ -21,7 +21,7 @@ PREFIX='aerohub-super-migration-'
 NAMES=[PREFIX+'app',PREFIX+'clock',PREFIX+'vehicle']
 IMAGE=os.environ.get('SUPER_APP_IMAGE','uav/apps-super-forest:migration-main-behavior')
 BOARD='flight_board:v0.1.0'
-WORKSTATION_IMAGE='osrf/ros:humble-desktop-full-jammy'
+from workstation import IMAGE as WORKSTATION_IMAGE, prepare as prepare_workstation
 
 
 def run(command,**kwargs):return subprocess.run(list(map(str,command)),check=True,**kwargs)
@@ -88,8 +88,7 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'log/airsim/super-migration-pc')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
     if args.action=='build' and args.execution_location=='four-part':
-        from workstation import prepare
-        prepare(args.workstation_workspace.resolve());return
+        prepare_workstation(args.workstation_workspace.resolve());return
     if args.action=='build' and args.execution_location=='pc':
         run(['bash',APP/'build_navigation_overlay.sh',args.overlay.resolve()]);return
     if args.action=='build':
@@ -140,15 +139,17 @@ def main():
     if args.execution_location=='pc' and not (args.overlay/'install/setup.bash').is_file():
         raise RuntimeError('Build the navigation overlay first: run.py build --overlay '+str(args.overlay))
     execution = BoardExecution(out) if args.execution_location != 'pc' else None
-    settings=json.loads((ROOT/'simulator/airsim/scenarios/super_forest/settings.json').read_text())
+    profile_path = Path(__file__).with_name('profile.json')
+    profile = json.loads(profile_path.read_text())
+    settings = json.loads((profile_path.parent / profile['settings']).read_text())
     if args.execution_location=='robopi-all':settings['LocalHostIp']=execution.link.required('PC_IP')
-    settings['ApiServerPort']=43472
+    ports = json.loads((APP/'deployment.json').read_text())['ports']
+    settings['ApiServerPort']=ports['rpc']
     vehicle=settings['Vehicles']['PX4']
-    vehicle.update(TcpPort=4881,ControlPortLocal=15641,ControlPortRemote=15681)
+    vehicle.update(TcpPort=ports['tcp'],ControlPortLocal=ports['control_local'],ControlPortRemote=ports['control_remote'])
     (out/'settings.json').write_text(json.dumps(settings,indent=2)+'\n')
-    px4_settings=json.loads(json.dumps(settings));px4_settings['Vehicles']['PX4']['TcpPort']=4981
+    px4_settings=json.loads(json.dumps(settings));px4_settings['Vehicles']['PX4']['TcpPort']=ports['relay']
     (out/'px4-settings.json').write_text(json.dumps(px4_settings,indent=2)+'\n')
-    profile=json.loads((ROOT/'simulator/airsim/scenarios/catora_open_field/profile.json').read_text())
     profile['settings']=str(out/'settings.json')
     (out/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     (out/'fleet.yaml').write_text(yaml.safe_dump({'vehicles':{'drone0':{'fmu_prefix':'/drone0','target_system_id':61}}}))
@@ -161,13 +162,14 @@ def main():
                         'import':json.loads((ROOT/'src/tool/navigation/planner/super/ros2_adapter/native/SOURCE.json').read_text())},
         'locked_submodules':{name:subprocess.check_output(['git','-C',ROOT,'ls-tree','HEAD',name],text=True).split()[2]
                       for name in ('as2/aerostack2','as2/as2_platform_pixhawk','src/tool/navigation/planner/super/upstream')},
-        'source_hashes':hashes,'ports':{'rpc':43472,'tcp':4881,'relay':4981,'agent':8951},'ros_domain':94},indent=2)+'\n')
+        'source_hashes':hashes,'ports':ports,'ros_domain':94},indent=2)+'\n')
     if execution:
         execution.require_super=args.execution_location in ('robopi-all','four-part')
         execution.prepare()
     # Refuse occupied independent ports before starting any simulation resources.
-    for kind, ports in ((socket.SOCK_STREAM,(43472,4881,4981)),(socket.SOCK_DGRAM,(8951,15641,15681))):
-        for port in ports:
+    for kind, keys in ((socket.SOCK_STREAM,('rpc','tcp','relay')),(socket.SOCK_DGRAM,('agent','control_local','control_remote'))):
+        for key in keys:
+            port = ports[key]
             with socket.socket(socket.AF_INET,kind) as probe:
                 if kind==socket.SOCK_STREAM:probe.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
                 probe.bind(('0.0.0.0',port))
@@ -179,12 +181,12 @@ def main():
         start_relay(out,execution.link.required('PC_IP') if args.execution_location=='robopi-all' else '127.0.0.1')
         run(['docker','run','--rm','--detach','--init','--network','host','--name',PREFIX+'vehicle','--label','aerohub.super.output='+str(out),
              '-e','ROS_DOMAIN_ID=94','-e','VEHICLE_NAME=PX4','-e','VEHICLE_NAMESPACE=drone0',
-             '-e','PX4_INSTANCE=60','-e','PX4_SYSTEM_ID=61','-e','XRCE_AGENT_PORT=8951',
-             '-e','AIRSIM_RPC_PORT=43472','-e','FLIGHT_BOARD_SENSORS=1','-e','FLIGHT_BOARD_CAMERAS=1',
+             '-e','PX4_INSTANCE=60','-e','PX4_SYSTEM_ID=61','-e','XRCE_AGENT_PORT='+str(ports['agent']),
+             '-e','AIRSIM_RPC_PORT='+str(ports['rpc']),'-e','FLIGHT_BOARD_SENSORS=1','-e','FLIGHT_BOARD_CAMERAS=1',
              *dds,'-e','PX4_PARAM_MPC_XY_VEL_MAX=16','-e','PX4_PARAM_SENS_GPS0_DELAY=200',
              '-v',str(out/'px4-settings.json')+':/config/settings.json:ro',BOARD,'vehicle'],stdout=subprocess.DEVNULL)
         run(['docker','run','--rm','--detach','--init','--network','host','--name',PREFIX+'clock','--label','aerohub.super.output='+str(out),
-             '-e','ROS_DOMAIN_ID=94','-e','VEHICLE_NAME=PX4','-e','AIRSIM_RPC_PORT=43472',*dds,BOARD,'clock'],stdout=subprocess.DEVNULL)
+             '-e','ROS_DOMAIN_ID=94','-e','VEHICLE_NAME=PX4','-e','AIRSIM_RPC_PORT='+str(ports['rpc']),*dds,BOARD,'clock'],stdout=subprocess.DEVNULL)
         deadline=time.monotonic()+60
         while True:
             log=subprocess.check_output(['docker','logs',PREFIX+'vehicle'],stderr=subprocess.STDOUT,text=True)
@@ -212,14 +214,14 @@ def main():
                     '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/evidence/pc-dds.xml',
                     '-e','PYTHONDONTWRITEBYTECODE=1','-e','ROS_LOG_DIR=/evidence/workstation-roslog',
                     '-e','SUPER_EXECUTION_LOCATION=four-part','-e','SUPER_CASE='+args.case,
-                    '-e','SUPER_APP_ROOT=/app','-e','PYTHONPATH=/work/runtime:/vendor',
+                    '-e','AIRSIM_RPC_PORT='+str(ports['rpc']),'-e','SUPER_APP_ROOT=/app','-e','PYTHONPATH=/work/runtime:/vendor',
                     '-v',str(workspace)+':/work:ro','-v',str(APP)+':/app:ro',
                     '-v',str(ROOT/'deployment/robopi/vendor')+':/vendor:ro','-v',str(out)+':/evidence',
                     '--entrypoint','/bin/bash',WORKSTATION_IMAGE,'-lc',
                     'source /opt/ros/humble/setup.bash && source /work/ws/install/setup.bash && exec python3 /app/mission.py']
             else:
                 command=['docker','run','--rm','--init','--network','host','--name',PREFIX+'app','--label','aerohub.super.output='+str(out),
-                     '-e','ROS_DOMAIN_ID=94','-e','SUPER_EXECUTION_LOCATION='+args.execution_location,'-e','SUPER_CASE='+args.case,
+                     '-e','ROS_DOMAIN_ID=94','-e','AIRSIM_RPC_PORT='+str(ports['rpc']),'-e','SUPER_EXECUTION_LOCATION='+args.execution_location,'-e','SUPER_CASE='+args.case,
                      *(['-e','FASTRTPS_DEFAULT_PROFILES_FILE=/evidence/pc-dds.xml','-e','ROS_LOCALHOST_ONLY=0'] if execution else []),
                      '-v',str(out)+':/evidence',
                      *(['-e','SUPER_APP_ROOT=/repo/deployment/airsim/demos/super_forest',

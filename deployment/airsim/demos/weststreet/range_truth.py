@@ -5,6 +5,7 @@ import bisect
 import json
 import math
 from pathlib import Path
+from weststreet_ports import PORTS
 import statistics
 import sys
 import time
@@ -23,10 +24,10 @@ def rotate(q, v):
 def record(path):
     from projectairsim import ProjectAirSimClient
     from simulator.projectairsim.extension_client import ProjectAirSimExtensionClient
-    client = ProjectAirSimClient(port_topics=19889, port_services=19890)
+    client = ProjectAirSimClient(port_topics=PORTS['topics'], port_services=PORTS['services'])
     client.connect_services()
     client.socket_services.recv_timeout = 3000
-    actor = ProjectAirSimExtensionClient(port=19891, scene_port=19892)
+    actor = ProjectAirSimExtensionClient(port=PORTS['hud'], scene_port=PORTS['scene'])
     def rpc(method):
         return client.request(dict(method='/Sim/SceneWestStreetPx4/'+method, params={}, version=1.0))
     try:

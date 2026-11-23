@@ -19,7 +19,7 @@ def run(command, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', type=Path, required=True)
+    parser.add_argument('--binary', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', choices=('short', 'cancel', 'map-reset', 'local', 'forest'), default='local')
     args = parser.parse_args()
@@ -34,16 +34,18 @@ def main():
     domain = next(value for value in range(190, 220) if value not in occupied_domains)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    settings = json.loads((ROOT/'simulator/airsim/scenarios/super_forest/settings.json').read_text())
+    profile_path = Path(__file__).with_name('profile.json')
+    profile = json.loads(profile_path.read_text())
+    settings = json.loads((profile_path.parent / profile['settings']).read_text())
     settings['ApiServerPort'] = 43482
     settings['Vehicles']['PX4'].update(TcpPort=4891, ControlPortLocal=15741, ControlPortRemote=15781)
     (out/'settings.json').write_text(json.dumps(settings, indent=2)+'\n')
     px4_settings = json.loads(json.dumps(settings))
     px4_settings['Vehicles']['PX4']['TcpPort'] = 4991
     (out/'px4-settings.json').write_text(json.dumps(px4_settings)+'\n')
-    profile = {'binary': str(args.binary.resolve()), 'settings': str(out/'settings.json'),
-        'overhead_pose_source': 'object',
-        'project': 'AirSimNH', 'args': ['-vulkan', '-nosound', '-windowed', '-ResX=960', '-ResY=540']}
+    profile['settings'] = str(out/'settings.json')
+    if args.binary:
+        profile['binary'] = str(args.binary.expanduser().resolve())
     (out/'profile.json').write_text(json.dumps(profile)+'\n')
     (out/'fleet.yaml').write_text('vehicles:\n  drone0:\n    fmu_prefix: /drone0\n    target_system_id: 71\n')
     manager = [sys.executable, ROOT/'simulator/manager/manager.py']

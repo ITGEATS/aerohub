@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from weststreet_ports import PORTS, session_ports
 import re
 import signal
 import shutil
@@ -140,7 +141,7 @@ def main():
     robot['sensors'] = [sensor for sensor in robot['sensors'] if sensor['id']!='lidar1']+[lidar]
     robot_path.write_text(json.dumps(robot,indent=2))
     if args.native_audit:
-        profile['adapter']['environment']['PROJECTAIRSIM_TOPIC_RELAY_PORT']='20189'
+        profile['adapter']['environment']['PROJECTAIRSIM_TOPIC_RELAY_PORT']=str(PORTS['native_relay'])
     profile['adapter']['environment']['AEROHUB_VISION_TIMING']='1'
     profile['adapter']['environment']['PROJECTAIRSIM_TRACKING_OVERLAY']=str(runtime_inputs['tracking_workspace'])
     profile_path.write_text(json.dumps(profile, indent=2))
@@ -174,7 +175,8 @@ def main():
     # Capture untracked authored runtime/mission too; git diff alone omits them.
     tracked_files = list(Path(__file__).parent.glob('*.py'))
     (out/'source-sha256.json').write_text(json.dumps({str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in tracked_files},indent=2))
-    actor = ProjectAirSimExtensionClient(port=19891,scene_port=19892)
+    active_ports = session_ports(args.reuse_runtime if args.reuse_runtime else out)
+    actor = ProjectAirSimExtensionClient(port=active_ports['hud'],scene_port=active_ports['scene'])
     actor_running = False
     next_actor_observation = 0.
     runner_ready_at = None
@@ -234,11 +236,15 @@ def main():
     super_setup+=component_setup
     print('Evidence: '+str(out),flush=True)
     try:
-        for port in (() if args.reuse_runtime else (19889,19890,19891,19892,18002,18991)+((20189,) if args.native_audit else ())):
+        ports_to_check = () if args.reuse_runtime else PORTS.items()
+        for key, port in ports_to_check:
+            if key == 'native_relay' and not args.native_audit:
+                continue
+            kind = socket.SOCK_DGRAM if key == 'xrce' else socket.SOCK_STREAM
             deadline = time.monotonic()+70
             while True:
                 try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as check:
+                    with socket.socket(socket.AF_INET, kind) as check:
                         check.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
                         check.bind(('127.0.0.1',port))
                     break
@@ -250,7 +256,7 @@ def main():
             model = ROOT/'src/basic_function/inference/models/yolo26n_seg'
             worker_stream = (out/'yolo-worker.log').open('w')
             worker = subprocess.Popen([str(model/'.venv/bin/python'),'-m','uvicorn','serve:app',
-                '--host','127.0.0.1','--port','18002','--workers','1'],cwd=model,
+                '--host','127.0.0.1','--port',str(PORTS['inference']),'--workers','1'],cwd=model,
                 env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',HF_HUB_OFFLINE='1'),
                 stdout=worker_stream,stderr=subprocess.STDOUT)
             opener = build_opener(ProxyHandler({}))
@@ -258,7 +264,7 @@ def main():
                 if worker.poll() is not None:
                     raise RuntimeError('YOLO worker exited')
                 try:
-                    with opener.open('http://127.0.0.1:18002/health/ready',timeout=2) as response:
+                    with opener.open(f"http://127.0.0.1:{PORTS['inference']}/health/ready",timeout=2) as response:
                         health = json.load(response)
                     (out/'gpu-health.json').write_text(json.dumps(health,indent=2))
                     return health.get('device','').startswith('cuda')
@@ -270,7 +276,8 @@ def main():
             probe_env=dict(env)
             probe_env['PYTHONPATH']=profile['client_path']+os.pathsep+probe_env.get('PYTHONPATH','')
             native_probe=subprocess.Popen([profile['client_python'],str(ROOT/'simulator/projectairsim/native_topic_relay.py'),
-                '--output',str(out/'native-frames.jsonl')],env=probe_env,stdout=native_probe_stream,stderr=subprocess.STDOUT)
+                '--upstream-port',str(active_ports['topics']),
+                '--listen-port',str(PORTS['native_relay']), '--output',str(out/'native-frames.jsonl')],env=probe_env,stdout=native_probe_stream,stderr=subprocess.STDOUT)
             wait(lambda:(out/'native-frames.jsonl.ready').exists(),10,'native relay startup')
         if not args.reuse_runtime:
             sim_attempted = True
@@ -281,7 +288,7 @@ def main():
             (out/'runner-reset.json').write_text(json.dumps(actor.reset_actor()))
             px4_command = ['docker','run','-d','--init','--network','host','--ipc','host','--name',names['px4'],
                 '-e',f'ROS_DOMAIN_ID={DOMAIN}','-e','VEHICLE_NAME=Drone1','-e','VEHICLE_NAMESPACE=drone0',
-                '-e',f'PX4_INSTANCE={INSTANCE}','-e',f'PX4_SYSTEM_ID={SYSTEM}','-e','XRCE_AGENT_PORT=18991',
+                '-e',f'PX4_INSTANCE={INSTANCE}','-e',f'PX4_SYSTEM_ID={SYSTEM}','-e',f"XRCE_AGENT_PORT={PORTS['xrce']}",
                 '-e','FLIGHT_BOARD_SENSORS=0','-e','SIMULATOR_RUNTIME_CONFIG=/evidence/simulator/runtime.json',
                 '-v',str(out)+':/evidence','flight_board:v0.1.1','vehicle']
             run(px4_command); started.append('px4')
@@ -432,7 +439,7 @@ def main():
         if safe and args.keep_scene:
             (out/'retained-runtime.json').write_text(json.dumps(dict(runtime=str(runtime),px4=names['px4'],
                 native_relay_pid=native_probe.pid if native_probe is not None else None,
-                scene_port=19892,display_port=19891,disarm_confirmed=True),indent=2))
+                scene_port=active_ports['scene'],display_port=active_ports['hud'],disarm_confirmed=True),indent=2))
         (out/'cleanup.json').write_text(json.dumps(dict(disarm_confirmed=safe,services_stopped=safe and not args.keep_scene,
             execution_services_stopped=safe,scene_retained=safe and args.keep_scene,
             retained_native_relay_pid=native_probe.pid if native_probe is not None and (not safe or args.keep_scene) else None)))

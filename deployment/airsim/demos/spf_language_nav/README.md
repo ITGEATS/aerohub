@@ -59,8 +59,8 @@ SPF 只配置 `model_name`，prompt 与点/深度解析留在 Tool；图像编�
 不会自动启用 Cloud，也不会将供应商模型名当作逻辑模型名。不强制文件权限、
 交互向导或额外密钥目录；请勿提交或打印密钥，建议限制本地文件权限。
 
-`prepare` 在固定镜像中为 worker 创建外部 `cloud-env`；源码只读，构建输入先复制到
-容器临时目录，避免 setuptools 向仓库写入元数据。不重建共享镜像。可用
+`prepare` 在固定镜像内同步 Vision Language 模型目录的 `.venv`，与 CityNav 共用。
+构建输入复制到容器临时目录，源码以只读方式挂载。可用
 `SPF_COMPUTE_IMAGE` / `SPF_FLIGHT_IMAGE` 显式复用本机已有固定版本镜像。
 配置或凭证缺失时 `start` 在启动仿真/飞控前失败。准备本身不调用 API。
 真实云端和真实 AirSim RGB 链已通过；新链飞行暂未通过轨迹执行门，见 [真实链路回归](live_cloud_validation.md)。

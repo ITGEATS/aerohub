@@ -33,7 +33,7 @@ parameter generation and actual planner node construction.
 
 ## Visible AirSim validation
 
-Use a new output directory for every case:
+Use a new output directory for every case. The default scene is resolved from `airsim_nh` in the shared resource table. The examples pass `--binary` to override it:
 
 ```bash
 DISPLAY=:1 AIRSIM_RENDER_MODE=windowed \

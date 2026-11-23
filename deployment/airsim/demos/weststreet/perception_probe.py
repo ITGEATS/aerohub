@@ -4,6 +4,7 @@ import argparse
 from collections import deque
 import json
 from pathlib import Path
+from weststreet_ports import PORTS
 import threading
 import time
 
@@ -33,7 +34,7 @@ def main():
     if args.range_method=='height' and (args.target_height is None or args.target_height<=0):
         parser.error('height mode requires explicit positive --target-height')
     ros_args=['--ros-args', '-r', '__ns:=/drone0', '-p', 'use_sim_time:=true',
-                     '-p', 'endpoint:=http://127.0.0.1:18002', '-p', 'timeout_s:=2.0',
+                     '-p', f"endpoint:=http://127.0.0.1:{PORTS['inference']}", '-p', 'timeout_s:=2.0',
                      '-p', 'detector_backend:=yolo', '-p', 'query:=person',
                      '-p', 'registered_depth:=true', '-p', 'depth_is_perspective:=false',
                      '-p', 'output_frame:=earth', '-p', 'camera_reliable:=false']
@@ -51,7 +52,7 @@ def main():
     platform = deque(maxlen=1)
     peer.create_subscription(PlatformInfo, 'platform/info', platform.append, qos_profile_sensor_data)
     client = peer.create_client(DetectSnapshot, 'tools/object_detection/observe')
-    actor = ProjectAirSimExtensionClient(port=19891, scene_port=19892)
+    actor = ProjectAirSimExtensionClient(port=PORTS['hud'], scene_port=PORTS['scene'])
     result = dict(success=False, scope='real disarmed observation; no pursuit or absolute-position acceptance',
                   confidence_threshold=.35, range_method=args.range_method, assumed_height_m=args.target_height, observations=[], audits=[])
     captures = {}

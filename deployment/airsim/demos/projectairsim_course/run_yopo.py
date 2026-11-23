@@ -50,7 +50,7 @@ def main():
     (out/'predeclared.json').write_text(json.dumps(dict(planner='yopo',runs=1,speed_m_s=args.speed,
         acceleration='native YOPO scaling',goal_relative_enu_m=[0,120,2],
         arrival='native ARRIVED_5M followed by physical stop',collision_coverage='unverified native collision topic not bridged'),indent=2))
-    c.run([json.loads(c.PROFILE.read_text())['client_python'],APP/'prepare_yopo_scene.py'],cwd=ROOT)
+    c.run([json.loads(c.profile_path().read_text())['client_python'],APP/'prepare_yopo_scene.py'],cwd=ROOT)
     c.run(['docker','stop','--timeout','15',c.PX4]);c.manager('stop')
     c.PROFILE=ROOT/'log/projectairsim/yopo-course-config/profile.json'
     c.wait_ports_free();c.manager('start');c.run(['docker','start',c.PX4])

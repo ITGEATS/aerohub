@@ -55,6 +55,7 @@ ground_station:
 airsim:
   base_settings: ../../../simulator/airsim/scenarios/swarm_open_field/settings.json
   rpc_port: 42471
+  board_rpc_relay_port: 42473
   ports:
     tcp_base: 4680
     control_local_base: 14840

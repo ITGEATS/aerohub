@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Two-container Function/Tool test with synthetic RGB and a local provider.
 
-Requires an already built ROS overlay and prepared /cloud-env. Owns and cleans
+Requires an already built ROS overlay and prepared Vision Language model .venv. Owns and cleans
 only its uniquely named internal Docker network/containers. No flight/API calls.
 """
 import argparse
@@ -31,18 +31,17 @@ def main():
     network = identifier
     common = ['--network', network, '-v', str(ROOT)+':/repo:ro',
               '-v', str(ROOT/'log/spf/inference-cloud')+':/evidence:ro',
-              '-v', str(ROOT/'log/spf/pc-e2e/cloud-env')+':/cloud-env:ro',
               '-v', str(output)+':/cross', '-e', 'ROS_DOMAIN_ID=186',
               '-e', 'ROS_LOCALHOST_ONLY=0', '-e', 'PYTHONDONTWRITEBYTECODE=1',
               '-e', 'FASTRTPS_DEFAULT_PROFILES_FILE=/repo/deployment/airsim/config/dds/fastdds_udp.xml',
               '--entrypoint', 'bash']
     setup = ('source /opt/ros/humble/setup.bash && '
              'source /evidence/ros_ws/install/setup.bash && '
-             'export PYTHONPATH=/cloud-env/lib/python3.10/site-packages:/usr/lib/python3/dist-packages:$PYTHONPATH && ')
+             'export PYTHONPATH=/repo/src/basic_function/inference/models/vision_language/.venv/lib/python3.10/site-packages:/usr/lib/python3/dist-packages:$PYTHONPATH && ')
     run(['docker','network','create','--internal','--label','aerohub.test='+identifier,network], stdout=subprocess.DEVNULL)
     try:
         run(['docker','run','-d','--name',server,*common,args.image,'-lc',setup+
-             'exec /cloud-env/bin/python /repo/deployment/inference/tests/cloud_function_fixture.py'], stdout=subprocess.DEVNULL)
+             'exec /repo/src/basic_function/inference/models/vision_language/.venv/bin/python /repo/deployment/inference/tests/cloud_function_fixture.py'], stdout=subprocess.DEVNULL)
         deadline = time.monotonic()+20
         while not (output/'ready.json').exists() and time.monotonic()<deadline:
             time.sleep(.1)

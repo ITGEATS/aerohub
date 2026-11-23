@@ -20,12 +20,15 @@ import time
 
 ROOT = Path(__file__).resolve().parents[4]
 APP = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+from simulator.manager.resources import resolve_resource
+from deployment.inference.vision_language_environment import prepare as prepare_vision_language
 FLIGHT = os.environ.get('SPF_FLIGHT_IMAGE', 'ghcr.io/popc0rn7/aerohub/flight-board:v0.1.1')
 ONBOARD = os.environ.get('SPF_COMPUTE_IMAGE', 'ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1')
 GROUND = 'osrf/ros:humble-desktop-full-jammy'
-BLOCKS_WIN_PATH = r'D:\Apps\airsim\Blocks\Blocks\WindowsNoEditor'
-RPC_PORT = 45481
-TCP_PORT = 4581
+SETTINGS = json.loads((APP / 'settings.json').read_text())
+RPC_PORT = SETTINGS['ApiServerPort']
+TCP_PORT = SETTINGS['Vehicles']['PX4']['TcpPort']
 AGENT_PORT = 8971
 PX4_INSTANCE, PX4_SYSTEM_ID = 70, 71
 
@@ -106,7 +109,7 @@ def scene_manager(action, output):
 
 
 def start_linux_scene(output):
-    profile = json.loads((ROOT / 'simulator/airsim/scenarios/catora_open_field/profile.json').read_text())
+    profile = json.loads((APP / 'profile.json').read_text())
     profile['settings'] = str(output / 'settings.json')
     (output / 'profile.json').write_text(json.dumps(profile, indent=2) + '\n')
     run(scene_manager('start', output))
@@ -124,7 +127,10 @@ def start_linux_scene(output):
 def relay(output):
     sys.path.insert(0, str(ROOT / 'deployment/airsim/demos/catora_open_field'))
     from sim_startup import StartupRelay
-    service = StartupRelay(('127.0.0.1', TCP_PORT + 10), ('127.0.0.1', TCP_PORT))
+    settings = json.loads((output / 'settings.json').read_text())
+    px4_settings = json.loads((output / 'px4-settings.json').read_text())
+    service = StartupRelay(('127.0.0.1', px4_settings['Vehicles']['PX4']['TcpPort']),
+                           ('127.0.0.1', settings['Vehicles']['PX4']['TcpPort']))
     finished = False
     def stop_relay(*_):
         nonlocal finished
@@ -161,7 +167,7 @@ def win_path(p):
     return capture(['wslpath', '-w', str(p)]).strip()
 
 
-def restart_blocks(output, observe=False):
+def restart_blocks(output, blocks_path, observe=False):
     """Blocks must be fresh so PX4 is the first TCP client (single-slot server)."""
     settings = json.loads((APP / 'settings.json').read_text())
     if observe:
@@ -191,7 +197,7 @@ def restart_blocks(output, observe=False):
     # thrash), pegging the CPU and destabilising the lockstep mavlink link.
     powershell(
         "schtasks /delete /tn SPFBlocks /f 2>$null | Out-Null; "
-        "$tr = '" + BLOCKS_WIN_PATH + "\\\\Blocks.exe -NoSplash -windowed -ResX=1280 -ResY=720 -nosound'; "
+        "$tr = '" + blocks_path.replace("'", "''") + "\\\\Blocks.exe -NoSplash -windowed -ResX=1280 -ResY=720 -nosound'; "
         "schtasks /create /tn SPFBlocks /tr $tr /sc once /st 00:00 /f | Out-Null; "
         "schtasks /run /tn SPFBlocks")
     deadline = time.time() + 90
@@ -252,7 +258,7 @@ def launch_inference(output):
         key = cloud.get(field)
         if key and key in os.environ:
             environment += ['-e', key]
-    mounts = ['-v', str(ROOT / 'log/spf/pc-e2e/cloud-env') + ':/cloud-env:ro']
+    mounts = []
     if config is not None:
         environment += ['-e', 'INFERENCE_MODEL_CONFIG=/run/inference/models.yaml']
         mounts += ['-v', str(config) + ':/run/inference/models.yaml:ro']
@@ -293,15 +299,19 @@ def start(output, observe=False):
     cloud_binding()  # Fail before starting any simulator/flight resources if unconfigured.
     linux = simulator_platform() == 'linux'
     winip = '127.0.0.1' if linux else windows_host_ip()
+    blocks_path = None
+    if not linux:
+        blocks_path = os.environ.get('SPF_BLOCKS_PATH') or win_path(resolve_resource('airsim_blocks_windows'))
     if linux:
         for kind, ports in [(socket.SOCK_STREAM, [RPC_PORT, TCP_PORT, TCP_PORT + 10]),
-                            (socket.SOCK_DGRAM, [AGENT_PORT, 14841, 14881])]:
+                            (socket.SOCK_DGRAM, [AGENT_PORT, SETTINGS['Vehicles']['PX4']['ControlPortLocal'],
+                                               SETTINGS['Vehicles']['PX4']['ControlPortRemote']])]:
             for port in ports:
                 with socket.socket(socket.AF_INET, kind) as probe:
                     probe.bind(('127.0.0.1', port))
     (output / 'topology.json').write_text(json.dumps(
         {'simulator_platform': simulator_platform(), 'windows_host_ip': winip, 'rpc_port': RPC_PORT, 'tcp_port': TCP_PORT,
-         'blocks_path': BLOCKS_WIN_PATH, 'overhead_view': bool(observe)},
+         'blocks_path': blocks_path, 'overhead_view': bool(observe)},
         indent=2) + '\n')
     pick_domain(output)
     for image in [FLIGHT, ONBOARD, GROUND]:
@@ -328,11 +338,11 @@ def start(output, observe=False):
     if linux:
         settings = json.loads((APP / 'settings.json').read_text())
         (output / 'settings.json').write_text(json.dumps(settings, indent=2) + '\n')
-        start_linux_scene(output)
         settings['Vehicles']['PX4']['TcpPort'] = TCP_PORT + 10
         (output / 'px4-settings.json').write_text(json.dumps(settings, indent=2) + '\n')
+        start_linux_scene(output)
     else:
-        restart_blocks(output, observe)
+        restart_blocks(output, blocks_path, observe)
     vehicle_settings = output / ('px4-settings.json' if linux else 'settings.json')
     launch(output, 'vehicle', FLIGHT, ['vehicle'],
            env=['-e', 'VEHICLE_NAME=PX4', '-e', 'VEHICLE_NAMESPACE=drone0',
@@ -378,14 +388,14 @@ def observer_command(output, case, winip, once):
     return cmd
 
 
-def mission_script(output, args, host):
+def mission_script(output, args, host, rpc_port=RPC_PORT):
     overlay = output / 'workstation/ws/install/setup.bash'
     setup = ('/repo/' + str(overlay.relative_to(ROOT)) if overlay.exists()
              else '/repo/log/spf/pc-e2e/workstation/ws/install/setup.bash')
     argv = ['python3', '/repo/deployment/airsim/demos/spf_language_nav/mission.py',
             '--output', '/evidence/' + args.case, '--instruction', args.instruction,
             '--max-duration-s', str(args.navigation_timeout), '--timeout', str(args.timeout),
-            '--rpc-host', host, '--rpc-port', str(RPC_PORT), '--fault', args.fault,
+            '--rpc-host', host, '--rpc-port', str(rpc_port), '--fault', args.fault,
             '--target', *map(str, args.target), '--spawn', *map(str, args.spawn)]
     return ('source /opt/ros/humble/setup.bash && source ' + shlex.quote(setup)
             + ' && exec ' + shlex.join(argv))
@@ -403,7 +413,7 @@ def mission(output, args):
     command = ['docker', 'run', '--rm', *common(output),
                '-e', 'PYTHONPATH=/repo/simulator/airsim/sensors:/repo/deployment/robopi/vendor',
                '--entrypoint', 'bash', GROUND, '-lc',
-               mission_script(output, args, winip)]
+               mission_script(output, args, winip, topology['rpc_port'])]
     observer = None
     try:
         if observe:
@@ -507,24 +517,9 @@ def prepare(output):
          '--packages-select uav_planner_interfaces uav_spf_planner uav_inference_interfaces uav_inference '
          'uav_follow_path_execution '
          '--event-handlers console_direct+'])
-    prepare_cloud_worker()
+    prepare_vision_language(ONBOARD)
     prepare_ground()
 
-
-def prepare_cloud_worker():
-    uv = shutil.which('uv')
-    if not uv:
-        raise RuntimeError('Install uv to prepare the isolated Cloud worker environment')
-    # Build inside the stable target image so Python ABI and absolute env paths match runtime.
-    run(['docker', 'run', '--rm', '-v', str(ROOT) + ':/repo:ro',
-         '-v', str(ROOT / 'log/spf/pc-e2e/cloud-env') + ':/cloud-env',
-         '-v', uv + ':/usr/local/bin/uv:ro', '--entrypoint', 'bash', ONBOARD, '-lc',
-         'mkdir -p /tmp/cloud-build/models/vision_language /tmp/cloud-build/runtime && '
-         'cp -a /repo/src/basic_function/inference/runtime/. /tmp/cloud-build/runtime/ && '
-         'cp /repo/src/basic_function/inference/models/vision_language/pyproject.toml '
-         '/repo/src/basic_function/inference/models/vision_language/uv.lock /tmp/cloud-build/models/vision_language/ && '
-         'UV_PROJECT_ENVIRONMENT=/cloud-env uv sync --locked --reinstall-package aerohub-inference-runtime '
-         '--python /usr/bin/python3 --project /tmp/cloud-build/models/vision_language'])
 
 
 def prepare_ground(output=None):

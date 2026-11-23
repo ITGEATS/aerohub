@@ -239,9 +239,11 @@ def main():
                              'passes the measured default; see README deviation '
                              'on the 50 m depth gate)')
     parser.add_argument('--rpc-host', default=None)
-    parser.add_argument('--rpc-port', type=int, default=45481)
+    parser.add_argument('--rpc-port', type=int, default=None)
     parser.add_argument('--timeout', type=float, default=900.0)
     args = parser.parse_args()
+    if args.rpc_port is None:
+        args.rpc_port = json.loads(Path(__file__).with_name('settings.json').read_text())['ApiServerPort']
     args.output.mkdir(parents=True, exist_ok=True)
 
     rpc = Rpc(args.rpc_host, args.rpc_port) if args.rpc_host else None

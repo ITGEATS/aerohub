@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     model = ROOT / 'src/basic_function/inference/models/vision_language'
-    python = os.environ.get('INFERENCE_WORKER_PYTHON', '/cloud-env/bin/python')
+    python = os.environ.get('INFERENCE_WORKER_PYTHON', str(model / '.venv/bin/python'))
+    if not os.access(python, os.X_OK):
+        raise RuntimeError(f'Vision Language interpreter unavailable: {python}. Run Demo prepare first.')
     namespace = os.environ.get('VEHICLE_NAMESPACE', 'drone0')
     parameters = os.environ['INFERENCE_ROS_PARAMETERS']
     commands = [

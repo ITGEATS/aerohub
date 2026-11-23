@@ -1,4 +1,4 @@
-"""Demo-local interfaces overlay in the unchanged shared ROS image."""
+"""Build the Demo interfaces overlay in the shared workstation image."""
 import hashlib
 import json
 import os
@@ -9,7 +9,7 @@ import subprocess
 from robopi_execution import connect
 
 ROOT=Path(__file__).resolve().parents[4]
-IMAGE='osrf/ros:humble-desktop-full-jammy'
+IMAGE = os.environ.get('SUPER_WORKSTATION_IMAGE', 'workstation:v0.1.1')
 
 
 def prepare(workspace):

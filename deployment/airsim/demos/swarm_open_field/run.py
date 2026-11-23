@@ -83,6 +83,7 @@ def main():
             raise RuntimeError('reserved container already exists: '+name)
     for image in (IMAGE,BOARD):execute(['docker','image','inspect',image],stdout=subprocess.DEVNULL)
     settings=json.loads((SCENE/'settings.json').read_text())
+    rpc_port = int(settings['ApiServerPort'])
     (output/'settings.json').write_text(json.dumps(settings,indent=2)+'\n')
     profile=json.loads((SCENE/'profile.json').read_text());profile['settings']=str(output/'settings.json')
     (output/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
@@ -105,14 +106,15 @@ def main():
     relays=[]
     try:
         execute(manager('start',output)+['--timeout','90'])
-        relays=launch_vehicles(BOARD,SCENE,output,PREFIX,DDS,sensors=False)
+        relays=launch_vehicles(BOARD,SCENE,output,PREFIX,DDS,sensors=False,
+                               settings_path=output/'settings.json',rpc_port=rpc_port)
         execute(['docker','run','--detach','--init','--network','host','--name',PREFIX+'clock',
-            '-e','ROS_DOMAIN_ID=91','-e','VEHICLE_NAME=Drone0','-e','AIRSIM_RPC_PORT=42471',BOARD,'clock'],
+            '-e','ROS_DOMAIN_ID=91','-e','VEHICLE_NAME=Drone0','-e',f'AIRSIM_RPC_PORT={rpc_port}',BOARD,'clock'],
             stdout=subprocess.DEVNULL)
         for index in range(3):
             command=('source /opt/ros/humble/setup.bash; source /opt/platform_sensors/install/setup.bash; '
                 f'exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args -p use_sim_time:=true '
-                f'-p rpc_port:=42471 -p vehicle_name:=Drone{index} -p vehicle_namespace:=drone{index} '
+                f'-p rpc_port:={rpc_port} -p vehicle_name:=Drone{index} -p vehicle_namespace:=drone{index} '
                 '-p settings_file:=/config/settings.json -p camera_enabled:=false '
                 f'-r /tf_static:=/drone{index}/tf_static')
             execute(['docker','run','--detach','--init','--network','host','--name',PREFIX+f'sensor{index}',
@@ -132,7 +134,7 @@ def main():
             '-e','ROS_DOMAIN_ID=91','-e','ROS_LOCALHOST_ONLY=0','-e','RMW_IMPLEMENTATION=rmw_fastrtps_cpp',
             '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/run/dds.xml','-e','CATORA_EXECUTION_BACKEND=follow_path',
             '-e','CATORA_APP_ROOT=/opt/swarm_app','-e','CATORA_OUTPUT=/results',
-            '-e','AIRSIM_HOST=127.0.0.1','-e','AIRSIM_PORT=42471','-e','AS2_LAUNCHER=/opt/swarm_app/as2/run.py',
+            '-e','AIRSIM_HOST=127.0.0.1','-e',f'AIRSIM_PORT={rpc_port}','-e','AS2_LAUNCHER=/opt/swarm_app/as2/run.py',
             '-e','AS2_CONFIG_FILE=/opt/swarm_app/config/config.yaml',
             '-e','AS2_CONTROLLER_CONFIG_FILE=/opt/swarm_app/config/pid_speed_controller.yaml',
             '-e','AS2_FLEET_FILE=/run/fleet.yaml','-e','AS2_RUNTIME_DIR=/results/runtime',

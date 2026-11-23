@@ -155,7 +155,11 @@ assert not active, 'Domain 94 already has board consumers: '+str(active)
 
     def mission_command(self, action, case):
         remote=CANDIDATE+'/runtime/super-runs/'+self.out.name
-        return (self.env+'python3 super_app/manage_mission.py '+action+' --output '+shlex.quote(remote)+
+        port_env = ''
+        if action == 'start':
+            port = json.loads((self.out/'settings.json').read_text())['ApiServerPort']
+            port_env = f'AIRSIM_RPC_PORT={int(port)} '
+        return (self.env+port_env+'python3 super_app/manage_mission.py '+action+' --output '+shlex.quote(remote)+
             ' --case '+shlex.quote(case)+' --rpc-host '+shlex.quote(self.link.required('PC_IP')))
 
     def collect_mission(self, destination=None):
@@ -188,7 +192,8 @@ print(hashlib.sha256(archive.read_bytes()).hexdigest())
         needed={'super_planner','rog_map','mars_quadrotor_msgs','uav_super_adapter','uav_planner_framework','as2_navigation_inputs'}
         if not needed.issubset(manifest['packages']):raise RuntimeError('Candidate does not contain board SUPER; deploy --include-super')
         remote=CANDIDATE+'/runtime/super-runs/'+self.out.name
-        ping="import sys;sys.path.insert(0,APP);from airsim_rpc import Rpc;assert Rpc(HOST,43472,timeout=3).call('ping')".replace('APP',repr(CANDIDATE+'/super_app')).replace('HOST',repr(self.link.required('PC_IP')))
+        port = int(json.loads((self.out/'settings.json').read_text())['ApiServerPort'])
+        ping=f"import sys;sys.path.insert(0,APP);from airsim_rpc import Rpc;assert Rpc(HOST,{port},timeout=3).call('ping')".replace('APP',repr(CANDIDATE+'/super_app')).replace('HOST',repr(self.link.required('PC_IP')))
         try:self.link.board(self.env+'python3 -c '+shlex.quote(ping),timeout=15)
         except BaseException as exc:
             (self.out/'result.json').write_text(json.dumps({'success':False,'motion_requested':False,'case':case,'error':'Board AirSim RPC preflight: '+str(exc)})+'\n')

@@ -38,7 +38,10 @@ class Mission(Node):
         if self.case.startswith('short'):
             self.task['waypoints_enu_m']=[[0.,4.,2.]]
             self.task['leg_timeout_s']=60
-        self.rpc=Rpc(os.environ.get('AIRSIM_RPC_HOST','127.0.0.1'),43472,timeout=5)
+        rpc_port = os.environ.get('AIRSIM_RPC_PORT')
+        if rpc_port is None:
+            rpc_port = json.loads((self.root/'deployment.json').read_text())['ports']['rpc']
+        self.rpc=Rpc(os.environ.get('AIRSIM_RPC_HOST','127.0.0.1'),int(rpc_port),timeout=5)
         self.navigation_drone=None
         self.use_navigation=os.environ.get('SUPER_EXECUTION_LOCATION','pc')=='pc'
         self.runtime={};self.four_part=os.environ.get('SUPER_EXECUTION_LOCATION')=='four-part'

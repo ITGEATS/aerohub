@@ -12,9 +12,10 @@ RoboPi 提供 SUPER、导航、Adapter 与 AS2/FollowTimedPath，工作站运行
 先按[部署说明](../../../README.md)完成官方 OHOS builder、目标依赖、场景资源及
 本地 `.env` 配置。候选构建还需现有 SUPER/PCL 目标依赖，详见
 [构建说明](../../../oh-ros-build/README.md)。使用现有 `flight_board:v0.1.0` 与
-`osrf/ros:humble-desktop-full-jammy`；工作站 build 只补编译外部接口，不重建镜像。
+`workstation:v0.1.1`。后者是已加载的 `onboard_computer:v0.1.1` 的本地别名。工作站 build 只补编译外部接口；镜像切换后重新执行 build。构建和运行均可通过 `SUPER_WORKSTATION_IMAGE` 显式选择镜像。
 
 ```bash
+docker image tag onboard_computer:v0.1.1 workstation:v0.1.1
 # 更新板端当前源码与隔离候选；默认安装和本机配置保持不变。
 bash tools/robopi/build_lib.sh super
 bash tools/robopi/deploy_lib.sh --component as2 --include-super \
