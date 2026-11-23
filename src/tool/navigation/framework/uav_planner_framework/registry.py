@@ -118,6 +118,7 @@ class PlannerRegistry:
                 "id": manifest["id"], "version": manifest["version"],
                 "manifest": str(manifest_path.resolve()),
                 "runtime": deepcopy(manifest["runtime"]),
+                "output": deepcopy(manifest["output"]),
                 "parameters": parameters,
             },
             "vehicles": deepcopy(task["vehicles"]),
@@ -165,8 +166,14 @@ class PlannerRegistry:
         inputs = capabilities["required_inputs"]
         if not isinstance(inputs, list) or any(not isinstance(item, str) or not item for item in inputs):
             raise ConfigError("manifest required_inputs must be a string array")
-        if manifest["output"] != {"type": "TimedTrajectorySegment", "interface_version": 1}:
+        if manifest["output"] not in (
+            {"type": "TimedTrajectorySegment", "interface_version": 1},
+            {"type": "BehaviorExecution", "interface_version": 1},
+        ):
             raise ConfigError("unsupported planner output")
+        if (manifest['output']['type'] == 'BehaviorExecution'
+                and capabilities['max_vehicles'] != 1):
+            raise ConfigError('BehaviorExecution currently supports one vehicle only')
         resources = manifest["resources"]
         _expect_keys(resources, {"gpu_required"}, {"cpu", "memory_mb", "gpu_required"}, "manifest.resources")
         if not isinstance(resources["gpu_required"], bool):

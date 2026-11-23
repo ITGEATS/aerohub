@@ -77,6 +77,23 @@ class SoftInnovationAssociation:
             velocity_correction_mps=float(np.linalg.norm(correction[3:])))
 
 
+class CaptureAssociation:
+    def check_valid(self, points):
+        valid, best = super().check_valid(points)
+        if self.preferred_id and not self.lost:
+            matching = [i for i in valid if self.ids[i] == self.preferred_id]
+            if len(matching) == 1:
+                best = matching[0]
+            else:
+                # A conflicting ID cannot take over an active track. A frame
+                # with no usable IDs still falls back to the same 3D policy.
+                valid = np.array([i for i in valid if not self.ids[i]], dtype=int)
+                if valid.size and best not in valid:
+                    best = min(valid, key=lambda i: np.linalg.norm(points[i] - self.x[:3]))
+        self.selected_index = int(best)
+        return valid, best
+
+
 class Tracker:
     def __init__(self, ekf_class=None, dt=0.1, *, measurement_stddev_m=None, association_policy="upstream", position_filter="none", max_prediction_time=None):
         if association_policy not in ('upstream', 'innovation_covariance_v1', 'soft_innovation_v1'):
@@ -89,7 +106,10 @@ class Tracker:
             class SourceAwareEKF(policy, base):
                 pass
             base = SourceAwareEKF
-        self.ekf = base(dt=dt)
+        class ObservationEKF(CaptureAssociation, base):
+            pass
+
+        self.ekf = ObservationEKF(dt=dt)
         self.ekf.association_blind_time=self.ekf.max_blind_time
         if max_prediction_time is not None:
             if not math.isfinite(max_prediction_time) or not .5<=max_prediction_time<=2.:
@@ -111,8 +131,15 @@ class Tracker:
         self.stamp = None
         self.observation_stamp = None
         self.frame = None
+        self.associated_position = None
+        self.track_epoch = 0
+        self.velocity_ready = False
+        self._confirmed = False
+        self._scope = None
+        self._track_id = 0
 
-    def observe(self, positions, stamp, frame):
+    def observe(self, positions, stamp, frame, *, ids=None, scope=None):
+        self.associated_position = None
         points = np.asarray(positions, dtype=float)
         if points.size == 0:
             points = np.empty((0, 3))
@@ -122,6 +149,9 @@ class Tracker:
             raise ValueError('invalid measurement')
         if self.frame is not None and frame != self.frame:
             raise ValueError('frame changed')
+        ids = tuple(ids) if ids is not None else (0,) * len(points)
+        if len(ids) != len(points):
+            raise ValueError('one optional ID is required per candidate')
         if self.stamp is not None:
             dt = stamp - self.stamp
             if dt <= 0:
@@ -133,6 +163,9 @@ class Tracker:
             self.ekf.B[:3] = np.eye(3) * (dt ** 2 / 2)
             self.ekf.B[3:] = np.eye(3) * dt
         self.stamp, self.frame = stamp, frame
+        if scope != self._scope:
+            self._track_id = 0
+            self._scope = scope
         raw = points.copy()
         if self.measurement_filter is not None:
             points = self.measurement_filter.apply(points, stamp)
@@ -141,10 +174,32 @@ class Tracker:
             status=self.measurement_filter.last_status if self.measurement_filter else 'raw',
             raw=raw.tolist(), filtered=points.tolist())
         if hasattr(self.ekf,"update_audit"):self.ekf.update_audit={}
+        if (self._confirmed and self.observation_stamp is not None
+                and stamp - self.observation_stamp > self.ekf.max_blind_time):
+            self._confirmed = False
+            self.ekf.lost = True
+            self.ekf.hits.clear()
+            self._track_id = 0
+        self.ekf.ids = ids if scope is not None else (0,) * len(points)
+        self.ekf.preferred_id = self._track_id
+        self.ekf.selected_index = None
         ids, _, confirmed = self.ekf.predict_and_update(points)
         self.measurement_audit["association"] = getattr(self.ekf,"update_audit",{})
         if self.ekf.blind_time == 0:
             self.observation_stamp = stamp
+        if confirmed and not self._confirmed:
+            self.track_epoch += 1
+        self._confirmed = confirmed
+        # The EKF counts successful position updates as confirmation hits.
+        # A fresh position-only reinitialization is explicitly not a hit.
+        self.velocity_ready = confirmed and any(self.ekf.hits)
+        selected = self.ekf.selected_index
+        if confirmed and ids.size and selected is not None and self.ekf.blind_time == 0:
+            self.associated_position = tuple(map(float, raw[selected]))
+            if self.ekf.ids[selected] and self.ekf.ids.count(self.ekf.ids[selected]) == 1:
+                self._track_id = self.ekf.ids[selected]
+        if self.ekf.lost:
+            self._track_id = 0
         return ('tracked' if ids.size else 'predicted') if confirmed else ('lost' if self.ekf.blind_time > self.ekf.max_blind_time else 'confirm')
 
     def snapshot(self, now):

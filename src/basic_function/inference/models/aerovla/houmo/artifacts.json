@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "model_id": "aerovla",
+  "source": {
+    "algorithm": "AeroVLA (formerly AerialVLA), ECCV 2026, https://github.com/XuPeng23/AeroVLA @ b87aaa7c9338ae878d39300a1ef930c753e1ff90 (Apache-2.0)",
+    "base_weights": "openvla-7b (Hugging Face OpenVLA/openvla-7b)",
+    "adapter": "XuPeng23/AerialVLA LoRA (Hugging Face)",
+    "quantization": "Houmo xh2 Dadao toolchain round 2026-10-17/18 (LoRA merge + ViT/LLM export-quant-HMM build); golden tensors captured in the same round",
+    "board_deployment_dir": "/data/local/workspace/aerovla_infer"
+  },
+  "files": {
+    "aerovla_vision.hmm": {
+      "sha256": "d35e8afb2b276cf1e8445b8cbad7af3a384bd31f96704bc63cde5491df5dbcbc",
+      "bytes": 823418912,
+      "path": "models/aerovla_vision.hmm"
+    },
+    "aerovla_prefill.hmm": {
+      "sha256": "162a36d24127db93d4fa101d14b8525065ed3d4e7ae79dd7f108be0ca7384ad5",
+      "bytes": 6767121544,
+      "path": "models/aerovla_prefill.hmm"
+    },
+    "aerovla_decode.hmm": {
+      "sha256": "4ab052475b35de369d9533e20a7706311a2cc3c9d0955fbea4c0fcc5926d9fb3",
+      "bytes": 6739245352,
+      "path": "models/aerovla_decode.hmm"
+    },
+    "token_embedding.npy": {
+      "sha256": "9debca67b3b2bc0800eeb209740a0d5e1b66a5c187a5ca9a021ef8214d6a9cfa",
+      "path": "assets/token_embedding.npy"
+    },
+    "assets.json": {
+      "sha256": "0c7446582f2ae046aec40ad1ceaaaac566160d64dbd16f00d00349754b653957",
+      "path": "assets/assets.json"
+    },
+    "id2token.json": {
+      "sha256": "e1422c7f77a8840c8068f84926949510cc95ca2782384bb6176783ab31e80273",
+      "path": "assets/id2token.json"
+    }
+  },
+  "hash_note": "sha256 values computed on the board 2026-11-19 (stage 2). Service start does not re-hash the 13 GiB HMM files (minutes of startup delay); model_version pins their first 16 hex chars from this record. Full verification runs with AEROVLA_VERIFY_SHA=1 or via setup.sh."
+}

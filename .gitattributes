@@ -4,6 +4,8 @@ tools/robopi/build_lib.sh text eol=lf
 tools/robopi/deploy_lib.sh text eol=lf
 tools/robopi/load_env.sh text eol=lf
 deployment/oh-ros-build/*.sh text eol=lf
+# Shell scripts run on Linux/WSL/board; CRLF breaks bash (`set: pipefail\r`).
+*.sh text eol=lf
 
 # Preserve exact imported source/evidence bytes for recorded SHA256 provenance.
 src/tool/navigation/planner/ego_planner_v2/ros2_adapter/native/** -text whitespace=-blank-at-eol,-blank-at-eof,cr-at-eol

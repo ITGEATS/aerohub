@@ -1,4 +1,13 @@
-# Object Detection Tool: public single observation
+# Object Detection Tool
+
+Detection publishes independent boxes, masks and optional 3D positions. Set
+`stream_enabled:=true` and select a fixed `query` for a continuous detection stream.
+Cross-frame IDs and tracking history belong to Target Tracking sessions;
+neither this Tool nor its Inference worker retains target identities.
+
+For YOLO masks, `position_method:=yolo_mask_gemini2_point_center` optionally
+uses the existing depth cluster's pixel coordinates to compute the lateral 3D
+center. The existing depth mode is selected by default.
 
 Version 0.4.0 provides query-based RGB detection and optional RGB-D positioning
 through the AS2 Module, using deployment-selected YOLO or Grounding DINO. Current

@@ -1,0 +1,23 @@
+type: object
+additionalProperties: false
+required: [rate_hz, max_input_skew_s, inference_timeout_s,
+           max_consecutive_failures, service_name,
+           prompt_table, front_topic, down_topic, pose_topic, obj_desc, target_position_enu]
+properties:
+  land_timeout_s: {type: number, exclusiveMinimum: 0}
+  land_speed_mps: {type: number, minimum: 0}
+  rate_hz: {type: number, exclusiveMinimum: 0}
+  max_input_skew_s: {type: number, minimum: 0}
+  inference_timeout_s: {type: number, exclusiveMinimum: 0}
+  max_consecutive_failures: {type: integer, minimum: 1}
+  service_name: {type: string}
+  prompt_table: {type: string}
+  front_topic: {type: string}
+  down_topic: {type: string}
+  pose_topic: {type: string}
+  obj_desc: {type: string}
+  target_position_enu:
+    type: array
+    minItems: 3
+    maxItems: 3
+    items: {type: number}

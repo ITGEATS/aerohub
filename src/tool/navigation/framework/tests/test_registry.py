@@ -29,6 +29,18 @@ class RegistryTest(unittest.TestCase):
     def setUp(self):
         self.registry = PlannerRegistry(ROOT / "registry")
 
+    def test_aerovla_resolves_native_behavior_execution(self):
+        value = task()
+        value['planner'] = {'id': 'aerovla', 'version': 'b87aaa7c9338ae878d39300a1ef930c753e1ff90'}
+        resolved = self.registry.resolve(value, deployment())
+        self.assertEqual(resolved['planner']['output'],
+                         {'type': 'BehaviorExecution', 'interface_version': 1})
+        self.assertIn('uav_aerovla_planner.goto_node', resolved['planner']['runtime']['command'])
+        self.assertNotIn('trajectory_timeout', resolved['planner']['parameters'])
+        self.assertNotIn('valid_from_lead_s', resolved['planner']['parameters'])
+        trajectory = self.registry.resolve(task(), deployment())
+        self.assertEqual(trajectory['planner']['output']['type'], 'TimedTrajectorySegment')
+
     def test_recursive_merge_replaces_arrays(self):
         self.assertEqual(recursive_merge({"a": {"b": 1}, "c": [1]}, {"a": {"b": 2}, "c": [3]}),
                          {"a": {"b": 2}, "c": [3]})

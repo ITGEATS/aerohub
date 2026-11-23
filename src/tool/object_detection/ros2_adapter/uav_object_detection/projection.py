@@ -156,10 +156,11 @@ class Projector:
                     diagnostic = {}
                     if position_method == 'box_foreground_surface_v1':
                         point, diagnostic = locate_box(depth, d.xyxy, k, r, position)
-                    elif position_method == 'yolo_mask_gemini2_reference':
+                    elif position_method in ('yolo_mask_gemini2_reference', 'yolo_mask_gemini2_point_center'):
                         mask = np.frombuffer(bytes(d.mask.data), np.uint8).reshape(frame.height, frame.width)
                         point, _unused_kf_variance = locate(depth, d.xyxy, k, r, position,
-                            (np.eye(3), np.zeros(3)), {'depth_method': 'gemini2_reference'}, diagnostic, mask)
+                            (np.eye(3), np.zeros(3)), {'depth_method': position_method.removeprefix('yolo_mask_')},
+                            diagnostic, mask)
                     else:
                         raise ValueError('unsupported position method')
                     measured.position.x, measured.position.y, measured.position.z = map(float, point)

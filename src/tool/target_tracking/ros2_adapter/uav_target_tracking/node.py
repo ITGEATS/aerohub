@@ -1,4 +1,4 @@
-"""Serial target-state Tool, optionally requesting turn-only Navigation."""
+"""Observation-only target tracking with session-owned association state."""
 import math
 import os
 import itertools
@@ -19,8 +19,9 @@ from std_msgs.msg import String
 from uav_object_detection_interfaces.srv import DetectSnapshot
 from uav_object_detection_interfaces.msg import ObjectDetectionFrame
 from uav_target_tracking_interfaces.action import TrackObject
-from uav_target_tracking_interfaces.msg import TargetState
+from uav_target_tracking_interfaces.msg import AssociatedPosition3D, TargetState
 from .core import Tracker, load_ekf
+from .stream_tracker import StreamTracker
 
 
 def stamp_value(stamp):
@@ -39,6 +40,9 @@ class TrackingNode(Node):
         if self._observation_mode not in ('snapshot','stream'):
             raise ValueError('unknown observation_mode')
         self._stream_query=self.declare_parameter('stream_query','person').value.strip().lower()
+        self._bytetrack = self.declare_parameter('bytetrack_enabled', False).value
+        if self._bytetrack and self._observation_mode != 'stream':
+            raise ValueError('bytetrack_enabled requires observation_mode=stream')
         self._stream_lock=threading.Lock()
         self._latest_frame=None
         self._stream_sequence=0
@@ -50,6 +54,10 @@ class TrackingNode(Node):
             if self.declare_parameter('timing_enabled',False).value else None)
         self.declare_parameter('snapshot_timeout', 1.0)
         self.declare_parameter('max_capture_age', 0.5)
+        self._world_frame = self.declare_parameter('world_frame', '').value
+        self._allow_stale_replay = self.declare_parameter('allow_stale_capture_replay', False).value
+        if self._allow_stale_replay and not self.get_parameter('use_sim_time').value:
+            raise ValueError('allow_stale_capture_replay requires a replay clock')
         noise = float(self.declare_parameter('measurement_stddev_m', 0.0).value)
         if not math.isfinite(noise) or noise < 0:
             raise ValueError('measurement_stddev_m must be finite and nonnegative (0 preserves upstream)')
@@ -71,6 +79,8 @@ class TrackingNode(Node):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(name + ' must be finite and positive')
         self.state_publisher = self.create_publisher(TargetState, 'tools/target_tracking/state', 10)
+        self.observation_publisher = self.create_publisher(
+            AssociatedPosition3D, 'tools/target_tracking/associated_position', 10)
         self._ekf_class = load_ekf()  # fail startup before accepting goals if provenance is unavailable
         self._stopping = threading.Event()
         self._slot = threading.Lock()
@@ -127,11 +137,39 @@ class TrackingNode(Node):
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
+    def observe(self, tracker, frame, stamp, *, stream=False, image_tracker=None):
+        if self._world_frame and frame.header.frame_id != self._world_frame:
+            raise ValueError('unexpected observation frame')
+        image_ids, scope = (image_tracker.attach(frame) if image_tracker is not None
+                            else ((0,) * len(frame.detections), None))
+        points, ids = [], []
+        for index, detection in enumerate(frame.detections):
+            point = (detection.position.x, detection.position.y, detection.position.z)
+            if detection.position_valid and all(math.isfinite(value) for value in point):
+                points.append(point)
+                ids.append(image_ids[index])
+        if not points and (frame.detections or (stream and not frame.valid)):
+            raise ValueError('observation has no usable 3D positions')
+        status = tracker.observe(points, stamp, frame.header.frame_id, ids=ids, scope=scope)
+        self.filter_publisher.publish(String(data=json.dumps(tracker.measurement_audit)))
+        return status, bool(points) and tracker.observation_stamp == stamp
+
+    @staticmethod
+    def producer_changed(previous, current):
+        return previous is not None and any(new and new != old for old, new in zip(previous, current))
+
     def execute(self, handle):
+        try:
+            return self.run_goal(handle)
+        finally:
+            # Keep session ownership until the terminal state has been published.
+            self._slot.release()
+
+    def run_goal(self, handle):
         self._generation += 1
         generation = self._generation
         epoch = self._clock_epoch
-        session = str(uuid.uuid4())
+        session = str(uuid.UUID(bytes=bytes(handle.goal_id.uuid)))
         tracker = Tracker(self._ekf_class, measurement_stddev_m=self._measurement_stddev, association_policy=self._association_policy, position_filter=self._position_filter,max_prediction_time=self._max_prediction_time)
         state = TargetState(session_id=session, generation=generation, status='unavailable')
         capture = 0
@@ -140,10 +178,13 @@ class TrackingNode(Node):
         last_clock = self.get_clock().now().nanoseconds * 1e-9
         reason = 'No usable observations'
         code = 'TIMEOUT'
-        stream_started=last_clock
+        session_started = last_clock
         stream_sequence=0
-        stream_identity=None
+        producer_identity = None
+        observation_stamp = None
+        image_tracker = None
         try:
+            image_tracker = StreamTracker() if self._bytetrack else None
             while rclpy.ok() and not self._stopping.is_set():
                 now = self.get_clock().now().nanoseconds * 1e-9
                 if handle.is_cancel_requested:
@@ -153,6 +194,8 @@ class TrackingNode(Node):
                 last_clock = now
                 if time.monotonic() >= deadline:
                     reason = 'Observation window elapsed'; break
+                accepted_header = None
+                max_age = float(self.get_parameter('max_capture_age').value)
                 # Do not release transport occupancy on cancel/timeout: a late
                 # response must drain before a subsequent session issues a call.
                 if self._observation_mode=='stream':
@@ -163,30 +206,34 @@ class TrackingNode(Node):
                         stream_sequence,frame,received,frame_epoch=latest
                         self.trace('tracking_take',frame,sequence=stream_sequence,
                             queue_ms=(time.monotonic()-received)*1000)
-                        stamp=stamp_value(frame.header.stamp)
-                        identity=(frame.tool_generation,frame.worker_generation,frame.model_version)
-                        fresh=(frame_epoch==epoch and stamp>=stream_started and
-                            0<=now-stamp<=float(self.get_parameter('max_capture_age').value) and
-                            time.monotonic()-received<=float(self.get_parameter('max_capture_age').value))
+                        stamp = stamp_value(frame.header.stamp)
+                        rgb = stamp_value(frame.image_header.stamp)
+                        identity = (frame.tool_generation, frame.worker_generation, frame.model_version)
+                        current_frame = frame_epoch == epoch and (rgb == 0 or rgb >= session_started)
+                        if current_frame and self.producer_changed(producer_identity, identity):
+                            code = 'OBSERVATION_GENERATION_CHANGED'
+                            reason = 'stream producer identity changed; restart session'
+                            break
+                        fresh = (current_frame and rgb >= session_started and stamp >= session_started
+                                 and now >= stamp and (self._allow_stale_replay or now - stamp <= max_age)
+                                 and time.monotonic() - received <= max_age)
                         if fresh:
-                            if stream_identity is not None and stream_identity!=identity:
-                                code='OBSERVATION_GENERATION_CHANGED'
-                                reason='stream producer identity changed; restart session'
-                                break
-                            stream_identity=identity
+                            if all(identity):
+                                producer_identity = identity
+                            attempt += 1
                             try:
-                                points=[[d.position.x,d.position.y,d.position.z]for d in frame.detections if d.position_valid]
-                                if not frame.valid and not points:
-                                    raise ValueError(frame.error or 'stream frame has no valid 3D positions')
-                                reason=tracker.observe(points,stamp,frame.header.frame_id)
-                                self.filter_publisher.publish(String(data=json.dumps(tracker.measurement_audit)))
-                                capture+=1
-                                self.trace('tracking_processed',frame,position_count=len(points),
-                                    tracker_status=reason,filter_status=tracker.measurement_audit['status'],
-                                    observation_ns=int(tracker.observation_stamp*1e9) if tracker.observation_stamp is not None else None)
+                                reason, accepted = self.observe(tracker, frame, stamp, stream=True, image_tracker=image_tracker)
+                                capture = attempt
+                                if accepted:
+                                    accepted_header = frame.header
+                                self.trace('tracking_processed', frame,
+                                    position_count=len(tracker.measurement_audit['raw']),
+                                    tracker_status=reason, filter_status=tracker.measurement_audit['status'],
+                                    observation_ns=int(tracker.observation_stamp*1e9)
+                                    if tracker.observation_stamp is not None else None)
                             except ValueError as error:
-                                reason=str(error)
-                                self.trace('tracking_reject',frame,reason=reason)
+                                reason = str(error)
+                                self.trace('tracking_reject', frame, reason=reason)
                         else:
                             self.trace('tracking_reject',frame,reason='stale_or_session_epoch')
                             reason='stream result predates session, is stale or has wrong clock epoch'
@@ -198,16 +245,21 @@ class TrackingNode(Node):
                         result = response.result
                         stamp = stamp_value(result.header.stamp)
                         age = now - stamp
-                        max_age = float(self.get_parameter('max_capture_age').value)
-                        if response.success and result.position_requested and 0 <= age <= max_age and time.monotonic() - started <= self._pending_budget + 0.25:
-                            points = [[d.position.x, d.position.y, d.position.z] for d in result.detections if d.position_valid]
+                        if (response.success and result.position_requested and stamp >= session_started and 0 <= age
+                                and (self._allow_stale_replay or age <= max_age)
+                                and time.monotonic() - started <= self._pending_budget + 0.25):
+                            identity = (result.tool_generation, result.worker_generation, result.model_version)
+                            if self.producer_changed(producer_identity, identity):
+                                code = 'OBSERVATION_GENERATION_CHANGED'
+                                reason = 'snapshot producer identity changed; restart session'
+                                break
+                            if all(identity):
+                                producer_identity = identity
                             try:
-                                if result.detections and not points:
-                                    raise ValueError('detections have no usable 3D positions')
-                                observed_status = tracker.observe(points, stamp, result.header.frame_id)
-                                self.filter_publisher.publish(String(data=json.dumps(tracker.measurement_audit)))
+                                reason, accepted = self.observe(tracker, result, stamp)
                                 capture = self._pending_capture
-                                reason = observed_status
+                                if accepted:
+                                    accepted_header = result.header
                             except ValueError as exc:
                                 reason = str(exc)
                         else:
@@ -223,23 +275,34 @@ class TrackingNode(Node):
                         self._pending_clock_epoch = epoch
                         self._pending_started = time.monotonic()
                         self._pending_budget = budget
+                if accepted_header is not None:
+                    observation_stamp = accepted_header.stamp
                 status, valid, x, cov = tracker.snapshot(now)
                 # Status describes the latest associated observation, not a
                 # single feedback tick that an asynchronous consumer can miss.
                 if valid and reason == 'tracked':
                     status = 'tracked'
                 state = TargetState(session_id=session, generation=generation, capture_id=capture,
-                                    status=status, valid=valid, reason=reason)
+                                    status=status, valid=valid, reason=reason,
+                                    velocity_valid=bool(valid and tracker.velocity_ready))
                 state.header.frame_id = tracker.frame or ''
                 state.header.stamp = stamp_msg(now)
-                if tracker.observation_stamp is not None:
-                    state.observation_stamp = stamp_msg(tracker.observation_stamp)
-                    state.valid_until = stamp_msg(tracker.observation_stamp + tracker.ekf.max_blind_time)
+                if observation_stamp is not None:
+                    state.observation_stamp = observation_stamp
+                    expiry_ns = (observation_stamp.sec * 10**9 + observation_stamp.nanosec
+                                 + round(tracker.ekf.max_blind_time * 10**9))
+                    state.valid_until = Time(sec=expiry_ns // 10**9, nanosec=expiry_ns % 10**9)
                 state.position.x, state.position.y, state.position.z = map(float, x[:3])
                 state.velocity.x, state.velocity.y, state.velocity.z = map(float, x[3:])
                 state.covariance = cov.reshape(-1).tolist()
-                if self._clock_epoch != epoch:
+                if self._clock_epoch != epoch or handle.is_cancel_requested:
                     continue
+                if accepted_header is not None and tracker.associated_position is not None:
+                    observation = AssociatedPosition3D(
+                        header=accepted_header, session_id=session, generation=generation,
+                        capture_id=capture, track_epoch=tracker.track_epoch)
+                    observation.position.x, observation.position.y, observation.position.z = tracker.associated_position
+                    self.observation_publisher.publish(observation)
                 self.state_publisher.publish(state)
                 handle.publish_feedback(TrackObject.Feedback(state=state))
                 time.sleep(.02)
@@ -249,9 +312,10 @@ class TrackingNode(Node):
             code = 'ERROR'
             reason = str(exc)
         finally:
+            if image_tracker is not None:
+                image_tracker.close()
             self._generation += 1  # invalidate outstanding calls before releasing slot
-            self._slot.release()
-        state.valid = False
+        state.valid = state.velocity_valid = False
         state.reason = reason
         self.state_publisher.publish(state)
         if code == 'TIMEOUT':

@@ -9,6 +9,37 @@
 原算法关联最近的门内目标，保留 M/N 确认、可达域重捕获和短时预测；没有外观身份或
 跨遮挡身份保证。Qt/Rt 是上游模型假设，不是检测器报告的测量协方差。
 
+## 流式 ByteTrack 与原始观测
+
+Object Detection 使用 `stream_enabled:=true` 发布独立检测；Tracking 使用
+`observation_mode:=stream bytetrack_enabled:=true` 在本 Tool 内为连续检测附加二维 ID，
+并将 `stream_query` 设为检测器的 `query`。`bytetrack_enabled` 默认关闭。
+每个 TrackObject 会话独占 ByteTrack 实例与历史，取消、超时、异常及正常结束均释放；
+下一会话重新建立 ID 作用域，不在 Inference、Detection 或磁盘中保存跟踪历史。
+默认快照与未启用 ByteTrack 的流继续使用三维关联。可配置 `world_frame` 固定输入坐标系。
+
+ByteTrack 使用 CPU 上的检测框，不加载检测权重、不调用 Inference 私有环境。
+启用前，在运行 Tracking 的 ROS Python 环境安装
+`src/tool/target_tracking/requirements-bytetrack.txt`（Ultralytics 8.4.210、lap 0.5.13）；
+交付环境须在构建时安装这些可选依赖。未启用时不导入它们。
+单独检查关联逻辑可在同一环境运行
+`python3 -m unittest discover -s src/tool/target_tracking/tests -p test_stream_tracker.py -v`。
+
+Tracking 只在当前会话及检测流世代内使用 ID，候选仍必须有有效三维测量并通过原三维门。
+同 ID 候选优先，已知冲突 ID 不接管当前轨迹。无 ID 输入继续使用三维关联。
+当轨迹重新确认时，读取实测历史的消费者需按 `track_epoch` 切换历史。
+
+- `tools/target_tracking/state` 发布估计状态和预测。使用速度时须同时检查
+  `valid` 和 `velocity_valid`。单独的重新初始化位置没有速度证据。
+- `tools/target_tracking/associated_position` 在已确认轨迹接纳每条三维测量时
+  发布 `AssociatedPosition3D`。保留滤波前的位置、原始采集时间和 frame。
+  消费者使用 `session_id / generation / track_epoch` 隔离历史，并以 `capture_id` 去重。
+  缺测、拒绝和纯预测期间不会发布实测事件。空检测仍可推进状态中的处理序号，
+  最近三维观测时间保持原值。
+
+新增字段影响 ROS 消息类型。部署时重编同一 overlay 中的接口和消费者。
+Tracking 仅接受 `follow=false`；原地转向与移动跟随由 Following 编排。
+
 ## 数据与时间契约
 
 - Goal：非空 `query`、有限正 `timeout`（墙钟秒）；query 的支持范围由部署的检测后端决定。

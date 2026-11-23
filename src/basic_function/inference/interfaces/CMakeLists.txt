@@ -14,6 +14,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DetectionFrame.msg"
   "srv/InferYopo.srv"
   "srv/InferYopoTracker.srv"
+  "srv/InferAeroVla.srv"
   "srv/InferDiffphys.srv"
   "srv/InferDetections.srv"
   "srv/InferGroundingDino.srv"
