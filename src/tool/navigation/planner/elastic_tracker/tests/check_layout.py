@@ -13,6 +13,7 @@ BUILD_ROOTS = (
     ROOT / 'src/tool/navigation/interfaces',
     ROOT / 'src/tool/object_detection',
     ROOT / 'src/tool/target_tracking',
+    ROOT / 'src/tool/system/motion_resource',
     ROOT / 'src/behavior/follow_path',
 )
 packages = defaultdict(list)

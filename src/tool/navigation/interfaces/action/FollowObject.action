@@ -1,0 +1,17 @@
+# QUERY selects an object by text; AUTO delegates selection to the implementation.
+uint8 QUERY=0
+uint8 AUTO=1
+uint8 selection_mode
+# Required for QUERY; empty for AUTO.
+string query
+# Maximum following time in wall-clock seconds.
+float64 timeout
+---
+# TIMEOUT, CANCELED, UNAVAILABLE or FAILED.
+string code
+string reason
+bool stop_confirmed
+---
+string phase
+bool target_ready
+bool reference_ready

@@ -12,5 +12,6 @@ colcon build --executor sequential --base-paths \
   "$component/ros2_adapter" \
   "$repo/src/basic_function/inference/interfaces" "$repo/src/basic_function/inference/ros2_adapter" \
   "$repo/src/tool/navigation/interfaces" "$repo/src/tool/object_detection" "$repo/src/tool/target_tracking" \
+  "$repo/src/tool/system/motion_resource" \
   "$repo/src/behavior/follow_path" \
   --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF

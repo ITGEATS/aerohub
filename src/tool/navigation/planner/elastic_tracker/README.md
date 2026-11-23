@@ -1,8 +1,8 @@
 # Elastic-Tracker ROS 2 Humble
 
-Elastic-Tracker 是单机滚动目标跟随 Planner。原始 [Elastic-Tracker](https://github.com/ZJU-FAST-Lab/Elastic-Tracker) 通过 `upstream/` 固定在 `0a302a2a9cc8b733e74941fdd4af3fb449447bea`，用于源码与算法对照。AeroHub 维护的 GPL-3.0 ROS 2 移植位于 `ros2_adapter/native/port/`，ROS 2 包直接编译这些源码。
+Elastic-Tracker 是单机滚动目标跟随 Planner。组件目录下的 `upstream/` 是唯一的上游参考子模块，指向官方 [ZJU-FAST-Lab/Elastic-Tracker](https://github.com/ZJU-FAST-Lab/Elastic-Tracker)，锁定在 `0a302a2a9cc8b733e74941fdd4af3fb449447bea`，用于源码与算法对照。Humble 构建使用 AeroHub 的 GPL-3.0 ROS 2 移植源码，位于 `ros2_adapter/native/port/`。
 
-RGB-D → 共享 Object Detection → 共享 TrackObject → `elastic_tracking_bridge` → Elastic Planner → 标准 FollowTimedPath → AS2 控制器与平台。TrackObject 使用 `follow=false` 提供观测；Elastic 转换完整的时间化轨迹，首次发 Action Goal，后续对同一任务发 `modify`。只有 FollowTimedPath 发布运动参考。
+工作站 Mission 通过 `FollowObject` 请求跟随。算力侧 Following 调用共享 TrackObject，仅消费本次 Goal 的反馈，并将目标状态交给 Elastic Planner。RGB-D 观测由共享 Object Detection 提供。Elastic 转换完整的时间化轨迹，首次发 FollowTimedPath Goal，后续对同一任务发 `modify`。只有 FollowTimedPath 发布运动参考。
 
 ## 构建和运行
 
@@ -25,12 +25,18 @@ ros2 launch uav_elastic_tracker_adapter stack.launch.py \
   depth_topic:=/drone0/sensor_measurements/FrontCamera/depth_planar/image \
   target_mask:=true fresh_native_output:=true
 
-ros2 action send_goal /drone0/tools/target_tracking/track \
-  uav_target_tracking_interfaces/action/TrackObject \
-  '{query: person, timeout: 120.0, follow: false}' --feedback
+ros2 action send_goal /drone0/tools/following/follow \
+  uav_planner_interfaces/action/FollowObject \
+  '{selection_mode: 0, query: person, timeout: 120.0}' --feedback
 ```
 
-任务侧完成起飞与悬停，确认 Action 有效状态和 `/drone0/elastic_adapter/state` 的 `input_ready` 同时成立，再调用 `/drone0/elastic_adapter/enable`（`std_srvs/srv/SetBool`）启用规划。结束时先禁用并等待 `stop_confirmed`，再取消已拥有的 TrackObject 会话。Land 动作和 PX4 状态由任务侧确认。
+任务侧在发送 Goal 前完成原生起飞与悬停。Following 在有效观测和车辆输入就绪后启用规划。超时或取消时，Following 确认运动停止后再请求取消自己启动的观测会话。停止无法确认时返回失败及 `stop_confirmed=false`。任务侧负责 Land 和 PX4 状态确认。`elastic_adapter/enable` 与 `elastic_adapter/state` 是组件内部控制和诊断接口。
+
+公共 `FollowObject` Action 支持两种选择方式。Elastic 接受 `QUERY=0`，要求非空查询。YOPO-Tracker 接受 `AUTO=1`，要求查询为空。具体实现由部署选择，同一车辆只启动一个公共 Action 服务端。已有 YOPO-Tracker 部署可使用 [YOPO Following 适配入口](../../../../../deployment/yopo_tracker_humble/README-following.md)。
+
+Following 公共入口与 System、SUPER Navigation 共用 `uav_motion_resource`。算力进程通过 `AEROHUB_MOTION_LOCK_DIR` 指向同一持久目录，跨容器使用同一宿主目录。Following 接单时获取车辆运动锁，确认停止后释放。托管任务通过 Following Action 发起运动，内部 enable 服务用于组件集成与诊断。
+
+已部署同一车辆的 Object Detection 和 TrackObject 时，启动 Planner 的 `stack.launch.py`，再用 `ros2 launch uav_elastic_tracker_adapter following.launch.py namespace:=drone0` 接入共享服务。上面的 `tracking_object.launch.py` 是独立复现入口，负责一起启动观测节点和 Following。两种入口择一，同一车辆只运行一个 Following 实例。使用共享观测部署时，查询范围、RGB-D/TF 和时间门限由该部署配置决定。
 
 ## 时间门限
 
@@ -64,6 +70,8 @@ Elastic 桥支持 AeroHub 现有的字符串状态格式和新版 Goal UUID／�
 同机诊断可在视觉和 Elastic 进程各自设置 `ELASTIC_TIMING_TRACE`。按 `stamp_ns` 和 `mono_ns` 关联目标状态桥发布、输入节点接收／转发、Adapter 接纳，以及深度编码和 RPC 耗时。
 
 ## 验证结果
+
+以下记录来自 Following 入口接入前的 Planner 运行链，Following Action 需单独验证。
 
 使用 `tests/verify.sh` 在只允许本机回环的 Humble 容器内执行源码构建、接口检查、原生算法回放和标准 FollowTimedPath 消费验证。交付工作区基于 AeroHub `dev` 的 `c3e541a`，在固定 Humble 开发镜像构建 17 个包，54 项单元及契约测试通过。合成输入驱动真实 Planner 和标准 FollowTimedPath，接纳 87 版并输出 217 条参考，零迟到更新，停止获确认。合成回归使用测试传感器与控制器。
 

@@ -10,6 +10,7 @@
   <exec_depend>sensor_msgs</exec_depend><exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend><exec_depend>uav_planner_interfaces</exec_depend>
   <exec_depend>uav_target_tracking_interfaces</exec_depend>
+  <exec_depend>uav_motion_resource</exec_depend>
   <exec_depend>uav_target_tracking</exec_depend><exec_depend>uav_object_detection</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>as2_msgs</exec_depend><exec_depend>std_srvs</exec_depend>

@@ -1,10 +1,6 @@
 """Adapt the public Tracking Tool state to Elastic's target Odometry."""
-import rclpy
 from nav_msgs.msg import Odometry
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
-from uav_target_tracking_interfaces.msg import TargetState
 
 from .contracts import InputRejected, accept_odometry
 from .timing import trace
@@ -15,15 +11,13 @@ def stamp_ns(stamp):
 
 
 class TargetStateBridge(Node):
-    def __init__(self):
-        super().__init__('elastic_tracking_bridge')
+    def __init__(self, *, node_name='elastic_tracking_bridge'):
+        super().__init__(node_name)
         namespace = self.get_namespace().strip('/')
         frame = f'{namespace}/odom' if namespace else 'odom'
         self.frame = self.declare_parameter('world_frame', frame).value
-        source = self.declare_parameter('target_state_topic', 'tools/target_tracking/state').value
         target = self.declare_parameter('target_topic', '/elastic_tracker/target_odom').value
         self.output = self.create_publisher(Odometry, target, 1)
-        self.create_subscription(TargetState, source, self.forward, QoSProfile(depth=1))
         self.session = None
         self.generation = 0
         self.last_stamp_ns = 0
@@ -80,15 +74,3 @@ class TargetStateBridge(Node):
             trace(self, 'target_bridge_publish', stamp_ns=accepted.stamp_ns,
                   observation_ns=observed, valid_until_ns=expires)
             self.output.publish(message)
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = TargetStateBridge()
-    try:
-        rclpy.spin(node)
-    except (KeyboardInterrupt, ExternalShutdownException):
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()

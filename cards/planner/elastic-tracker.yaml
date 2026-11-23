@@ -9,7 +9,7 @@ implementation:
   component_id: elastic_tracker_native
   manifest: deployment/elastic_tracker_humble/component.yaml
   shared_runtime: elastic-tracker
-  coupled_capabilities: []
+  coupled_capabilities: [tool.elastic-following]
 inputs:
 - id: target_state
   capability_type: perception/target/state/3d

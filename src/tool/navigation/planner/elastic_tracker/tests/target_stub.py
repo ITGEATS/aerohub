@@ -1,10 +1,10 @@
-"""Independent analytical target; all motion geometry supplied by the caller."""
+"""Replay fixture for running the Planner without a Following Tool."""
 import argparse
 import math
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-from .core import split_ns
+from uav_elastic_tracker_adapter.core import split_ns
 
 
 def main(args=None):

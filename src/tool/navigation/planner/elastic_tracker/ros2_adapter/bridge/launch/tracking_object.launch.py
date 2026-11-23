@@ -1,6 +1,10 @@
-"""Run the shared RGB-D detector and TrackObject with Elastic as motion owner."""
+"""Run shared observation services and the Elastic-backed Following Tool."""
+from pathlib import Path
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -10,6 +14,7 @@ def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     sim_time = ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)
     query = ParameterValue(LaunchConfiguration('query'), value_type=str)
+    following = Path(get_package_share_directory('uav_elastic_tracker_adapter')) / 'launch/following.launch.py'
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value='drone0'),
         DeclareLaunchArgument('use_sim_time', default_value='true', choices=['true', 'false']),
@@ -39,6 +44,9 @@ def generate_launch_description():
                  'max_prediction_time': ParameterValue(
                      LaunchConfiguration('max_prediction_time'), value_type=float),
              }], output='screen'),
-        Node(package='uav_elastic_tracker_adapter', executable='elastic_tracking_bridge',
-             namespace=namespace, parameters=[{'use_sim_time': sim_time}], output='screen'),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(str(following)),
+                                 launch_arguments={
+                                     'namespace': namespace,
+                                     'use_sim_time': LaunchConfiguration('use_sim_time'),
+                                 }.items()),
     ])

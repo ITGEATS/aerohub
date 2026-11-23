@@ -15,5 +15,4 @@ setup(name=name, version='0.1.0', packages=find_packages(),
           'elastic_tracker_native_rpc = ' + name + '.native_rpc:main',
           'elastic_tracker_native_node = ' + name + '.native_execution:main',
           'elastic_tracker_input_node = ' + name + '.input_node:main',
-          'elastic_tracking_bridge = ' + name + '.elastic_tracking_bridge:main',
-          'elastic_tracker_target_stub = ' + name + '.target_stub:main']})
+          'elastic_following = ' + name + '.following:main']})
