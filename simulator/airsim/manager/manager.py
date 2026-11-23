@@ -13,6 +13,11 @@ import sys
 import time
 
 REPOSITORY = Path(__file__).resolve().parents[3]
+if __name__ == "__main__":
+    repository_python = REPOSITORY / ".venv/bin/python"
+    if os.access(repository_python, os.X_OK) and Path(sys.prefix) != repository_python.parents[1]:
+        os.execv(repository_python, [str(repository_python), __file__, *sys.argv[1:]])
+
 sys.path.insert(0, str(REPOSITORY))
 
 from deployment.swarm.view import apply_overhead_view, camera_options
@@ -172,8 +177,8 @@ def start_overhead_tracker(profile, settings, runtime_settings, directory):
 def require_tracker_dependencies():
     if importlib.util.find_spec('msgpack') is None:
         raise ImportError(
-            f'overhead view tracker needs msgpack for {sys.executable}; install python3-msgpack '
-            'or pip install -r deployment/swarm/requirements.txt (see simulator/airsim/README.md)'
+            f'overhead view tracker needs msgpack for {sys.executable}; run '
+            'bash simulator/setup_python.sh --airsim-only (see simulator/airsim/README.md)'
         )
 
 

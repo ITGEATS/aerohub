@@ -14,6 +14,11 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+if __name__ == "__main__":
+    repository_python = ROOT / ".venv/bin/python"
+    if os.access(repository_python, os.X_OK) and Path(sys.prefix) != repository_python.parents[1]:
+        os.execv(repository_python, [str(repository_python), __file__, *sys.argv[1:]])
+
 sys.path.insert(0, str(ROOT))
 
 from simulator.manager.config import load_profile, runtime_manifest
