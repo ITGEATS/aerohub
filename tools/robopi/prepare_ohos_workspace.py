@@ -37,7 +37,7 @@ def main():
     parser.add_argument('--ros-install', required=True, type=Path)
     parser.add_argument('--sysdeps', type=Path, default=os.environ.get('OHOS_SYSDEPS'))
     parser.add_argument('--work-root', type=Path,
-                        default=os.environ.get('OHOS_WORK_ROOT', 'log/airsim/ohos-as2'))
+                        default=os.environ.get('OHOS_WORK_ROOT', 'deployment/robopi/workspace/ohos-as2'))
     parser.add_argument('--source-cache', type=Path,
                         help='Optional directory of Git repositories named as the locked dependencies')
     args = parser.parse_args()

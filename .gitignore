@@ -122,3 +122,10 @@ rosbag2_*/
 /config/inference.cloud.local.yaml
 /config/inference.cloud.secrets.env
 /config/.inference.cloud.*
+
+# Machine-local configuration overrides across components
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.toml
+/deployment/robopi/workspace/

@@ -12,7 +12,7 @@ docker info >/dev/null 2>&1 || { echo 'Docker unavailable; cannot check shared b
 if docker container inspect aerohub-oh-ros-build >/dev/null 2>&1; then
   echo 'Shared builder is occupied; leave its inputs unchanged' >&2; exit 1
 fi
-work=${OHOS_WORK_ROOT:-log/airsim/ohos-as2}
+work=${OHOS_WORK_ROOT:-deployment/robopi/workspace/ohos-as2}
 [[ "$work" == /* ]] || work="$root/$work"
 [[ -d "$work/root" && -d "$work/ws/src" ]] || { echo 'Prepare the OHOS workspace first' >&2; exit 1; }
 python3 - "$root" "$work" "$component" <<'PY'
