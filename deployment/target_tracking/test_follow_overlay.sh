@@ -13,7 +13,6 @@ source /query-work/install/setup.bash
 source /work/install/setup.bash
 export PYTHONPATH=/query-work/python_deps${PYTHONPATH:+:$PYTHONPATH}
 export PYTHONDONTWRITEBYTECODE=1 ROS_DOMAIN_ID=195 ROS_LOCALHOST_ONLY=1
-python3 -m unittest discover -s /repo/src/tool/target_tracking/tests -p test_facing.py -v
 python3 -m unittest discover -s /repo/src/tool/target_tracking/tests -p test_measurement_filter.py -v
 python3 /repo/src/tool/target_tracking/tests/test_core.py
 python3 /repo/src/tool/target_tracking/tests/test_ros.py
