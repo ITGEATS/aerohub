@@ -254,8 +254,10 @@ def main():
     parser.add_argument('--fault', choices=['none','cancel','stale','worker-exit'], default='none')
     parser.add_argument('--goal', type=float, nargs=3, default=[0., 15., 2.])
     parser.add_argument('--timeout', type=float, default=90.)
-    parser.add_argument('--rpc-port', type=int, default=45471)
+    parser.add_argument('--rpc-port', type=int, default=None)
     args = parser.parse_args()
+    if args.rpc_port is None:
+        args.rpc_port = json.loads(Path(__file__).with_name('settings.json').read_text())['ApiServerPort']
     if not math.isfinite(args.timeout) or args.timeout <= 0 or not all(math.isfinite(v) for v in args.goal):
         parser.error('timeout must be finite positive; goal must be finite')
     args.output.mkdir(parents=True, exist_ok=True)

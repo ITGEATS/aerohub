@@ -24,6 +24,7 @@ INPUTS = (
     "deployment/falcon/prepare_params.py",
     "deployment/falcon/prepare_workstation.py",
     "deployment/falcon/run.py",
+    "deployment/falcon/profile.json",
     "deployment/falcon/source_manifest.py",
     "deployment/falcon/tests",
     "simulator/airsim/sensors/uav_as2_sensor_adapter/rpc.py",

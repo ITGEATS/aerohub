@@ -104,7 +104,15 @@ python3 deployment/inference/setup_models.py --config config/inference.grounding
 
 在 `inference.models` 中填写其 ID，脚本先验证全部选择，拒绝未知或重复 ID，再按顺序调用各模型 `setup.sh`；失败停止。`--check-cuda` 将同名标志转交模型准备脚本。空列表不操作，不卸载未选模型、不启动服务。现有本地配置如选择尚未登记的模型，会明确报错，不自动改写用户配置。
 
-manifest 不重复保存模型版本、权重或依赖。新增模型必须有 README、setup.sh、pyproject.toml 和 uv.lock，CUDA 过程使用 [model-migration-cuda](../../../skill/model-migration-cuda/SKILL.md)，云端模型不要求本地权重或 CUDA 检查。每模型环境与 ROS overlay 分离，不重建稳定 AS2 镜像。
+<a id="model-delivery"></a>
+
+## 模型交付
+
+每个模型目录提供 `README.md`，写清支持的后端、前置环境、源码和权重来源、依赖、准备与启动步骤，以及实际验证范围。需要手动下载或复制时，说明来源、校验方法和目标位置。准备脚本按需提供，README 给出可执行的准备步骤。
+
+模型根目录保存共用文件。多后端模型可将专属代码和产物声明放在 `cuda/`、`houmo/` 等目录，按实际支持的后端建目录。使用独立 `uv` 环境的模型维护 `pyproject.toml` 和 `uv.lock`。板端模型在 README 说明其依赖的板端 runtime 和部署入口。
+
+接入公共 `setup_models.py` 时，仍按该入口约定提供 `setup.sh` 和锁定环境。CUDA 和 Houmo 迁移分别见 [CUDA Skill](../../../skill/model-migration-cuda/SKILL.md) 和 [Houmo Skill](../../../skill/model-migration-houmo/SKILL.md)。
 
 ## 公共运行约定
 

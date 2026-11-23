@@ -102,7 +102,9 @@ def main():
                 if kind == socket.SOCK_STREAM: sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
                 try: sock.bind(('0.0.0.0',port))
                 except OSError as exc: raise RuntimeError(f'Port {port}, type {kind} unavailable') from exc
-    settings = json.loads((ROOT/'simulator/airsim/scenarios/super_forest/settings.json').read_text())
+    profile_path = Path(__file__).with_name('profile.json')
+    profile = json.loads(profile_path.read_text())
+    settings = json.loads((profile_path.parent / profile['settings']).read_text())
     if args.forest or args.short:
         if not args.native: raise RuntimeError('--forest requires --native')
         task=json.loads((args.task or ROOT/'deployment/airsim/demos/ipc_navigation/forest-task.json').read_text())
@@ -129,7 +131,6 @@ def main():
     (out/'settings.json').write_text(json.dumps(settings,indent=2)+'\n')
     settings['Vehicles']['PX4']['TcpPort'] = args.relay_port
     (out/'px4-settings.json').write_text(json.dumps(settings,indent=2)+'\n')
-    profile = json.loads((ROOT/'simulator/airsim/scenarios/catora_open_field/profile.json').read_text())
     profile['settings'] = str(out/'settings.json')
     (out/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     config = yaml.safe_load((ROOT/'deployment/airsim/config/as2/config.yaml').read_text())

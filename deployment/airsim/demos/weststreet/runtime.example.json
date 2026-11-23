@@ -1,7 +1,4 @@
 {
-  "base_profile": "~/aerohub-runtime/projectairsim/course/profile.json",
-  "ue_root": "~/UE_installed_build",
-  "project": "~/UE_installed_build/WestStreet/PAirSim.uproject",
   "navigation_workspace": "~/aerohub-runtime/weststreet/navigation",
   "client_workspace": "~/aerohub-runtime/weststreet/clients",
   "system_workspace": "~/aerohub-runtime/weststreet/system",

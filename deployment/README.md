@@ -14,9 +14,8 @@ OHOS 开发环境由用户先按官方[设备开发环境搭建和开发指南](
 镜像、容器与角色不必一一对应：flight_board 同时包装模拟飞控与平台采集桥，
 onboard_computer 是可选 PC 开发环境。完整职责、接口和当前实现差异统一见上述主说明。
 
-工作站任务容器选用 `osrf/ros:humble-desktop-full-jammy` 作为基线，复用 onboard
-开发环境的底层；任务接口在外部工作区补编译，运行时显式加载 overlay，不启动算法和 AS2 执行节点。
-[SUPER 四方入口](airsim/demos/super_forest/README.md#four-part)已实现此方式，复用原镜像，不新增正式镜像交付项。
+工作站任务容器默认使用 onboard 镜像的本地 `workstation:<版本>` 别名。任务接口在外部工作区补编译，运行时显式启动 Mission 并加载 overlay。
+[SUPER 四方入口](airsim/demos/super_forest/README.md#four-part)提供别名和使用命令。
 
 ## 目录与交付边界
 
@@ -42,7 +41,7 @@ RoboPi 原生运行 AS2，不运行 Docker。SDK、目标 ROS 和第三方依赖
 3. 按[项目适配说明](oh-ros-build/README.md#首次初始化项目工作区)准备隔离工作区，填写 `.env`。
 4. 按[固定镜像说明](flight_board/README.md#使用固定镜像)加载 flight_board tar 和校验文件，或按[GHCR 说明](releases/README.md#从-ghcr-获取)拉取固定镜像并设置 `.env`。
 5. 从 [AirSim 仓库 Releases](https://github.com/microsoft/AirSim/releases) 下载对应 Linux 场景，按[场景说明](../simulator/airsim/config/README.md)配置 AirSim binary 资源，准备 PC 与板端网络。
-6. 按所选 Demo 准备计算环境：SUPER 四方任务复用 `osrf/ros:humble-desktop-full-jammy` 并补编译外部接口；全 PC 或其他 Demo 按各自说明加载 onboard_computer 镜像。
+6. 按所选 Demo 准备计算环境：SUPER 四方任务通过 workstation 别名复用 onboard 镜像并补编译外部接口；全 PC 或其他 Demo 按各自说明加载 onboard_computer 镜像。
 7. 按[RoboPi 文档](robopi/README.md)编译、部署、启动和验收；Library 接入必须完成 RoboPi 验证，PC 验证不能替代。
 
 PC 运行组合为：
@@ -63,9 +62,20 @@ RoboPi：OHOS 算法、Adapter、AS2 原生进程
 `deployment/airsim/as2/`，传感器节点和订阅检查位于 `simulator/airsim/sensors/`。
 各部署入口复用这些文件，不维护另外一份实现。
 
-`.env` 保存设备、网络和构建目录，`simulator/airsim/config/resources.local.yaml` 保存外部场景路径。
+`.env` 保存设备、网络和构建目录，`config/resources.local.yaml` 保存外部场景路径。
 两者均由用户从模板创建，不提交 Git；已有本机文件不要覆盖。
 SDK、依赖快照、构建缓存与本机验收日志放在忽略目录，不属于源码交付。
+
+### Demo 场景绑定
+
+| Demo | 默认资源 | 配置与运行产物 |
+| --- | --- | --- |
+| CAT-ORA Open Field、Swarm Open Field | `airsim_nh` | 场景目录的 profile 和 settings。Swarm 启动器按部署拓扑写出实际配置。 |
+| SUPER Forest、IPC Control、Falcon、GCOPTER | `airsim_nh` | 各入口目录的 profile 引用共用森林 settings。启动器写出本轮 profile、AirSim settings 和 PX4 settings。 |
+| YOPO Single、SPF Language Nav（Linux） | `airsim_nh` | 各 Demo 的 profile 和 settings。启动器写出本轮 profile 和两侧 settings。 |
+| CityNav Blocks、SPF Language Nav（WSL） | `airsim_blocks_windows` | 各 Demo 的 settings。启动器保存本轮 settings 并交给 Windows Blocks。 |
+| ProjectAirSim Course | `projectairsim_course_hud`、`projectairsim_course_profile` | 课程包提供 PX4 profile 及其 scene/robot 配置。启动器生成 HUD profile，YOPO 和 DiffPhys 还会生成专用 scene/robot 配置。 |
+| WestStreet | `ue5_root`、`projectairsim_weststreet_project`、`projectairsim_course_profile` | 以课程包的 PX4 配置为基础，按 Demo 生成 WestStreet profile、scene 和 robot 配置。 |
 
 ## 仓库验收与运行验收
 

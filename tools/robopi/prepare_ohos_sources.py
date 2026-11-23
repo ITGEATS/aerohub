@@ -10,7 +10,7 @@ import tarfile
 import io
 
 root = Path(__file__).resolve().parents[2]
-work_root = Path(os.environ.get('OHOS_WORK_ROOT', 'log/airsim/ohos-as2')).expanduser()
+work_root = Path(os.environ.get('OHOS_WORK_ROOT', 'deployment/robopi/workspace/ohos-as2')).expanduser()
 if not work_root.is_absolute():
     work_root = root / work_root
 workspace = work_root / 'ws/src'

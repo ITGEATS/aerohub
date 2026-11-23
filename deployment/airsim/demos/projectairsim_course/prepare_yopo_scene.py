@@ -1,9 +1,10 @@
 import json,pathlib,sys,copy,math,hashlib
 root=pathlib.Path.cwd();sys.path.insert(0,str(root/'simulator/projectairsim'))
 import commentjson
-base=root/'log/projectairsim/package-course-wmm'
-profile=json.loads((base/'profile.json').read_text())
-source=pathlib.Path(profile['scene_config']);dest=root/'log/projectairsim/yopo-course-config'
+from run_super import profile_path
+base=profile_path()
+profile=json.loads(base.read_text())
+source=base.parent/pathlib.Path(profile['scene_config']).expanduser();dest=root/'log/projectairsim/yopo-course-config'
 dest.mkdir(parents=True,exist_ok=True)
 scene=commentjson.loads(source.read_text());robot=commentjson.loads((source.parent/scene['actors'][0]['robot-config']).read_text())
 # Use the native sensor camera, not the stabilized Chase observer camera.

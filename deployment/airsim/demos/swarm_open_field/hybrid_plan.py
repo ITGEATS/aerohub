@@ -25,14 +25,12 @@ NATIVE_PARAMETERS = (
 MIN_VEHICLES = 3
 MAX_VEHICLES = 7
 # sim_startup, the clock/sensor containers and the board RPC relay use this AirSim RPC port.
-RPC_PORT = 42471
-BOARD_RPC_RELAY_PORT = 42473
 # The centralized proxy and the adapter that queries it both use loopback only.
 GOAL_OFFSET_NED_M = (6.0, 0.0)
 GOAL_DOWN_NED_M = -3.0
 
 
-def validate_demo_topology(config: dict[str, Any], topology: dict[str, Any]) -> None:
+def validate_demo_topology(topology: dict[str, Any]) -> None:
     count = topology["vehicle_count"]
     if not MIN_VEHICLES <= count <= MAX_VEHICLES:
         raise ConfigError(
@@ -47,8 +45,7 @@ def validate_demo_topology(config: dict[str, Any], topology: dict[str, Any]) -> 
                 "native launch, flight mission and audit address vehicles as "
                 "drone<i>/Drone<i>; set name_prefix=drone and airsim_name_prefix=Drone"
             )
-    if int(config["airsim"].get("rpc_port", RPC_PORT)) != RPC_PORT:
-        raise ConfigError(f"airsim.rpc_port must be {RPC_PORT} for this entry")
+
 
 
 def formation_offsets_enu(
@@ -152,7 +149,7 @@ def build_plan(
     native_parameters: dict[str, Any],
 ) -> dict[str, Any]:
     topology = resolve_topology(config)
-    validate_demo_topology(config, topology)
+    validate_demo_topology(topology)
     scenario = next(
         (item for item in topology["scenarios"] if item["name"] == scenario_name), None
     )
@@ -180,10 +177,17 @@ def build_plan(
         }
     }
     board = topology["board_vehicle"]
+    settings = render_airsim_settings(config)
+    rpc_port = settings["ApiServerPort"]
+    board_rpc_relay_port = config["airsim"].get("board_rpc_relay_port", rpc_port + 2)
+    if (type(board_rpc_relay_port) is not int or
+            not 1 <= board_rpc_relay_port <= 65535 or board_rpc_relay_port == rpc_port):
+        raise ConfigError("airsim.board_rpc_relay_port must be a valid port distinct from AirSim RPC")
     return {
         "topology": topology,
+        "board_rpc_relay_port": board_rpc_relay_port,
         "scenario": scenario,
-        "settings": render_airsim_settings(config),
+        "settings": settings,
         "fleet": fleet,
         "board_fleet": {"vehicles": {board["name"]: fleet["vehicles"][board["name"]]}},
         "deployment": {

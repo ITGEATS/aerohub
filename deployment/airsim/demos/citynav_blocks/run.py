@@ -35,16 +35,15 @@ import time
 
 ROOT = Path(__file__).resolve().parents[4]
 APP = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+from simulator.manager.resources import resolve_resource
+from deployment.inference.vision_language_environment import prepare as prepare_vision_language
 FLIGHT = 'ghcr.io/popc0rn7/aerohub/flight-board:v0.1.1'
 ONBOARD = 'ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1'
 GROUND = 'osrf/ros:humble-desktop-full-jammy'
-# Local machine paths are NEVER committed (contrib guide 6.2): point the
-# Blocks WindowsNoEditor directory at your own install through this
-# environment variable, e.g.
-#   $env:CITYNAV_BLOCKS_PATH = '<...>\Blocks\WindowsNoEditor'
-BLOCKS_WIN_PATH = os.environ.get('CITYNAV_BLOCKS_PATH', '')
-RPC_PORT = 45481
-TCP_PORT = 4581
+SETTINGS = json.loads((APP / 'settings.json').read_text())
+RPC_PORT = SETTINGS['ApiServerPort']
+TCP_PORT = SETTINGS['Vehicles']['PX4']['TcpPort']
 SAM_PORT, CLIP_PORT = 8100, 8101
 AGENT_PORT = 8971
 PX4_INSTANCE, PX4_SYSTEM_ID = 70, 71
@@ -57,7 +56,6 @@ BLOCKS_ARGS = os.environ.get(
     '"-ExecCmds=r.Streaming.PoolSize 128"')
 ROS_WS = '/repo/log/citynav/pc-e2e/ros_ws'
 WORKSTATION_WS = '/repo/log/citynav/pc-e2e/workstation/ws'
-CLOUD_ENV = str(ROOT / 'log' / 'citynav' / 'pc-e2e' / 'cloud-env')
 INFERENCE_CONFIG = str(ROOT / 'config' / 'inference.cloud.local.yaml')
 
 
@@ -117,11 +115,7 @@ def check_owner(output, role):
 
 def restart_blocks(output, observe=False):
     """Blocks must be fresh so PX4 is the first TCP client (single-slot server)."""
-    if not BLOCKS_WIN_PATH:
-        raise RuntimeError(
-            'CITYNAV_BLOCKS_PATH is not set; point it at your local Blocks '
-            'install directory (the one containing Blocks.exe) before '
-            'running start/mission')
+    blocks_path = os.environ.get('CITYNAV_BLOCKS_PATH') or str(resolve_resource('airsim_blocks_windows'))
     settings = json.loads((APP / 'settings.json').read_text())
     if observe:
         # AGENTS multi-deployment rule: centroid-tracking top-down view through
@@ -169,7 +163,7 @@ def restart_blocks(output, observe=False):
         # render-load arguments for the z-oscillation attribution experiments
         # (inner double quotes are escaped for the PowerShell single-quoted
         # string, matching the historical working form).
-        "$tr = '" + BLOCKS_WIN_PATH + "\\\\Blocks.exe "
+        "$tr = '" + blocks_path.replace("'", "''") + "\\\\Blocks.exe "
         + BLOCKS_ARGS.replace('"', '\\"') + "'; "
         "schtasks /create /tn " + TASK_NAME + " /tr $tr /sc once /st 00:00 /f | Out-Null; "
         "schtasks /run /tn " + TASK_NAME)
@@ -193,6 +187,7 @@ def restart_blocks(output, observe=False):
         if time.time() > deadline:
             raise RuntimeError('Blocks TCP %d never listened' % TCP_PORT)
         time.sleep(2)
+    return blocks_path
 
 
 def windows_ipv4_candidates():
@@ -280,8 +275,7 @@ def launch_inference(output):
                 '-e', 'INFERENCE_MODEL_CONFIG=/run/inference/models.yaml',
                 '-e', 'INFERENCE_ROS_PARAMETERS=/evidence/inference.yaml',
                 '-e', 'VEHICLE_NAMESPACE=drone0'],
-           mounts=['-v', CLOUD_ENV + ':/cloud-env:ro',
-                   '-v', INFERENCE_CONFIG + ':/run/inference/models.yaml:ro'],
+           mounts=['-v', INFERENCE_CONFIG + ':/run/inference/models.yaml:ro'],
            entrypoint='bash')
 
 
@@ -312,12 +306,12 @@ def start(output, observe=False):
                     hashlib.sha256(path.read_bytes()).hexdigest()
     (output / 'source-manifest.json').write_text(json.dumps(source_manifest, indent=2) + '\n')
 
-    restart_blocks(output, observe)
+    blocks_path = restart_blocks(output, observe)
     host, probe = probe_host(output)
     (output / 'topology.json').write_text(json.dumps(
         {'host_address': host, 'rpc_port': RPC_PORT, 'tcp_port': TCP_PORT,
          'sam_port': SAM_PORT, 'clip_port': CLIP_PORT,
-         'blocks_path': BLOCKS_WIN_PATH, 'overhead_view': bool(observe),
+         'blocks_path': blocks_path, 'overhead_view': bool(observe),
          'host_probe': probe['report']}, indent=2) + '\n')
     generate_planner_params(output, host)
 
@@ -407,7 +401,7 @@ def mission(output, args):
                (' --expect-fault' if args.expect_fault else '') +
                (' --expect-stuck' if args.expect_stuck else '') +
                ' --timeout ' + str(args.timeout) +
-               ' --rpc-host ' + host + ' --rpc-port %d' % RPC_PORT +
+               ' --rpc-host ' + host + ' --rpc-port %d' % topology['rpc_port'] +
                ' --target ' + ' '.join(str(v) for v in args.target) +
                ' --spawn ' + ' '.join(str(v) for v in args.spawn)]
     observer = None
@@ -513,28 +507,9 @@ def prepare(output):
          'uav_inference_interfaces uav_inference '
          'uav_follow_path_execution '
          '--event-handlers console_direct+'])
-    prepare_cloud_worker()
+    prepare_vision_language(ONBOARD)
     prepare_ground()
 
-
-def prepare_cloud_worker():
-    """uv-locked isolated worker env for the shared vision-language model
-    (serves /infer and /infer_frames), built inside the target image so the
-    Python ABI matches the runtime container (SPF same method)."""
-    import shutil
-    uv = shutil.which('uv')
-    if not uv:
-        raise RuntimeError('Install uv to prepare the isolated Cloud worker environment')
-    (ROOT / 'log/citynav/pc-e2e').mkdir(parents=True, exist_ok=True)
-    run(['docker', 'run', '--rm', '-v', str(ROOT) + ':/repo:ro',
-         '-v', CLOUD_ENV + ':/cloud-env',
-         '-v', uv + ':/usr/local/bin/uv:ro', '--entrypoint', 'bash', ONBOARD, '-lc',
-         'mkdir -p /tmp/cloud-build/models/vision_language /tmp/cloud-build/runtime && '
-         'cp -a /repo/src/basic_function/inference/runtime/. /tmp/cloud-build/runtime/ && '
-         'cp /repo/src/basic_function/inference/models/vision_language/pyproject.toml '
-         '/repo/src/basic_function/inference/models/vision_language/uv.lock /tmp/cloud-build/models/vision_language/ && '
-         'UV_PROJECT_ENVIRONMENT=/cloud-env uv sync --locked --reinstall-package aerohub-inference-runtime '
-         '--python /usr/bin/python3 --project /tmp/cloud-build/models/vision_language'])
 
 
 def prepare_ground():

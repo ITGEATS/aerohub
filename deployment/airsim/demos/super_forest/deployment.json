@@ -1,0 +1,10 @@
+{
+  "ports": {
+    "rpc": 43472,
+    "tcp": 4881,
+    "relay": 4981,
+    "agent": 8951,
+    "control_local": 15641,
+    "control_remote": 15681
+  }
+}

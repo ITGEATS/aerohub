@@ -9,7 +9,7 @@ sys.path.insert(0,str(ROOT))
 from sim_startup import launch_vehicles
 from orchestrate import Workers
 from deployment.swarm.topology import load_config
-from hybrid_plan import BOARD_RPC_RELAY_PORT,NATIVE_PARAMETERS,PREFIX,RPC_PORT,build_plan,write_plan
+from hybrid_plan import NATIVE_PARAMETERS,PREFIX,build_plan,write_plan
 
 def execute(cmd,**kw):return subprocess.run(list(map(str,cmd)),check=True,**kw)
 def manager(action,out,profile):return [sys.executable,ROOT/'simulator/manager/manager.py',action,'--profile',profile,'--run-dir',out/'scene']
@@ -49,6 +49,9 @@ def main():
     profile_data=json.loads((ROOT/'simulator/airsim/scenarios/swarm_open_field/profile.json').read_text())
     paths=write_plan(plan,out,profile_data,config['airsim']['camera'])
     settings_path=paths['settings'];profile_path=paths['profile']
+    rpc_port = int(plan['settings']['ApiServerPort'])
+    board_rpc_relay_port = plan['board_rpc_relay_port']
+    (out/'rpc-ports.json').write_text(json.dumps({'airsim':rpc_port,'board_relay':board_rpc_relay_port})+'\n')
     lock_path=ROOT/'log/airsim/robopi-runtime/cli.lock';lock_path.parent.mkdir(parents=True,exist_ok=True)
     lock=lock_path.open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     loaded=subprocess.check_output(['bash','-c','source "$1/tools/robopi/load_env.sh"; env -0','env',str(ROOT)])
@@ -81,7 +84,7 @@ def main():
     board('python3 -c '+shlex.quote(f'import hashlib;assert hashlib.sha256(open({remote+"/app.tar.gz"!r},"rb").read()).hexdigest()=={digest!r}'))
     board(f'tar -xzf {remote}/app.tar.gz -C {remote} && mkdir -p {remote}/results {remote}/runtime')
     values={'ROS_DOMAIN_ID':'91','ROS_LOCALHOST_ONLY':'0','RMW_IMPLEMENTATION':'rmw_fastrtps_cpp','FASTRTPS_DEFAULT_PROFILES_FILE':remote+'/dds.xml',
-        'CATORA_APP_ROOT':remote,'CATORA_OUTPUT':remote+'/results','AIRSIM_HOST':os.environ['PC_IP'],'AIRSIM_PORT':str(BOARD_RPC_RELAY_PORT),
+        'CATORA_APP_ROOT':remote,'CATORA_OUTPUT':remote+'/results','AIRSIM_HOST':os.environ['PC_IP'],'AIRSIM_PORT':str(board_rpc_relay_port),
         'AS2_LAUNCHER':remote+'/run_as2.py','AS2_CONFIG_FILE':remote+'/config.yaml','AS2_CONTROLLER_CONFIG_FILE':remote+'/pid.yaml',
         'AS2_FLEET_FILE':remote+'/fleet.yaml','AS2_RUNTIME_DIR':remote+'/runtime','AS2_BEHAVIORS':'takeoff,land','AS2_TF_SCOPE':'per-vehicle',
         'AS2_RESET_OOM_SCORE':'1','AS2_MAX_RSS_MB':'3072','PLANNER_STARTUP_TIMEOUT':'30.0','CATORA_PREFLIGHT_ONLY':'1' if args.preflight_only else '0',
@@ -99,7 +102,7 @@ def main():
         'native_planner_per_vehicle':True,'live_transport':'DDS UDP Ethernet; PC containers share host NIC','startup_transfer':'one-time HDC calibration and resolved YAML with SHA256'},indent=2)+'\n')
     class Relay(socketserver.BaseRequestHandler):
         def handle(self):
-            with socket.create_connection(('127.0.0.1',RPC_PORT),timeout=5) as peer:
+            with socket.create_connection(('127.0.0.1',rpc_port),timeout=5) as peer:
                 self.request.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1);peer.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
                 while True:
                     ready,_,_=select.select([self.request,peer],[],[],10)
@@ -109,17 +112,17 @@ def main():
                         if not data:return
                         (peer if source is self.request else self.request).sendall(data)
     class Server(socketserver.ThreadingTCPServer):allow_reuse_address=True;daemon_threads=True
-    relay=Server((os.environ['PC_IP'],BOARD_RPC_RELAY_PORT),Relay);threading.Thread(target=relay.serve_forever,daemon=True).start()
+    relay=Server((os.environ['PC_IP'],board_rpc_relay_port),Relay);threading.Thread(target=relay.serve_forever,daemon=True).start()
     workers=Workers(out,APP,PREFIX,args.compute_image,remote,board,hdc,pc_vehicles,plan['fleet'],count,
         scenario['name'],scenario['center_vehicle']);relays=[]
     try:
         execute(manager('start',out,profile_path)+['--timeout','90'])
-        relays=launch_vehicles(image,APP,out,PREFIX,out/'pc-dds.xml',settings_path=settings_path,vehicles=plan['sim_vehicles'])
-        execute(['docker','run','--rm','--detach','--init','--network','host','--name',PREFIX+'clock','-e','ROS_DOMAIN_ID=91','-e','VEHICLE_NAME='+board_vehicle['airsim_name'],'-e',f'AIRSIM_RPC_PORT={RPC_PORT}',
+        relays=launch_vehicles(image,APP,out,PREFIX,out/'pc-dds.xml',settings_path=settings_path,vehicles=plan['sim_vehicles'],rpc_port=rpc_port)
+        execute(['docker','run','--rm','--detach','--init','--network','host','--name',PREFIX+'clock','-e','ROS_DOMAIN_ID=91','-e','VEHICLE_NAME='+board_vehicle['airsim_name'],'-e',f'AIRSIM_RPC_PORT={rpc_port}',
             '-v',str(out/'pc-dds.xml')+':/opt/fastdds_udp.xml:ro',image,'clock'],stdout=subprocess.DEVNULL)
         for vehicle,container in zip(topology['vehicles'],containers['sensors']):
             name=vehicle['name']
-            command=f"source /opt/ros/humble/setup.bash; source /opt/platform_sensors/install/setup.bash; exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args -p use_sim_time:=true -p rpc_port:={RPC_PORT} -p vehicle_name:={vehicle['airsim_name']} -p vehicle_namespace:={name} -p settings_file:=/config/settings.json -p camera_enabled:=false -r /tf_static:=/{name}/tf_static"
+            command=f"source /opt/ros/humble/setup.bash; source /opt/platform_sensors/install/setup.bash; exec ros2 run uav_as2_sensor_adapter airsim_sensor_node --ros-args -p use_sim_time:=true -p rpc_port:={rpc_port} -p vehicle_name:={vehicle['airsim_name']} -p vehicle_namespace:={name} -p settings_file:=/config/settings.json -p camera_enabled:=false -r /tf_static:=/{name}/tf_static"
             execute(['docker','run','--rm','--detach','--init','--network','host','--name',container,'-e','ROS_DOMAIN_ID=91','-e','FASTRTPS_DEFAULT_PROFILES_FILE=/run/dds.xml',
                 '-v',str(out/'pc-dds.xml')+':/run/dds.xml:ro','-v',str(settings_path)+':/config/settings.json:ro','--entrypoint','bash',image,'-c',command],stdout=subprocess.DEVNULL)
         if not args.preflight_only:
@@ -141,7 +144,7 @@ def main():
             '-e','ROS_DOMAIN_ID=91','-e','ROS_LOCALHOST_ONLY=0','-e','RMW_IMPLEMENTATION=rmw_fastrtps_cpp',
             '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/run/dds.xml','-e','AEROHUB_ROLE=ground',
             '-e','CATORA_NODE_NAME=swarm_ground_station','-e','CATORA_APP_ROOT=/opt/swarm_app','-e','CATORA_OUTPUT=/results',
-            '-e','AIRSIM_HOST=127.0.0.1','-e',f'AIRSIM_PORT={RPC_PORT}','-e','SWARM_PROXY_HOST='+proxy_host,
+            '-e','AIRSIM_HOST=127.0.0.1','-e',f'AIRSIM_PORT={rpc_port}','-e','SWARM_PROXY_HOST='+proxy_host,
             '-e','AEROHUB_SWARM_BOARD_VEHICLE='+board_vehicle['name'],'-e','AEROHUB_SWARM_VEHICLE_COUNT='+str(count),
             '-e','AEROHUB_SWARM_SCENARIO='+scenario['name'],'-e','AEROHUB_SWARM_CENTER='+scenario['center_vehicle'],
             '-e','AEROHUB_SWARM_FAULT='+args.fault_scenario,

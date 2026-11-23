@@ -117,10 +117,12 @@ def main():
     parser.add_argument('--spawn', type=float, nargs=3, default=[10.0, 10.0, 45.0],
                         help='teleport spawn x y yaw_deg')
     parser.add_argument('--rpc-host', default=None)
-    parser.add_argument('--rpc-port', type=int, default=45481)
+    parser.add_argument('--rpc-port', type=int, default=None)
     parser.add_argument('--fault', choices=['none', 'cancel', 'stale', 'vlm-down'], default='none')
     parser.add_argument('--timeout', type=float, default=420.0)
     args = parser.parse_args()
+    if args.rpc_port is None:
+        args.rpc_port = json.loads(Path(__file__).with_name('settings.json').read_text())['ApiServerPort']
     args.output.mkdir(parents=True, exist_ok=True)
     # exist_ok=True: the observer container may legitimately create the case
     # directory first; overwrite protection stays in run.py, which refuses an

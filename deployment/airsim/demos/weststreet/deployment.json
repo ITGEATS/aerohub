@@ -1,0 +1,11 @@
+{
+  "ports": {
+    "topics": 19889,
+    "services": 19890,
+    "hud": 19891,
+    "scene": 19892,
+    "inference": 18002,
+    "xrce": 18991,
+    "native_relay": 20189
+  }
+}

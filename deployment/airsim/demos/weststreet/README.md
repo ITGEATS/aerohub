@@ -466,3 +466,5 @@ p/v实验入口：`--tangent-follow --tangent-lead 1 --continuous-yaw
 YOLO保持0.35、无ROI。该候选一次65秒任务通过，但240秒任务在约
 78.8秒因广场柱墩遮挡失效，两圈尚未通过。位置前看不是速度前馈，
 距离允许浮动，不能声称严格保持8米。详见VALIDATION-tool-demo.md。
+
+WestStreet 默认使用资源表中的 `ue5_root`、`projectairsim_weststreet_project` 和 `projectairsim_course_profile`。启动脚本以课程包的 PX4 配置为基础，生成本次的 WestStreet scene 和 robot 配置。旧的 runtime JSON 场景路径及显式命令行参数可继续覆盖默认资源。

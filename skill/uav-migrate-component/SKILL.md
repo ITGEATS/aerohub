@@ -5,7 +5,7 @@ description: 将无人机算法或外部组件迁移为目标 PC 环境中的完
 
 # 迁移无人机组件
 
-本 Skill 是 PC 侧完整迁移 Harness：从上游事实基线开始，直到 Function/Behavior 接口和适用平台验证完成。注册交付使用 [`uav-package-component`](../uav-package-component/SKILL.md)，板端安装使用 [`deploy-lib`](../deploy-lib/SKILL.md)。先读项目 `AGENTS.md`；复现任务在 `skill/temp/<对象>/` 持续记录，证据放在 `log/<对象>/`。
+本 Skill 是 PC 侧完整迁移 Harness：从上游事实基线开始，直到 Function/Behavior 接口和适用平台验证完成。注册交付使用 [`uav-package-component`](../uav-package-component/SKILL.md)，板端安装使用 [`deploy-lib`](../deploy-lib/SKILL.md)。先读项目 `AGENTS.md`；复现任务的过程记录和保留证据放在 `dev/<对象>/`，`log/` 保存可清理的临时运行输出。
 
 ## 1. 锁定上游
 

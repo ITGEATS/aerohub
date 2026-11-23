@@ -245,7 +245,7 @@ class ManagerTrackerDependencyTest(unittest.TestCase):
     def test_missing_msgpack_fails_before_airsim_starts(self):
         manager = self.load_manager()
         with mock.patch.object(manager.importlib.util, "find_spec", return_value=None):
-            with self.assertRaisesRegex(ImportError, "requirements.txt"):
+            with self.assertRaisesRegex(ImportError, "setup_python.sh --airsim-only"):
                 manager.load_profile(ROOT / "simulator/airsim/scenarios/swarm_open_field/profile.json")
 
     def test_tracker_health_requires_fresh_structured_updates(self):
