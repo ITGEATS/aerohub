@@ -1,0 +1,11 @@
+FROM ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.0
+USER root
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+WORKDIR /opt/yopo-following
+COPY src/tool/navigation/interfaces src/uav_planner_interfaces
+COPY src/tool/system/motion_resource src/uav_motion_resource
+RUN source /opt/ros/humble/setup.bash && \
+    colcon build --base-paths src --executor sequential --cmake-args -DBUILD_TESTING=OFF
+COPY deployment/yopo_tracker_humble/following_action.py .
+COPY deployment/yopo_tracker_humble/following_entrypoint.sh .
+ENTRYPOINT ["/bin/bash", "/opt/yopo-following/following_entrypoint.sh"]

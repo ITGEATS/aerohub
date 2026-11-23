@@ -41,12 +41,13 @@ landed/disarmed并决定后续普通降落。应急保护、人工接管与权�
 ## 运动互斥边界
 
 公共纯Python包 `uav_motion_resource` 提供每车辆命名空间的 flock 和占用记录。
-System和SUPER的 `NavigateToPose` 在接收任务时原子获取，确认停止后释放。
+System、SUPER 的 `NavigateToPose` 和 Elastic／YOPO-Tracker 的公共 `FollowObject`
+在接收任务时原子获取，确认停止后释放。
 进程退出或停止未确认时记录保留，不按TTL清除。部署必须让两者使用相同
 `AEROHUB_MOTION_LOCK_DIR`，跨算力容器须挂载同一宿主目录；记录还应跨容器重建保留。
 默认目录为 `/tmp/aerohub-motion`，仅适合同一容器进程互斥，不保证容器重建后的恢复。
 
-当前互斥仅覆盖这两个已接入的托管入口；YOPO、旧enable入口、原生Behavior及平台
+当前互斥覆盖上述托管入口；YOPO Navigation、各组件的底层启停入口、原生 Behavior 及平台
 直连客户端不在覆盖范围。该部署不得同时启动这些旁路作为运动控制方。
 本版不宣称实现仓库全部Planner的全局资源仲裁或应急优先级。
 

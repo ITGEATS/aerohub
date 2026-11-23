@@ -1,0 +1,10 @@
+world_frame: drone0/odom
+odom_topic: /drone0/elastic_tracker/odom
+target_topic: /elastic_tracker/target_odom
+depth_topic: /drone0/sensor_measurements/front_center/depth_planar/image
+depth_encodings: {32FC1: metres, 16UC1: millimetres}
+camera_source: upstream/src/mapping/config/camera.yaml
+camera_note: Upstream example only. Supply actual CameraInfo/extrinsics before platform validation.
+target_height: source_before_upstream_plus_one_metre
+twist_linear: world_ENU
+clock_source: ROS2_/clock_forwarded_once_to_isolated_ROS1_master

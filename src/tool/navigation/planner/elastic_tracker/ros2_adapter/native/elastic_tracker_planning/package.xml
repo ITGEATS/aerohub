@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>elastic_tracker_planning</name><version>0.1.0</version>
+  <description>AeroHub build integration of locked Elastic-Tracker ROS 2 sources.</description>
+  <maintainer email="maintainers@example.com">AeroHub</maintainer>
+  <license>GPL-3.0-only</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>elastic_tracker_mapping</depend>
+  <depend>elastic_tracker_traj_opt</depend>
+  <depend>elastic_tracker_decomp</depend>
+  <depend>quadrotor_interfaces</depend>
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>pcl_conversions</depend>
+  <depend>ament_index_cpp</depend>
+  <depend>eigen</depend>
+  <depend>libpcl-all-dev</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

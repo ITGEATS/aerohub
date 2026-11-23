@@ -1,0 +1,25 @@
+# Exact values: upstream/src/planning/planning/launch/planning.launch;
+# visibility/tracking weights: upstream simulation1.launch.
+plan_hz: 20
+# Future splice epoch for direct, acknowledged execution.
+execution_handoff_lead_s: 0.2
+K: 8
+# User-selected speed, 2026-11-17 (m/s).
+vmax: 1.0
+# User-selected acceleration, 2026-11-17 (m/s^2).
+amax: 2.0
+rhoT: 100.0
+rhoP: 10000.0
+rhoV: 1000.0
+rhoA: 1000.0
+rhoTracking: 1000.0
+rhosVisibility: 10000.0
+theta_clearance: 0.8
+clearance_d: 0.2
+tolerance_d: 0.3
+tracking_dist: 2.5
+tracking_dur: 3.0
+tracking_dt: 0.2
+debug: false
+fake: false
+prediction: {rho_a: 1.0, vmax: 4.0}

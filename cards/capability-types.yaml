@@ -199,6 +199,24 @@ capability_types:
       axes: none
       timestamp: publication_time
 
+  - id: perception/target/state/3d
+    name: Single-session 3D target state
+    description: Validity, world-frame position and velocity, joint covariance and observation provenance for a target tracking session.
+    transport:
+      protocol: ros2_topic
+      schema: uav_target_tracking_interfaces/msg/TargetState
+      qos:
+        reliability: reliable
+        durability: volatile
+        history: keep_last
+        depth: 1
+    semantics:
+      unit_system: SI
+      units: {position: m, velocity: m/s}
+      coordinate_frame: configured_world_frame
+      axes: world_frame_defined
+      timestamp: state_sample_time
+
   - id: perception/map/registered-points/3d
     name: Registered 3D points
     description: Scan points registered into an algorithm-owned local world frame; not a free-space or collision map.
