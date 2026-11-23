@@ -61,9 +61,9 @@ Selection never falls back on failure. A declaration is not an implementation:
 this VLM adapter currently implements Cloud only. Explicitly selecting CUDA/Houmo
 for SPF fails before loading an engine. Other models keep their own adapters.
 
-Credentials can be inline `api_key` or an explicit per-entry `api_key_env` reference,
-e.g. `api_key_env: OPENAI_API_KEY`. Optional `base_url_env` and `model_env` work the
-same way. A referenced environment value overrides that entry's inline value;
+Credentials can be stored as `api_key` in the ignored local YAML, or supplied through
+an explicit `api_key_env` reference such as `OPENAI_API_KEY`. Optional `base_url_env`
+and `model_env` also reference process environment variables. A referenced environment value overrides that entry's inline value;
 unreferenced global OPENAI_* variables do not override unrelated models. Environment
 variables alone cannot create a missing model or engine declaration.
 
@@ -80,6 +80,7 @@ unrelated entries such as YOPO/CUDA are left to their own model adapters.
 ## Prepare and run
 
 `bash setup.sh` uses `uv sync --locked`, no weights or cloud calls, no CUDA requirement.
+SPF and CityNav prepare this same model-directory `.venv` from inside their onboard image using the image’s Python 3.10. Both launchers use that interpreter for the HTTP worker and the container Python for the ROS adapter.
 `UV_PROJECT_ENVIRONMENT` may point to a deployment-specific external workspace.
 For ROS Humble, prepare using Python 3.10 in the same environment/path used to run it.
 The SPF deployment prepares its worker in the stable compute image, outside the image.

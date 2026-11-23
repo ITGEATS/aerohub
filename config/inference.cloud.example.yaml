@@ -1,8 +1,8 @@
-# Copy to inference.cloud.local.yaml (gitignored); fill per-model credentials there.
+# Copy to inference.cloud.local.yaml (gitignored) and fill in your credentials.
 models:
   vlm:
     cloud:
       base_url: https://api.deepseek.com
       model: deepseek-flash
-      api_key: ''
-      api_key_env: OPENAI_API_KEY
+      api_key: your-api-key
+      # Alternatively, use api_key_env: OPENAI_API_KEY with an exported variable.

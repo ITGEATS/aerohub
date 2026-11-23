@@ -28,11 +28,42 @@ Tool 不必经过运动 Behavior 才能读取状态、传感器或地图。State
 
 ## 场景客户端与开发资源
 
+仿真器支持基线为 ProjectAirSim 1.1.0 和 AirSim 1.8.1，使用已安装的场景包及配套 SDK，通过资源表定位。源码构建按场景开发或定制需要执行。
+
 仿真场景、外部源码和 UE 工具链统一从 [config/](config/README.md) 进入。
 ProjectAirSim 源码登记为 `projectairsim_source`；本机路径通过资源配置解析，
 见 [开发资源导航](config/README.md#开发资源导航)。
 显示及接口开发先查阅 [ProjectAirSim 原生能力参考](docs/ProjectAirSim原生显示接口核查.md)，
 再定位上游实现与本项目插件；工作项见 [场景客户端开发清单](docs/场景客户端开发清单.md)。
+
+<a id="python-environments"></a>
+
+## Python 环境
+
+| 运行什么 | 选哪个环境 | 从哪里准备 |
+| --- | --- | --- |
+| ROS 2 节点、Adapter、Mission | 所在 onboard 或 workstation 等 ROS 容器自带的 Python | 按 [Deploy 说明](deployment/README.md) 启动容器，加载 Humble 和对应的 install overlay。 |
+| Simulator Manager、AirSim 宿主工具、ProjectAirSim SDK | 仓库根 `.venv` | 运行 `bash simulator/setup_python.sh`。只使用 AirSim 时加 `--airsim-only`。详见 [仿真环境说明](config/README.md#python-客户端环境)。 |
+| ModelScope 模型下载与发布工具 | 仓库根 `.venv` | 执行下方共享工具准备命令。 |
+| Inference 模型 worker | 模型目录的 `.venv` | 按 [模型目录](src/basic_function/inference/models/) 中对应模型的 README 准备锁定的 `uv` 环境。SPF 和 CityNav 共用 Vision Language 模型的 `.venv`。 |
+| 需要独立 Python 版本或依赖的算法、组件 | 对应项目目录的 `.venv` | 按项目 README 执行其环境准备入口。 |
+
+虚拟环境目录由准备入口在本机生成。依赖声明和准备脚本随其所属工具、模型或项目维护。
+
+ModelScope、Simulator Manager 和 AirSim 宿主工具的共享依赖在根 `pyproject.toml` 声明，由 `uv.lock` 锁定。在仓库根目录执行：
+
+```bash
+bash setup_python.sh
+.venv/bin/modelscope --help
+```
+
+准备入口使用 `uv sync --locked --inexact`，复用根 `.venv` 并保留已安装的原生 SDK。ProjectAirSim 的完整准备入口另外同步锁定的 SDK 依赖，再从资源表指定的源码可编辑安装。新增共享依赖时修改根声明并运行 `uv lock`，随后执行对应准备入口和验证。
+
+后续脚本使用 `.venv/bin/python` 导入 ModelScope SDK，交互操作使用 `.venv/bin/modelscope`；激活根环境后也可直接使用相应命令。
+
+## 组件工作区与构建
+
+按组件 README 准备工作区、编译和启动。组件维护自己的构建产物与 overlay，并通过自己的入口加载；Deploy 负责编排各组件。日常按需编译，启动使用已有产物。遇到缺包或行为与源码不符时，可以补编后重启。接口或 ABI 变更后，验证前重编受影响的消费者。
 
 ## 当前 AirSim / RoboPi 入口
 
@@ -107,6 +138,7 @@ Aerostack2 由 Universidad Politécnica de Madrid（UPM）的 Computer Vision an
 | [AS2 简介](docs/as2简介.md) | 原生架构、执行流程及层间调用接口 |
 | [项目简介](docs/项目简介.md) | 项目目录、统一 Planner 设计、配置、使用与验收 |
 | [开发者贡献指导](docs/开发者贡献指导.md) | AS2 扩展点、Model Hub 适配设计与开发约束 |
+| [模型产物管理](docs/模型产物管理.md) | ModelScope 托管、上传、下载回验与版本接入 |
 
 ## 目录
 
@@ -172,6 +204,6 @@ bash tools/robopi/prepare_sources.sh
 | [CAT-ORA](https://github.com/ctu-mrs/catora) | 多机轨迹规划 |
 | [Swarm-Formation](https://github.com/ZJU-FAST-Lab/Swarm-Formation) | 多机编队规划 |
 
-上游仓库和精确提交通过 `.gitmodules` 及外层 gitlink 锁定。AirSim 构建对 AS2 与 Pixhawk 的兼容修改以补丁形式应用，来源和修改边界见 [AS2 补丁说明](deployment/platform/patches/as2-pr-provenance.md)与 [Pixhawk 补丁说明](deployment/platform/patches/px4-v1.18-provenance.md)。引入新上游代码时必须保留许可证和来源记录，不得把第三方代码误标为本项目原创实现。
+上游仓库和精确提交通过 `.gitmodules` 及外层 gitlink 锁定。AS2 与 Pixhawk 的项目修改由各自 Fork 子模块保存，实际来源见 `.gitmodules`，版本以父仓库 gitlink 为准。历史平台补丁及其来源记录保留在 `deployment/platform/patches/`，使用前核对对应构建入口与基线版本。引入新上游代码时必须保留许可证和来源记录，不得把第三方代码误标为本项目原创实现。
 
 本仓库可能同时包含多种许可证的软件，使用和再分发时需分别遵守其许可条款。仓库根目录目前没有一份覆盖全部自建代码的统一 `LICENSE`；各 ROS 包的许可证声明也不能覆盖第三方源码，发布源码、镜像或二进制前必须按实际包含的组件完成许可证核查。

@@ -1,5 +1,11 @@
 # 运行镜像版本
 
+## 下一套共享基线 v0.1.2（待处理）
+
+- 核对 onboard 和 flight_board 各版本的镜像来源、摘要、接口兼容性和 Deploy 实际用量。选择并验收下一套默认组合后，记录完整镜像引用、场景版本和验证证据。
+- Workstation 默认使用所选 onboard 镜像的本地 `workstation:<版本>` 别名，共用同一镜像 ID，在独立容器显式启动任务客户端。
+- 已有 Deploy 保留各自版本组合，按接口、overlay 和仿真回归结果逐个迁移。旧组合保留用于复现和回滚。
+
 ## v0.1.1：算力侧消息与源码来源更新
 
 2026-11-11 已发布 `ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.1`，
