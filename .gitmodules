@@ -88,3 +88,7 @@
 [submodule "elastic_tracker"]
 	path = src/tool/navigation/planner/elastic_tracker/upstream
 	url = https://github.com/ZJU-FAST-Lab/Elastic-Tracker.git
+[submodule "src/tool/navigation/planner/racer/ros2_adapter/native"]
+	path = src/tool/navigation/planner/racer/ros2_adapter/native
+	url = https://github.com/Air-Suck/RACER-ROS2.git
+	branch = feat/aerohub-external-execution

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/ldg810/RACER-ROS2.git",
+    "commit": "f8265e091b11cc856c1334f8260850b9006b1953"
+  },
+  "fork": {
+    "repository": "https://github.com/Air-Suck/RACER-ROS2.git",
+    "branch": "feat/aerohub-external-execution",
+    "commit": "92d054fd84ec649e6c4a0c20f0c0d9d43b62a70b"
+  },
+  "submodule_path": "src/tool/navigation/planner/racer/ros2_adapter/native",
+  "ownership": "Native RACER changes live in the Fork; AeroHub keeps adapters, deployment, configuration, cards, and validation."
+}
