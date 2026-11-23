@@ -1,0 +1,57 @@
+schema_version: '0.1'
+id: aerohub.planner.yopo-tracker
+version: '0.1.0'
+source:
+  upstream: https://github.com/TJU-Aerial-Robotics/YOPO-Tracker.git
+  revision: d313f8610195dc986caceff7a3616f63d7e6f31f
+  integration: src/tool/navigation/planner/yopo_tracker/ros2_adapter
+  upstream_license: MIT
+  checkpoint: YOPO/saved/YOPO_1/epoch50.pth
+  checkpoint_sha256: a625490468cb8734867e51d2af2be68a8182bcbbbb1e0401b1d2a32e6ccd5f7f
+provides: [planner.yopo-tracker]
+cards: [cards/planner/yopo-tracker.yaml]
+roles:
+  compute: [YOPO-Tracker-planner, Inference-ROS-adapter, isolated-CUDA-worker, AS2, FollowTimedPath]
+  workstation: [ROS-task-client, Takeoff-Land-client]
+  simulator: [AirSim, RGB-D-bridge, simulation-clock]
+  flight_controller: [PX4-SITL]
+runtime:
+  platform: linux-x86_64-NVIDIA
+  base_image: ghcr.io/popc0rn7/aerohub/onboard-computer:v0.1.0
+  flight_board_image: ghcr.io/popc0rn7/aerohub/flight-board:v0.1.0
+  dependencies: [ROS-2-Humble, as2_msgs, uav_planner_interfaces, uav_follow_path_execution, uav_inference_interfaces, quadrotor_msgs, AirSim, PX4-SITL]
+  build: deployment/yopo_tracker_humble/build.py
+  entrypoint: deployment/yopo_tracker_humble/entrypoint.sh
+  launch: src/tool/navigation/planner/yopo_tracker/ros2_adapter/bridge/live_node.py
+  worker: deployment/inference/start_yopo_tracker.sh
+  configuration: src/tool/navigation/planner/yopo_tracker/ros2_adapter/README.md
+  sitl_brake_calibration: deployment/yopo_tracker_humble/brake-calibration.sitl.json
+  camera_profile: 'FrontCamera, rectified 320x192 RGB8 and 32FC1 axial depth, RELIABLE depth 1'
+  namespace: /drone0
+  frame: drone0/odom
+  clock: shared AirSim /clock
+  transport: ROS-2-DDS
+  transforms: external AS2 pose transforms and FrontCamera optical calibration
+  interfaces:
+    start_tracking: {address: /yopo_tracker_live/start, schema: std_srvs/srv/Trigger}
+    stop_tracking: {address: /yopo_tracker_live/stop, schema: std_srvs/srv/Trigger}
+    events: {address: /yopo_tracker_live/status, schema: std_msgs/msg/String}
+    inference: {address: /drone0/inference/yopo_tracker/infer, schema: uav_inference_interfaces/srv/InferYopoTracker}
+  readiness: CUDA worker healthy, ROS inference service available, matching RGB-D calibration and TF, fresh synchronized vehicle state, airborne hover and FollowTimedPath ready
+  stop: latch stop through the Adapter and wait for the session's finished event and low-speed hover before native Land
+  rollback: after confirmed stop and disarm, restore the prior source and matching overlay, then restart with a fresh target estimate
+  persistence: none
+ownership:
+  motion: one selected client per vehicle; FollowTimedPath publishes motion references
+  state_tf_clock: supplied by the external AS2 and simulation stack
+validation:
+  state: partial
+  index: src/tool/navigation/planner/yopo_tracker/README.md
+  package_base: 13b7db0b949075d97c6f409a68897537287b25a8
+  checked_package_image_id: sha256:45724ec12b184f04ac15c625c8cbd244f0f65d35e5f42d51307bd171be7d65ab
+  package_passed: [embedded-Humble-types, no-mount-CUDA-live-Adapter, DDS-source-stamp-pairing, default-FollowTimedPath-replay]
+  prior_sitl_base: 44ce9af3865026421123bc66dac0d6e460d8293d
+  prior_sitl_tracker_image_id: sha256:7038a69a5e96a9d40bca140278551e40e27d5e533db738089a5ccd4ccca9acfb
+  prior_sitl_passed: [two-live-tracking-revisions, RGB-D-interruption-stop, native-Land-and-PX4-disarm]
+  open: [sustained-moving-target-tracking, target-disappears-with-healthy-camera, tracking-accuracy]
+  excluded: [real-aircraft, RoboPi, multi-vehicle]

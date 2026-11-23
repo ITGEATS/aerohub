@@ -155,8 +155,8 @@ Tracking 识别 person → 一个 Navigation HOLD 会话，每0.25s更新跟随�
 目标观测超过0.6s、无效、有效期届满、坐标系变化或任务异常即停止导航。
 未确认停止则不交接到降落，保留算力执行供恢复，不把该状态判为成功。
 
-当前 `follow=False`；保持接管yaw。不能把Tracking的 `follow=True` 原地朝向
-会话与本demo导航同时运行，两者争用同一运动资源。转弯后持续看人仍有缺口。
+当前 `follow=False`；保持接管yaw。Tracking 已拒绝 `follow=True`。朝向应由跟随
+实现内部协调，不能另起运动会话与本demo导航争用资源。转弯后持续看人仍有缺口。
 
 构建任务客户端（固定镜像、独立工作区、无网络、不发起飞行）。
 `WESTSTREET_CLIENT_WORKSPACE` 指向运行配置中的 `client_workspace`。
@@ -185,7 +185,7 @@ bash deployment/airsim/demos/weststreet/run_demo.sh --output /evidence/tool-demo
 
 - Navigation yaw链：SUPER原生已有yaw多项式，但Adapter未转交；原生FSM
   忽略距自身<0.1m的目标，需提供明确的原地朝向执行路径，不能只开配置。
-- Tracking朝向与追逐位置需归属同一运动会话；当前turn-only契约不承担追逐。
+- 朝向与跟随位置应由 Following 实现在同一运动会话内协调；Tracking 仅提供观测，原转向契约已移除。本 Demo 现有 Mission 编排不代表已提供通用 Following 入口。
 - 四方联合启动、起飞后人物启停fixture、真实GPU视觉与SUPER移动闭环验收待完成。
   暂未发现需新增检测/测距Function或新增FollowPath Behavior的证据。
 
