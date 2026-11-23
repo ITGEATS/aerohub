@@ -71,7 +71,7 @@
 - 首页、Gallery 列表、Swarm-Formation、FAST-LIVO2、Quickstart、Docs 均返回 200。
 - 本地视觉证据：`log/gallery-review/` 下的 `<id>-1440.png`、`<id>-390.png`、`<id>-core.png`、`<id>-layers.png`，以及 `visual-report.json`、`regression-report.json`。这些是网站检查证据，不是算法复现证据。
 
-同步更新正式 `gallerize-proj` 与 `bundle-gallery` Skill：补入算法核心与框架分工、关键词、案例留空、正文图例同步、窄屏滚动及既有开发服务的字段重载与在线视觉检查要求。本轮没有运行算法或改变其验收等级。
+同步更新正式 `uav-create-gallery-entry` 与 `uav-build-gallery-site` Skill：补入算法核心与框架分工、关键词、案例留空、正文图例同步、窄屏滚动及既有开发服务的字段重载与在线视觉检查要求。本轮没有运行算法或改变其验收等级。
 
 
 ### 输入输出补充
@@ -94,7 +94,7 @@
 
 已实现 SUPER 两张应用卡片与关键词，YOPO 四张应用卡片及两张算法方法卡片。YOPO 桌面两页、手机四页。页面构建、1440 / 1920 / 390 视口、所有动图、按钮和键盘翻页、关键词与方法来源显示已检查；宽屏无整页横向溢出。外网搜集请求未成功，当前素材来自锁定上游本地副本，外部视频播放未独立核验。具体截图与报告位于根目录 log/gallery-review/；该结果仅说明网页显示，不升级算法验收。
 
-正式 gallerize-proj、bundle-gallery 已分别整合素材编排与验收规则，清理早期试版的展开/收起交互描述。未自动推广其他条目，未提交或发布。
+正式 uav-create-gallery-entry、uav-build-gallery-site 已分别整合素材编排与验收规则，清理早期试版的展开/收起交互描述。未自动推广其他条目，未提交或发布。
 
 ## 全量条目推广
 

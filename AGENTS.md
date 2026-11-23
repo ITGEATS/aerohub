@@ -4,12 +4,14 @@
 
 ## 共享工作约定
 
+- 所有代码、配置、文档、Skill、构建、测试与交付相关的贡献开发，开始前必须完整阅读并在全过程遵循 [`docs/开发者贡献指导.md`](docs/开发者贡献指导.md)，收尾时按其中的验证、材料归属、分支同步和 PR 交付要求逐项核对。本文件保存必须始终生效的共享约束和架构决策，不复制或替代贡献指导。
+- 选择或组合 Skill 时先查阅 [`skill/README.md`](skill/README.md) 的职责边界，再完整读取所选 Skill 的 `SKILL.md` 及当前步骤要求的 references；职责目录只负责路由，不替代具体规则。
 - Skill 的实现统一维护在 `skill/`；`.agents/skills/` 仅按需保存指向 `../../skill/<名称>` 的独立相对软链接，表示当前启用项，不复制实现或自动链接全部 Skill。
 - 本文件只保存共享项目约定，不记录个人 SSH 别名、主机地址、绝对工作区路径或代理配置。
 - 开发者自行选择 Linux 构建与测试环境；个人机器配置保存在不纳入 Git 的本地配置中。跨工作区同步前核对差异，保留已有依赖、独有文件及用户修改，不整树覆盖。
 - 临时测试目录不作为源码的长期保存位置。本地专用 AGENTS.md 不得覆盖本仓库的共享版本。
 - 未经用户明确授权，不创建 Git commit，不执行 push、merge 或历史改写。
-- UE 场景观察窗口默认显示光标、允许鼠标自由出窗，保留窗口获焦时的键盘快捷键；仅在用户明确要求鼠标操控时启用捕获或锁定。新增启动入口或调整输入模式时，按 [pairsim-build](skill/pairsim-build/SKILL.md) 核查配置与运行时设置，并实际验证点击窗口后仍能移出鼠标；光标可见不等于已解除锁定。
+- UE 场景观察窗口默认显示光标、允许鼠标自由出窗，保留窗口获焦时的键盘快捷键；仅在用户明确要求鼠标操控时启用捕获或锁定。新增启动入口或调整输入模式时，按 [uav-build-projectairsim-scene](skill/uav-build-projectairsim-scene/SKILL.md) 核查配置与运行时设置，并实际验证点击窗口后仍能移出鼠标；光标可见不等于已解除锁定。
 - 所有以源码形式接入本仓库的外部上游工作，无论是否修改，都必须作为 Git 子模块管理：由 `.gitmodules` 记录可访问的仓库 URL，由父仓库 gitlink 锁定明确且可获取的提交。禁止将上游仓库通过复制目录、归档展开、vendor subtree 或其他普通文件形式提交到主仓库。
 - 兼容问题优先在本项目通过 Adapter、Bridge、插件、配置或启动层解决。确实必须修改上游源码时，必须先在 `Air-Suck` 组织下维护对应 Fork，在 Fork 中提交修改及其上游基线和必要回归测试，先 push 可获取的 Fork 提交，再将该 Fork 作为子模块接入并更新父仓库 gitlink；不得在主仓库保存修改后的上游源码副本，也不得以构建时补丁代替最终来源。ROS 1 算法必须源码迁移到 ROS 2 Humble；ROS 1 容器、`ros1_bridge`、专用 Proxy 或 IPC 桥只能用于离线基线对照，不能进入 PC 复现、板端部署或交付运行拓扑。
 - `onboard_computer` 共享镜像作为复现镜像的固定基础环境。算法交付镜像必须在构建阶段复制锁定源码并编译依赖、算法和适配层，运行时不得挂载仓库、源码 workspace、build/install overlay 或宿主依赖目录。易于为目标架构构建的依赖直接编入镜像；难以迁移的 ROS 1 依赖不能通过额外挂载规避，应按板端已有 ROS 2 Humble、Python 和系统工具完成源码迁移。AS2 接口或 ABI 变化时连同受影响消费者重编译，避免混用旧插件。
@@ -88,7 +90,7 @@
 
 - 回顾 `dev/<复现对象或任务>/` 的过程记录及保留证据，提炼适用条件、可复用步骤、接口约束、常见问题、解决方法和验证标准。
 - 优先修订已有 Skill，纠正过时或不准确的内容并补齐缺口；确有独立且可复用的能力缺口时，按上述规则先在对话中提出新 Skill 候选，经用户明确同意后再落盘，避免自动创建或重复创建 Skill。
-- 按内容归属更新架构分析、平台传感器适配、ROS 适配、AS2 接入、可复现构建、端到端验证、组件部署管理或能力卡片编写等相关 Skill。平台数据源、传感器模型、标定与采样语义使用 `skill/uav-platform-sensor-adaptation/`；ROS 适配负责版本、消息及传输，并保留这些时间与坐标语义；故障诊断与恢复验证归入验证 Skill。涉及平台传感器、感知或状态估计算法输入接入时必须读取平台传感器适配 Skill。
+- 按内容归属更新架构分析、平台传感器适配、ROS 适配、AS2 接入、可复现构建、端到端验证、组件部署管理或能力卡片编写等相关 Skill。平台数据源、传感器模型、标定与采样语义使用 `skill/uav-adapt-platform-sensors/`；ROS 适配负责版本、消息及传输，并保留这些时间与坐标语义；故障诊断与恢复验证归入验证 Skill。涉及平台传感器、感知或状态估计算法输入接入时必须读取平台传感器适配 Skill。
 - 区分已验证步骤、失败尝试和待验证方案，注明版本与适用范围；不得将合成输入冒烟通过提升为仿真闭环或真机验收通过。正式 Skill 应能独立使用，不依赖本地 `dev/`、历史 `skill/temp/` 或 `log/` 中的文件才能执行；必要的脚本和模板应随正式 Skill 保存。
 - 交付时说明本次完善了哪些 Skill、依据是什么；确无新增可复用经验时，也必须完成回顾并记录无需修改的具体原因。
 
@@ -114,6 +116,6 @@
 
 新增 `src/basic_function/inference/` 提供与 Perception、State Estimator 并列的 Inference Robotic Function：对外使用 ROS 2，内部 FastAPI runtime 与每模型独立 uv 环境隔离。`interfaces/`、`ros2_adapter/`、`runtime/` 保存公共服务设施，`models/<模型>/` 保存推理适配和环境。算法源码仍按功能归属原分类；Inference 模块只引用模型实现，不迁移或复制 Planner 算法，不承担轨迹重建或运动执行。
 
-CUDA 模型迁移、独立环境与模型文件准备按正式子 Skill [model-migration-cuda](skill/model-migration-cuda/SKILL.md) 执行；每模型 README/setup 及验证要求集中在该 Skill 维护。
+CUDA 模型迁移、独立环境与模型文件准备按正式子 Skill [uav-prepare-cuda-inference](skill/uav-prepare-cuda-inference/SKILL.md) 执行；每模型 README/setup 及验证要求集中在该 Skill 维护。
 
 自建代码位于 `src/`，顶层按 `tool/`、`basic_function/`、`behavior/` 三类组织。导航算法位于 `tool/navigation/planner/`，共用协调与接口分别位于 `tool/navigation/framework/` 和 `tool/navigation/interfaces/`；Inference、State Estimator、Perception 位于 `basic_function/` 下。面向任务的目标检测 Tool 应放入 `tool/object_detection/`，其模型推理适配仍归 `basic_function/inference/models/`。ROS 2 迁移代码使用 `ros2_adapter/native/`，统一 AeroHub 接口使用同级 `ros2_adapter/bridge/`；`ros1_proxy/` 仅可保存带明确历史标识的对照实现，不得被活动部署入口引用。同类对象的目录规则见 `docs/开发者贡献指导.md` 和 `src/README.md`。AS2 依赖在 `as2/`，PX4 在 `px4/`，官方 Gazebo 工程在 `simulator/gazebo/`，均以 `.gitmodules` 和 gitlink 锁定。开发材料和产物按上文归属；部署入口仍为 `deployment/`，不得重新依赖项目外部的旧源码路径。

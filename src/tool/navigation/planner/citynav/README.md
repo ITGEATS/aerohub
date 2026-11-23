@@ -61,7 +61,7 @@ max_step_size=60、vlm_name="sam"）。每 episode 主循环（`CityNavAgent()` 
 | --- | --- | --- |
 | HSPM 决策 + 语义点云 + 记忆图 | Planner（Navigation Tool 实现基础） | `src/tool/navigation/planner/citynav/ros2_adapter/`（`uav_citynav_planner`，onboard-computer 容器） |
 | 云端 gpt-4o → glm-4v-flash 调用 | 外部推理依赖，共享 Inference Function 承载（Tool 化改造 2026-11-18，D26：私有 `llm_proxy` 包已删除，prompt 逐字复制移至 planner 包 `prompts.py`，请求经 `InferVisionLanguageFrames` Action） | `src/basic_function/inference/ros2_adapter/uav_inference/`（`vision_language_frames_node`）+ `interfaces/action/InferVisionLanguageFrames.action` |
-| GroundingDINO + SAM 本地推理 | Inference Robotic Function | `src/basic_function/inference/models/grounded_sam/`（uv 隔离，model-migration-cuda） |
+| GroundingDINO + SAM 本地推理 | Inference Robotic Function | `src/basic_function/inference/models/grounded_sam/`（uv 隔离，uav-prepare-cuda-inference） |
 | 轨迹执行 | 原生扩展 Behavior（复用，不新建） | `src/behavior/follow_path/` FollowTimedPath（共享 `uav_planner_interfaces`） |
 | 起飞/降落 | 原生 AS2 Behavior | TakeoffBehavior / LandBehavior |
 | RGB-D/位姿/时钟供给 | 平台与飞控板角色 | flight_board 传感器桥 / 时钟桥 / AS2 self_localization |

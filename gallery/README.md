@@ -41,7 +41,7 @@ Astro 内容缓存保存在当前工程的 `.astro/cache/`，即使 `node_module
 
 Gallery 登记由 `registered-algorithms` loader 在加载和 `content/gallery.json` 变更时重新读取；新增、删除和清空登记会更新运行中的内容集合，无需重启用户服务。`npm run check:registry-watch` 在 Gallery 内隔离副本验证此行为，不改实际登记文件。
 
-已有 dev 服务与静态构建分别验证。修改内容 schema 后，已有服务可能未重新加载新增字段；出现“构建产物有图、开发页面无图”时，先检查当前页面 HTML 及其图片请求，具体排查见 `skill/bundle-gallery/SKILL.md`。开发服务由使用者启动和停止。
+已有 dev 服务与静态构建分别验证。修改内容 schema 后，已有服务可能未重新加载新增字段；出现“构建产物有图、开发页面无图”时，先检查当前页面 HTML 及其图片请求，具体排查见 `skill/uav-build-gallery-site/SKILL.md`。开发服务由使用者启动和停止。
 
 ## 文件归属
 
@@ -52,7 +52,7 @@ Gallery 登记由 `registered-algorithms` loader 在加载和 `content/gallery.j
 - `schema/algorithm.ts`：元数据字段及验证证据约束；内容配置入口使用严格校验，未知元数据字段报错。
 - `public/`：直接复制到站点的公共资源；算法下载文件放 `public/algorithms/<algorithm_id>/`。
 - 算法专属图片放条目旁的 `assets/`，正文图片使用相对引用。Demo 封面在 frontmatter 使用相对 `gallery/` 的内容路径，见下方示例；保留原始来源及必要的许可信息。本地封面随站点构建，读取真实图像宽高，避免依赖外部图片域名和固定比例。大型视频、rosbag 和原始日志通过外部资源引用，不复制算法源码或运行环境进网站；预览截图留在根目录 `log/gallery-review/`，不提交。
-- 所有 Skill 的实现统一在仓库根目录 `skill/`，包括 `gallerize-proj/` 和 `bundle-gallery/`；`.agents/skills/` 仅通过独立相对软链接启用选定的 Skill。算法实现仍在根目录 `src/`，运行部署仍在 `deployment/`。
+- 所有 Skill 的实现统一在仓库根目录 `skill/`，包括 `uav-create-gallery-entry/` 和 `uav-build-gallery-site/`；`.agents/skills/` 仅通过独立相对软链接启用选定的 Skill。算法实现仍在根目录 `src/`，运行部署仍在 `deployment/`。
 
 采用 Markdown 原生 YAML frontmatter，合并之前讨论的 `algorithm.yaml` 和 `index.md`，避免为同一条目维护额外加载器。新增条目可复制示例 Markdown，修改元数据与正文，再在 `content/gallery.json` 添加 item。没有适配代码也能生成页面。例如：
 
@@ -68,7 +68,7 @@ JSON 中保留其他已有条目；每个 ID、Markdown 路径均须唯一，指
 
 网页的 Markdown、条目配置、资源与构建产物均放在 `gallery/` 内。Skill 可以读取仓库根目录 `src/` 中的说明，并将展示内容整理到 `gallery/content/`；网页构建与开发服务只读取展示副本，不直接加载或监听仓库根目录。
 
-本地执行 `npm run bundle` 即可校验并生成网页，它与 `build` 共用同一入口。`bundle-gallery` Skill 负责阅读源 Markdown、对照网页并同步展示文案；命令本身不自动总结任意 README。`gallerize-proj` 负责核查 Tool / Behavior / Function 三层的能力覆盖与依赖，查找官方 Demo、新增内容和登记 item 后衔接 bundle。样式和布局继续由现有模板管理。
+本地执行 `npm run bundle` 即可校验并生成网页，它与 `build` 共用同一入口。`uav-build-gallery-site` Skill 负责阅读源 Markdown、对照网页并同步展示文案；命令本身不自动总结任意 README。`uav-create-gallery-entry` 负责核查 Tool / Behavior / Function 三层的能力覆盖与依赖，查找官方 Demo、新增内容和登记 item 后衔接 bundle。样式和布局继续由现有模板管理。
 
 算法 Markdown 的 frontmatter 示例：
 

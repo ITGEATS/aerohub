@@ -24,7 +24,7 @@ python3 deployment/airsim/demos/catora_open_field/run.py run
 
 ### RoboPi 运行完整应用
 
-AS2 与 CAT-ORA 使用 `deploy-lib` 的持久布局；构建使用现有 OHOS builder。
+AS2 与 CAT-ORA 使用 `uav-install-robopi-runtime` 的持久布局；构建使用现有 OHOS builder。
 PC 保留 AirSim、四个 PX4/Agent Docker 和 `/clock`，CAT-ORA 原生服务、代理、
 Planner、轨迹桥和四机 AS2 均运行在 RoboPi。先配置 `.env` 的 HDC、网络和工作区。
 

@@ -23,7 +23,7 @@ onboard_computer 是可选 PC 开发环境。完整职责、接口和当前实�
 | 目录 | 用途 | 是否为镜像交付项 |
 | --- | --- | --- |
 | [flight_board](flight_board/README.md) | PX4 / Agent / Humble sensors / clock 的统一仿真底座 | 是，GHCR 或离线 tar 交付 |
-| [oh-ros-build](oh-ros-build/README.md) | 官方 builder 调用、工作区准备与 CMake 适配；目录名为既有脚本路径 | 否，只有脚本和文档 |
+| [uav-cross-compile-ros-for-ohos](uav-cross-compile-ros-for-ohos/README.md) | 官方 builder 调用、工作区准备与 CMake 适配；目录名为既有脚本路径 | 否，只有脚本和文档 |
 | [robopi](robopi/README.md) | 板端原生 AS2 部署、启动和诊断 | 否，部署交叉编译产物 |
 | [onboard_computer](onboard_computer/README.md) | 承载 AS2、算法 Library 与应用的正式 PC 开发及仿真验证环境 | 是，PC 开发可选；日常补编译约定与现有入口差异见详情 |
 | [swarm](swarm/README.md) | 可配置机群拓扑、RoboPi/PC 混合进程编排与 AirSim 质心俯视观察 | 否，共享部署基础设施 |
@@ -39,7 +39,7 @@ RoboPi 原生运行 AS2，不运行 Docker。SDK、目标 ROS 和第三方依赖
 
 1. 完成官方指南，准备匹配的 SDK、目标依赖、官方 builder 和板端系统环境。
 2. 执行 `bash tools/robopi/prepare_sources.sh` 初始化仓库锁定的活动 submodule。
-3. 按[项目适配说明](oh-ros-build/README.md#首次初始化项目工作区)准备隔离工作区，填写 `.env`。
+3. 按[项目适配说明](uav-cross-compile-ros-for-ohos/README.md#首次初始化项目工作区)准备隔离工作区，填写 `.env`。
 4. 按[固定镜像说明](flight_board/README.md#使用固定镜像)加载 flight_board tar 和校验文件，或按[GHCR 说明](releases/README.md#从-ghcr-获取)拉取固定镜像并设置 `.env`。
 5. 从 [AirSim 仓库 Releases](https://github.com/microsoft/AirSim/releases) 下载对应 Linux 场景，按[场景说明](../simulator/airsim/config/README.md)配置 AirSim binary 资源，准备 PC 与板端网络。
 6. 按所选 Demo 准备计算环境：SUPER 四方任务复用 `osrf/ros:humble-desktop-full-jammy` 并补编译外部接口；全 PC 或其他 Demo 按各自说明加载 onboard_computer 镜像。

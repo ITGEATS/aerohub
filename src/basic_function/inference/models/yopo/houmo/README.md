@@ -2,13 +2,13 @@
 
 仅运行已有 HMM 包或开发迁移模型所需的条件见 [Inference 前置条件](../../../README.md#开始前准备什么)。
 
-工具准备与通用流程见 [model-migration-houmo](../../../../../../skill/model-migration-houmo/SKILL.md)。外部工具是固定 Houmo 工具链镜像和仓库已有 OHOS Native SDK；postmo-modelzoo 不是依赖。容器名为 `houmo-migrate-yopo`。
+工具准备与通用流程见 [uav-compile-model-for-houmo](../../../../../../skill/uav-compile-model-for-houmo/SKILL.md)。外部工具是固定 Houmo 工具链镜像和仓库已有 OHOS Native SDK；postmo-modelzoo 不是依赖。容器名为 `houmo-migrate-yopo`。
 
 在忽略的 `.env` 中设置 `OHOS_NATIVE_SDK` 和已有 AArch64 `TCIM_RUNTIME_PATH`，初始化锁定算法源码后进入迁移容器：
 
 ```bash
 git submodule update --init src/tool/navigation/planner/yopo/upstream
-bash skill/model-migration-houmo/scripts/run.sh yopo
+bash skill/uav-compile-model-for-houmo/scripts/run.sh yopo
 ```
 
 模型网络边界是 YOPO `YopoNetwork.forward`，不是完整的 `inference()`。实际接口为：
@@ -86,7 +86,7 @@ Uvicorn 放在服务私有目录，版本见 `requirements-board.txt`。其他�
 需要包含同版本 `python/` 绑定源码；无需 postmo 源码。执行于迁移容器：
 
 ```bash
-bash skill/model-migration-houmo/scripts/build_tcim_python.sh \
+bash skill/uav-compile-model-for-houmo/scripts/build_tcim_python.sh \
   /workspace/src/basic_function/inference/models/yopo/houmo/artifacts/board-tcim
 python3 -m pip download --no-deps \
   --dest src/basic_function/inference/models/yopo/houmo/artifacts/wheels/board \

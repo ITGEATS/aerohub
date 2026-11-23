@@ -11,7 +11,7 @@ Inference 适配。算法归属与迁移契约见
 - 三件套 HMM 与 assets（token_embedding/id2token/assets.json）已在
   `/data/local/workspace/aerovla_infer/`（2026-10-18 量化轮产物，sha256 锁定于
   [houmo/artifacts.json](houmo/artifacts.json)）。重新量化按
-  [model-migration-houmo](../../../../../../skill/model-migration-houmo/SKILL.md) 在
+  [uav-compile-model-for-houmo](../../../../../../skill/uav-compile-model-for-houmo/SKILL.md) 在
   x86 Linux + GPU 工具链容器执行，产物再上板。
 
 ## 服务契约（HTTP worker）

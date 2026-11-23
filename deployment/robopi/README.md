@@ -1,10 +1,10 @@
 # RoboPi AS2 运行
 
 官方交叉编译 builder 的调用与挂载契约统一见
-[oh-ros-build](../oh-ros-build/README.md)；本页维护板端部署、运行及工具链准备记录。
+[uav-cross-compile-ros-for-ohos](../uav-cross-compile-ros-for-ohos/README.md)；本页维护板端部署、运行及工具链准备记录。
 
-使用前须先完成[官方开发环境准备](../oh-ros-build/README.md#前置条件)，
-再按[首次初始化步骤](../oh-ros-build/README.md#首次初始化项目工作区)执行
+使用前须先完成[官方开发环境准备](../uav-cross-compile-ros-for-ohos/README.md#前置条件)，
+再按[首次初始化步骤](../uav-cross-compile-ros-for-ohos/README.md#首次初始化项目工作区)执行
 `prepare.sh`。下文操作均以此为前提。
 
 本机操作统一从仓库根目录的 `tools/robopi/robopi.sh` 进入。设备、网卡和运行参数

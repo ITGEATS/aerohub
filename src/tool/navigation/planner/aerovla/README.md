@@ -31,7 +31,7 @@
 
 | 上游部件 | aerohub 归属 | 说明 |
 | --- | --- | --- |
-| openvla-7b+LoRA 推理 | **板端 RoboPi** `src/basic_function/inference/models/aerovla/houmo/`（复用已调通 HMM 产物，model-migration-houmo 口径） | 推理角色在算力板；bf16 数值基线不可执行（无可用 GPU 主机），以 golden 复跑为数值门槛，逐张量对照保留为缺口 |
+| openvla-7b+LoRA 推理 | **板端 RoboPi** `src/basic_function/inference/models/aerovla/houmo/`（复用已调通 HMM 产物，uav-compile-model-for-houmo 口径） | 推理角色在算力板；bf16 数值基线不可执行（无可用 GPU 主机），以 golden 复跑为数值门槛，逐张量对照保留为缺口 |
 | mosaic/hint/prompt/反量化/落地判别 | `src/tool/navigation/planner/aerovla/ros2_adapter/`（Tool/Planner 层） | prompt 逐字入 `prompts.py`，AST 防漂移 |
 | 每步位移执行 | `TimedTrajectorySegment` → FollowTimedPath（决策 3） | 上游速度环 vs PX4 位置控制：动力学偏离记录 |
 | 前视/下视 RGB + 位姿 | 传感器桥扩展（Blocks settings 增 FrontCamera/DownCamera 256×256 FOV90） | citynav 多目装置经验复用 |

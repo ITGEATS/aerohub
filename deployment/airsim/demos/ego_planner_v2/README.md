@@ -10,7 +10,7 @@
 
 - onboard：`ghcr.io/popc0rn7/aerohub/onboard-computer@sha256:964048afd46a9d394aa771d801d48b57de8a2b2665979b1ba6f2b5e273f9adb9`
 - flight-board：`ghcr.io/popc0rn7/aerohub/flight-board@sha256:1eff3190ca7870d0267ddb1531365dd7c68d85c6e52ade3d25b17b84b4758843`
-- OHOS builder、SDK/目标依赖准备遵循 [oh-ros-build](../../../oh-ros-build/README.md)。
+- OHOS builder、SDK/目标依赖准备遵循 [uav-cross-compile-ros-for-ohos](../../../uav-cross-compile-ros-for-ohos/README.md)。
 
 Windows 示例，仓库根目录执行；工作区由操作者选择，不能与 Swarm 共用：
 
@@ -71,7 +71,7 @@ API18 / AArch64 / ROS2 Humble / Python3.12，目标 SOABI `cpython-312-aarch64-l
 依赖归档保留符号链接。不能指向 Swarm 工作区；准备脚本所需离线源码/SDK由操作者提供。
 
 ```bash
-# 已按 oh-ros-build 文档准备环境变量与工作区；原系统/依赖导出保持只读。
+# 已按 uav-cross-compile-ros-for-ohos 文档准备环境变量与工作区；原系统/依赖导出保持只读。
 python3 tools/robopi/relocate_ego_target_metadata.py "$OHOS_WORK_ROOT"
 bash deployment/oh-ros-build/run.sh check
 # 首次创建工作区后，准备锁定 AS2/Pixhawk 源码并构建必要运行包。
