@@ -65,3 +65,7 @@ Mountains 实测在车底碰撞时仍持续收到约0.485m/s向上速度，实�
 协同 SLAM 的 peer 优化与 landmark 输出频率不应决定控制状态频率。插件将每个全局 pose 与时间邻近的 local odometry 配对，计算并保持 `map -> odom`；每个新 local sample 都以原采样 stamp 提交保持的校正、`odom -> base_link` 和 body twist。独立 smoke 使用非恒等校正检查组合结果，端到端 authority 则测量飞行窗口内 canonical source stamp 与本地 arrival gap。
 
 不要把初始化等待、验证器阻塞或仿真时钟跳步混入控制 freshness。发布权检查还应确认运行图中选中的 `plugin_name`、canonical topic 与 TF 只有一个宿主；shadow 通过后才切换 authority，并要求相同源码、镜像和标定。
+
+## 滚动 Planner 与时间化执行
+
+首条轨迹通过 FollowTimedPath Action 获取执行权，后续对同一任务执行 modify。在最后获接纳的曲线上按未来切入时间求位置、速度和加速度作为新轨迹的边界，保留原时间基准；收到接纳确认才更新承诺曲线。分别验证提交接纳、实际执行参考和故障停止三项。Following 对观测会话的管理见 [ROS 适配](../uav-ros-adaptation/SKILL.md#共享目标状态适配)。

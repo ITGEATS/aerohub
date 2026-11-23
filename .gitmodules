@@ -85,3 +85,6 @@
 [submodule "src/tool/navigation/planner/citynav/upstream"]
 	path = src/tool/navigation/planner/citynav/upstream
 	url = https://github.com/EmbodiedCity/CityNavAgent.code
+[submodule "elastic_tracker"]
+	path = src/tool/navigation/planner/elastic_tracker/upstream
+	url = https://github.com/ZJU-FAST-Lab/Elastic-Tracker.git

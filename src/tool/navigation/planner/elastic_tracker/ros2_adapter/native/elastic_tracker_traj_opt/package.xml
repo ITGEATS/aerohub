@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>elastic_tracker_traj_opt</name><version>0.1.0</version>
+  <description>AeroHub build integration of locked Elastic-Tracker ROS 2 sources.</description>
+  <maintainer email="maintainers@example.com">AeroHub</maintainer>
+  <license>GPL-3.0-only</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>eigen</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

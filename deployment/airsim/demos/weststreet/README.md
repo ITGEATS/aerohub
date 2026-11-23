@@ -4,6 +4,12 @@
 [`demo_before_plaza.py`](demo_before_plaza.py)。使用方法、side 会话修复及验收边界见
 [恢复版说明](README-before-plaza.md)。`demo.py` 仅委托到同一实现。
 
+恢复版在 Demo 内组合共享 `TrackObject` 和 Navigation `to_point()`。其相对位置、
+短时失跟冻结与目标点更新属于本场景的跟随策略。Elastic 的滚动时间化轨迹由独立的
+[Following Tool 入口](../../../../src/tool/navigation/planner/elastic_tracker/README.md)提供。
+若以该入口验收 WestStreet，Mission 只需管理场景、起降和 Following Goal；
+同一任务中的运动更新由所选 Following 实现持有。
+
 恢复版使用专用 `log/weststreet-before-plaza/runtime/`，请保留该目录。
 此前失败的柱区航点、空中转场和预置分支已移除；不再提供对应启动参数。
 下面的 System 短程入口与历史实验说明不代表当前追踪默认配置。

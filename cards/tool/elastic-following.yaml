@@ -1,0 +1,33 @@
+schema_version: '1.0'
+id: tool.elastic-following
+version: 0.1.0
+type: tool
+name: Elastic Following
+description: Supports FollowObject QUERY mode. Follows one query-selected target for a finite wall-clock duration using
+  shared observation, rolling Elastic planning and FollowTimedPath execution.
+  Cancellation and timeout stop motion before releasing the owned observation.
+implementation:
+  component_id: elastic_tracker_native
+  manifest: deployment/elastic_tracker_humble/component.yaml
+  shared_runtime: elastic-tracker
+  coupled_capabilities: [planner.elastic-tracker]
+inputs: []
+outputs: []
+interfaces:
+  - id: follow
+    role: functional_operation
+    interaction: managed_task
+    protocol: ros2_action
+    schema: uav_planner_interfaces/action/FollowObject
+    parameter_schema: src/tool/navigation/interfaces/action/FollowObject.action
+lifecycle:
+  management: system_managed
+  operations: {start: null, status: null, stop: null}
+hardware_requirements:
+  - hardware_type: compute/cpu/x86-64
+  - hardware_type: sensor/camera/depth
+  - hardware_type: flight-controller/px4
+resource_access:
+  reads: [tools/object_detection/observe]
+  shared_writes: []
+  exclusive_writes: [local/target-tracking-session, vehicle/motion]

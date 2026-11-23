@@ -9,6 +9,7 @@ find_package(unique_identifier_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/FollowObject.action"
   "action/FollowTimedPath.action"
   "action/NavigateToPose.action"
   "action/NavigateToSemanticGoal.action"

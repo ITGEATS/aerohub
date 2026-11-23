@@ -1,0 +1,26 @@
+# Existing defaults from e42f473; all handoff leads follow SUPER's 0.1 s.
+task:
+  task_id: awaiting_enable
+vehicles:
+- drone0
+deployment:
+  drone0:
+    namespace: /drone0
+    px4_origin_in_fleet_ned:
+    - 0.0
+    - 0.0
+    - 0.0
+planner:
+  parameters:
+    sample_dt: 0.1
+    trajectory_timeout: 5.0
+    update_period: 0.05
+    valid_from_lead: 0.1  # SUPER bridge node.py: lead_time default, first and updates
+    max_velocity: 3.0
+    target_timeout: 0.5
+    world_frame: drone0/odom
+    odom_topic: /drone0/elastic_tracker/odom
+    target_topic: /elastic_tracker/target_odom
+    accepted_target_topic: /elastic_tracker/accepted_target_odom
+    input_max_age: 1.0
+    input_max_future: 0.05
