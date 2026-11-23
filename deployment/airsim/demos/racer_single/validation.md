@@ -6,7 +6,7 @@
 
 运行前矩阵见 `acceptance.json`。本次没有改动既定飞行门限：20 秒探索窗口、至少两个实际激活版本和 0.5m 位移，原生起飞 0.75m/0.35m/s，Land 0.35m/s，停止 6 秒、Land 22 秒、Land 后联合确认 10 秒。原生规划速度尺度 0.65 是逐轴软代价，执行范数上界 1.5 是此场景独立检查。活动飞行范围和停止/接触阶段诊断分开记录。
 
-RACER 上游为 `f8265e091b11cc856c1334f8260850b9006b1953`；完整基线、差异和文件校验分别见 `src/planner/racer/upstream.lock.json`、`integration-delta.json`。AeroHub 本地基线为 `4c06d210b08df47059dbe6e3073f0d5db35f3196`，本地新增文件与既有未提交修改均保留。未 commit、push 或上传。远端版本未成功核实，不能把缓存 origin/dev 当作当前远端。
+本节记录的历史候选基于 RACER 上游 `f8265e091b11cc856c1334f8260850b9006b1953` 和当时的父仓 vendored 差异。当前实现已将原生差异迁入 `Air-Suck/RACER-ROS2` Fork，并由 `src/tool/navigation/planner/racer/upstream.lock.json` 与父仓 gitlink 锁定；本节旧构建与飞行数据只保留为当时证据，不冒充迁移后的复验。
 
 四镜像 ID 见 `images.lock.json`，NLOpt 的四个 deb/版本/校验见 `dependencies.lock.json`。原生构建从正式源码重新编译 17 个包（20min17s）；工作站 as2_msgs、px4_msgs 两包独立构建。未重建或替换共享镜像。候选 `20261117-single-01` 的 `manifest.json`、两个构建日志、安装哈希和原生 executable.sha256 保留。
 

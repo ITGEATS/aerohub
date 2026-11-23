@@ -42,7 +42,7 @@
 
 | 项目与依据 | 当前结果 | 尚缺什么 |
 |---|---|---|
-| 来源/许可证：[upstream.lock](../../../../src/tool/navigation/planner/racer/upstream.lock.json) | 锁定f8265e091b11cc856c1334f8260850b9006b1953，保留原生包及第三方声明 | 上游无根LICENSE，不把全部依赖统称一个许可 |
+| 来源/许可证：[upstream.lock](../../../../src/tool/navigation/planner/racer/upstream.lock.json) | 上游基线锁定`f8265e0`；AeroHub原生差异位于`Air-Suck/RACER-ROS2` Fork，父仓gitlink锁定`92d054f`；保留原生包及第三方声明 | 上游无根LICENSE，不把全部依赖统称一个许可 |
 | 可复现构建：[build.py](../racer_single/build.py)、[依赖锁](../racer_single/dependencies.lock.json) | 固定镜像、NLOpt包哈希、独立overlay；当前ABI改动连同反向消费者重编译有证据 | 本轮只核对未重新构建；镜像、缓存、完整UE资产仍是外部前置条件 |
 | 真实传感器/建图/协同 | 最新轮各73组深度/位姿配对，实际深度融合45/46次；协同消费通过 | 不代表地图完整、精确对齐或全部障碍可见 |
 | 原生计划→AS2→PX4运动 | 最新轮激活11/17版本，拒绝0，水平位移3.20/4.78米 | 单轮零拒绝不证明长期无拒绝；中途交接停止不自动等于失败 |
@@ -53,7 +53,7 @@
 | 一机RoboPi+其余PC | 未执行 | 目标依赖、ABI、安装/进程映射、跨机DDS与时钟、地面和飞行验收 |
 | 原四机pillar/AirSim四机 | 当前版本未完成对应接入验收 | 原内部仿真与当前AirSim双机不同；当前入口只允许两机 |
 | 回退 | 旧源码/产物可核验；停机切换步骤存在 | 未执行跨版本飞行回退，不支持热回退 |
-| 发布/团队获取 | 源码与证据在本地，尚未commit/push | 依用户要求暂不上传；本地索引不是远端可获取发布包 |
+| 发布/团队获取 | Fork提交`92d054f`已发布并可按提交获取；父仓通过`.gitmodules`与gitlink引用 | 历史飞行大体积原始记录仍由本地索引定位，不属于Fork源码发布包 |
 
 正式要求来自 [端到端验收Skill](../../../../skill/uav-sim-e2e-validation/SKILL.md)，具体20秒、机号、范围、位移和Land预算来自本Demo，不提升为AeroHub标准。完整任务指标应结合原项目目标和实际平台确定，不能以“消除休眠”替代探索效果指标。
 

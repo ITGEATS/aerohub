@@ -9,9 +9,40 @@ import uuid
 
 DEMO=Path(__file__).resolve().parent
 REPO=DEMO.parents[3]
+NATIVE=REPO/'src/tool/navigation/planner/racer/ros2_adapter/native'
+SOURCE_LOCK=REPO/'src/tool/navigation/planner/racer/upstream.lock.json'
 
 def digest(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
+
+def git_output(repo,*args):
+    return subprocess.check_output(
+        ['git','-C',str(repo),*args],text=True,encoding='utf-8').strip()
+
+def native_identity():
+    lock=json.loads(SOURCE_LOCK.read_text(encoding='utf-8'))
+    rel=NATIVE.relative_to(REPO).as_posix()
+    staged=git_output(REPO,'ls-files','--stage','--',rel).split()
+    if len(staged)<2 or staged[0]!='160000':
+        raise RuntimeError('RACER native source is not a gitlink')
+    head=git_output(NATIVE,'rev-parse','HEAD')
+    status=git_output(NATIVE,'status','--porcelain','--untracked-files=all')
+    section='submodule.'+rel
+    url=subprocess.check_output(
+        ['git','config','-f',str(REPO/'.gitmodules'),'--get',section+'.url'],
+        text=True,encoding='utf-8').strip()
+    branch=subprocess.check_output(
+        ['git','config','-f',str(REPO/'.gitmodules'),'--get',section+'.branch'],
+        text=True,encoding='utf-8').strip()
+    expected=lock['fork']
+    if staged[1]!=head or head!=expected['commit']:
+        raise RuntimeError('RACER gitlink, checkout, and source lock differ')
+    if url!=expected['repository'] or branch!=expected['branch']:
+        raise RuntimeError('RACER submodule metadata differs from source lock')
+    if status:
+        raise RuntimeError('RACER submodule checkout is dirty')
+    return {rel:{'url':url,'branch':branch,'gitlink_commit':staged[1],
+                 'checkout_commit':head,'clean':True}}
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
@@ -20,10 +51,12 @@ def main():
     args=ap.parse_args()
     release=args.release.resolve();release.mkdir(parents=True,exist_ok=False)
     images=json.loads((DEMO/'images.lock.json').read_text(encoding='utf-8'))
-    manifest={'status':'building','images':images,'source_files':{},'commands':[]}
+    manifest={'status':'building','images':images,'source_files':{},
+              'source_gitlinks':native_identity(),'commands':[]}
     for folder in [REPO/'src/tool/navigation/planner/racer',DEMO,REPO/'simulator/airsim/sensors',REPO/'deployment/swarm']:
         for p in sorted(folder.rglob('*')):
-            if p.is_file() and '__pycache__' not in p.parts:
+            if (p.is_file() and '__pycache__' not in p.parts and
+                    NATIVE not in p.parents):
                 manifest['source_files'][p.relative_to(REPO).as_posix()]=digest(p)
     for image in set(images.values()):
         actual=subprocess.check_output(['docker','image','inspect',image,'--format','{{.Id}}'],text=True).strip()

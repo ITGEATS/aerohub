@@ -4,7 +4,7 @@
 
 ## 源码、镜像与依赖
 
-实际源码在 `src/tool/navigation/planner/racer/ros2_adapter/{native,bridge}`；上游提交及导入基线在 `upstream.lock.json`。构建不读取旧实验目录、旧算法 install 或外部 checkout。复跑原始四机 pillar 请使用[锁定的原版 RACER](https://github.com/ldg810/RACER-ROS2/tree/f8265e091b11cc856c1334f8260850b9006b1953)的完整工作区。
+原生源码由 `src/tool/navigation/planner/racer/ros2_adapter/native` 子模块提供，AeroHub Adapter 位于同级 `bridge`；上游基线、Fork URL 和 gitlink 提交记录在 `upstream.lock.json`。构建不读取旧实验目录、旧算法 install 或外部 checkout。
 
 `images.lock.json` 锁定四个已有 linux/amd64 镜像 ID：算法工具环境、机载 AS2/执行环境、flight-board 和工作站 ROS。它们是显式外部前置条件，不由本入口从零生成；缺少时先从团队渠道取得匹配镜像。原镜像不被修改，额外 NLOpt 只安装于短命构建/算法容器层。镜像来源与已安装软件完整表写入构建清单，不宣称可从空机完全独立构建。
 
@@ -20,7 +20,7 @@
 python deployment/airsim/demos/racer_single/build.py --release <new-release-directory> --deps <reviewed-NLopt-cache>
 ```
 
-入口在两个固定镜像内分别干净构建原生算法与工作站接口。`manifest.json` 记录源文件、镜像、实际命令、传感器源码及安装文件哈希；`native-build.log`、`interfaces-build.log` 和 `native/packages.tsv` 保留构建证据。失败目录保留，改正后使用新候选目录。当前 native 工作区包含 12 个原生包。历史构建清单对应当时的完整 17 包工作区。
+入口在两个固定镜像内分别干净构建原生算法与工作站接口。`manifest.json` 记录父仓源文件、RACER gitlink/checkout 身份、镜像、实际命令、传感器源码及安装文件哈希；`native-build.log`、`interfaces-build.log` 和 `native/packages.tsv` 保留构建证据。失败目录保留，改正后使用新候选目录。当前完整 Fork 构建 17 个原生包。
 
 创建不纳入版本控制的 local JSON，至少包含：
 

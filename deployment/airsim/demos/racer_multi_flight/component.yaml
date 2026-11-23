@@ -3,11 +3,13 @@ id: aerohub.planner.racer-dual
 version: '0.2.1-pc-dual.20261119'
 source:
   upstream: https://github.com/ldg810/RACER-ROS2.git
-  revision: f8265e091b11cc856c1334f8260850b9006b1953
+  upstream_revision: f8265e091b11cc856c1334f8260850b9006b1953
+  fork: https://github.com/Air-Suck/RACER-ROS2.git
+  revision: 92d054fd84ec649e6c4a0c20f0c0d9d43b62a70b
   lock: src/tool/navigation/planner/racer/upstream.lock.json
   native: src/tool/navigation/planner/racer/ros2_adapter/native
   adapter: src/tool/navigation/planner/racer/ros2_adapter/multi
-  license: package-and-vendored-notices-preserved; no-root-LICENSE-at-pinned-revision
+  license: package-and-third-party-notices-preserved; no-root-LICENSE-at-upstream-revision
 provides: [planner.racer-dual]
 cards: [cards/planner/racer-dual.yaml]
 roles:

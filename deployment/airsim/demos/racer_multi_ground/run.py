@@ -8,6 +8,17 @@ ONBOARD=ROS+'source /root/aerostack2_ws/install/setup.bash\nsource /opt/px4_ws/i
 def read(p):return json.loads(p.read_text(encoding='utf-8'))
 def sha(p):return hashlib.file_digest(p.open('rb'),'sha256').hexdigest()
 def call(args,timeout=None):return subprocess.check_output(args,text=True,encoding='utf-8',errors='replace',timeout=timeout).strip()
+def verify_gitlinks(manifest):
+    links=manifest.get('source_gitlinks')
+    if not isinstance(links,dict) or not links:raise ValueError('build manifest has no source gitlink identity')
+    for rel,expected in links.items():
+        path=REPO/rel;staged=call(['git','-C',str(REPO),'ls-files','--stage','--',rel]).split()
+        head=call(['git','-C',str(path),'rev-parse','HEAD'])
+        status=call(['git','-C',str(path),'status','--porcelain','--untracked-files=all'])
+        if len(staged)<2 or staged[0]!='160000' or staged[1]!=expected['gitlink_commit']:
+            raise ValueError('built source gitlink mismatch '+rel)
+        if head!=expected['checkout_commit'] or status or not expected.get('clean'):
+            raise ValueError('built submodule checkout mismatch '+rel)
 class Deployment:
     def __init__(self,path):
         self.local=read(path);self.root=Path(self.local['run_root']).resolve();self.release=Path(self.local['release']).resolve()
@@ -40,6 +51,7 @@ class Deployment:
         for rel,h in build['source_files'].items():
             if '/native/' in rel or '/workstation_interfaces/' in rel:
                 if sha(REPO/rel)!=h:raise ValueError('built source mismatch '+rel)
+        verify_gitlinks(build)
         for rel,h in build['artifacts'].items():
             if sha(self.release/rel)!=h:raise ValueError('artifact mismatch '+rel)
         for rel,h in read(SINGLE/'dependencies.lock.json')['files'].items():

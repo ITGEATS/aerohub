@@ -23,6 +23,20 @@ def sha(p):
         for chunk in iter(lambda:f.read(1024*1024),b''):h.update(chunk)
     return h.hexdigest()
 
+def verify_gitlinks(manifest):
+    links=manifest.get('source_gitlinks')
+    if not isinstance(links,dict) or not links:
+        raise RuntimeError('build manifest has no source gitlink identity')
+    for rel,expected in links.items():
+        path=REPO/rel
+        staged=call(['git','-C',str(REPO),'ls-files','--stage','--',rel]).split()
+        head=call(['git','-C',str(path),'rev-parse','HEAD'])
+        status=call(['git','-C',str(path),'status','--porcelain','--untracked-files=all'])
+        if len(staged)<2 or staged[0]!='160000' or staged[1]!=expected['gitlink_commit']:
+            raise RuntimeError('source gitlink differs from build: '+rel)
+        if head!=expected['checkout_commit'] or status or not expected.get('clean'):
+            raise RuntimeError('submodule checkout differs from build: '+rel)
+
 class Deployment:
     def __init__(self,local):
         self.local=json.loads(local.read_text(encoding='utf-8'))
@@ -94,6 +108,7 @@ class Deployment:
         for rel,expected in manifest['source_files'].items():
             if '/native/' in rel or '/workstation_interfaces/' in rel:
                 if sha(REPO/rel)!=expected:raise RuntimeError('source differs from build: '+rel)
+        verify_gitlinks(manifest)
         for rel,expected in manifest['artifacts'].items():
             if sha(self.release/rel)!=expected:raise RuntimeError('artifact differs: '+rel)
         shutil.copytree(DEMO/'config',self.root/'configuration')
