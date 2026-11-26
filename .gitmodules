@@ -92,3 +92,6 @@
 	path = src/tool/navigation/planner/racer/ros2_adapter/native
 	url = https://github.com/Air-Suck/RACER-ROS2.git
 	branch = feat/aerohub-external-execution
+[submodule "flowpilot"]
+	path = src/tool/navigation/planner/flowpilot/upstream
+	url = https://github.com/flyingbitac/FlowPilot.git

@@ -89,3 +89,8 @@ Mountains 实测在车底碰撞时仍持续收到约0.485m/s向上速度，实�
 ## 滚动 Planner 与时间化执行
 
 首条轨迹通过 FollowTimedPath Action 获取执行权，后续对同一任务执行 modify。在最后获接纳的曲线上按未来切入时间求位置、速度和加速度作为新轨迹的边界，保留原时间基准；收到接纳确认才更新承诺曲线。分别验证提交接纳、实际执行参考和故障停止三项。Following 对观测会话的管理见 [ROS 适配](../uav-ros-adaptation/SKILL.md#共享目标状态适配)。
+
+
+## 公共任务与最终状态边界
+
+将私有Planner生命周期封装到公共Navigation时，保留原计划/停止语义，明确不支持的约束；启用公共入口后禁止旧目标或取消入口绕过Goal所有权。取消发生在到达制动期间时，终态仍按取消处理，不能由旧ARRIVED原因升级成功。最终位姿与平台状态必须分别核对采样和接收新鲜度，距离判定使用未舍入数值。FlowPilot实例与新版本验收见[参考](../uav-sim-e2e-validation/references/flowpilot-acceptance.md)。

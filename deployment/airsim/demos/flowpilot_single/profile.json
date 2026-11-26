@@ -1,0 +1,7 @@
+{
+  "binary_resource": "airsim_nh",
+  "project": "AirSimNH",
+  "settings": "settings.json",
+  "args": ["-windowed", "-ResX=640", "-ResY=360", "-vulkan", "-nosound", "-NoMouseCapture"],
+  "overhead_view": {"enabled": false}
+}

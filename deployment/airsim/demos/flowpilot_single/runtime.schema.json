@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlowPilot single-host Linux deployment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prefix",
+    "domain",
+    "image",
+    "flight_image",
+    "airsim_host",
+    "rpc_port",
+    "evidence",
+    "goal",
+    "timeout"
+  ],
+  "properties": {
+    "prefix": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,40}$"
+    },
+    "domain": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 232
+    },
+    "image": {
+      "type": "string",
+      "minLength": 1
+    },
+    "flight_image": {
+      "type": "string",
+      "minLength": 1
+    },
+    "airsim_host": {
+      "enum": [
+        "127.0.0.1",
+        "localhost"
+      ]
+    },
+    "rpc_port": {
+      "const": 45471
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "timeout": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  }
+}

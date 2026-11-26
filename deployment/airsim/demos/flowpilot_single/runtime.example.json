@@ -1,0 +1,15 @@
+{
+  "prefix": "flowpilot-single",
+  "domain": 187,
+  "image": "flowpilot-component:dev",
+  "flight_image": "flight_board:v0.1.0",
+  "airsim_host": "127.0.0.1",
+  "rpc_port": 45471,
+  "evidence": "../../../../dev/flowpilot/evidence/local-run",
+  "goal": [
+    0.0,
+    12.0,
+    2.0
+  ],
+  "timeout": 90.0
+}

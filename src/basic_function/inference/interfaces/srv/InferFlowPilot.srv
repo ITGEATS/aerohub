@@ -1,0 +1,13 @@
+string request_id
+sensor_msgs/Image depth
+std_msgs/Header observation_header
+float32[25] state_goal
+float32 speed_mps
+---
+bool success
+string message
+string request_id
+std_msgs/Header observation_header
+# Flattened row-major arrays, in observation body frame
+float64[576] waypoints
+float64[24] control_points

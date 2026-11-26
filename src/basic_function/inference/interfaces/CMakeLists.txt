@@ -12,6 +12,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/YopoCandidate.msg"
   "msg/Detection.msg"
   "msg/DetectionFrame.msg"
+  "srv/InferFlowPilot.srv"
   "srv/InferYopo.srv"
   "srv/InferYopoTracker.srv"
   "srv/InferAeroVla.srv"

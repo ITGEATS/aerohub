@@ -1,0 +1,37 @@
+schema_version: '1.0'
+id: inference.flowpilot
+version: 0.1.0
+type: capability
+name: FlowPilot depth trajectory inference
+description: Returns body-frame Bernstein controls and samples from depth and measured
+  state; does not execute motion.
+implementation:
+  component_id: aerohub.inference.flowpilot
+  manifest: deployment/inference/flowpilot/component.yaml
+  shared_runtime: flowpilot-component
+  coupled_capabilities: []
+inputs: []
+outputs: []
+interfaces:
+- id: infer
+  role: functional_operation
+  interaction: request_response
+  protocol: ros2_service
+  schema: uav_inference_interfaces/srv/InferFlowPilot
+  parameter_schema: src/basic_function/inference/interfaces/srv/InferFlowPilot.srv
+lifecycle:
+  management: system_managed
+  operations:
+    start: null
+    status: null
+    stop: null
+hardware_requirements:
+- hardware_type: compute/cpu/x86-64
+- hardware_type: compute/gpu/cuda
+resource_access:
+  reads:
+  - model/flowpilot/weights
+  shared_writes:
+  - compute/gpu
+  exclusive_writes:
+  - inference/flowpilot/worker

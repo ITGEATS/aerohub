@@ -1,0 +1,38 @@
+schema_version: '0.1'
+id: aerohub.planner.flowpilot-single
+version: 0.1.0
+source:
+  upstream: src/tool/navigation/planner/flowpilot/upstream
+  revision: f29f1bfee1399c96e5fd384276d5d7a09876286b
+  license: Apache-2.0 upstream; see third-party weight notices
+provides:
+- planner.flowpilot-single
+cards:
+- cards/planner/flowpilot-single.yaml
+coupling:
+  shared_image: flowpilot-component
+  compute_processes:
+  - CUDA-worker
+  - ROS-inference
+  - FlowPilot-planner
+  - AS2
+  - FollowTimedPath
+runtime:
+  platform: linux-x86_64-NVIDIA
+  build: deployment/inference/flowpilot/build.py
+  dockerfile: deployment/inference/flowpilot/Dockerfile
+  entrypoint: deployment/inference/flowpilot/entrypoint.sh
+  lifecycle: deployment/airsim/demos/flowpilot_single/run.py
+  configuration: deployment/airsim/demos/flowpilot_single/runtime.example.json
+  public_navigation: uav_planner_interfaces/action/NavigateToPose
+  readiness: real worker warmup plus passive preflight with fresh inputs
+  stop: confirm fresh disarmed platform before stopping owned labelled resources
+validation:
+  stage: partial
+  evidence:
+  - docs/flowpilot-validation.md
+  limitations:
+  - new-baseline-image-build-pending
+  - real-Humble-public-Action-roundtrip-pending
+  - new-baseline-CUDA-parity-pending
+  - onscreen-PX4-normal-and-fault-matrix-pending

@@ -1,0 +1,12 @@
+**/.git
+**/.venv
+**/__pycache__
+**/*.pyc
+**/artifacts
+**/build
+**/install
+**/*.local.*
+dev
+log
+skill/temp
+docs/local

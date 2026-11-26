@@ -1,0 +1,28 @@
+/drone0/flowpilot_planner:
+  ros__parameters:
+    use_sim_time: true
+    navigation_action: true
+    vehicle_id: drone0
+    fixed_frame: drone0/odom
+    optical_frame: drone0/flowpilot_front_optical
+    depth_model: axial
+    camera_pitch_deg: -15.0
+    handoff_lead_s: 0.2
+    inference_timeout_s: 0.1
+    submission_reserve_s: 0.05
+    max_observation_age_s: 0.3
+    max_observation_skew_s: 0.05
+    max_speed: 2.0
+    command_speed_mps: 2.0
+    arrival_brake_margin_m: 1.25
+    # Safety box for the model's control points; the z floor is a crash guard,
+    # not the cruise altitude (the plan tracks the goal altitude below).
+    plan_world_box: [-6.0, 6.0, -5.0, 16.0, 0.5, 4.0]
+    # The model commands descent even with the goal above: shape the plan's z
+    # onto a reference easing to the goal altitude (<= rate), climb margin allowed.
+    goal_altitude_tracking: true
+    goal_altitude_rate_mps: 0.5
+    goal_altitude_time_constant_s: 3.0
+    goal_altitude_climb_margin_m: 0.5
+    initial_plan_timeout_s: 1.0
+    max_yaw_rate_rad_s: 1.5707963267948966

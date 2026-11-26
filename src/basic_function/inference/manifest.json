@@ -36,6 +36,10 @@
     "vlm": {
       "directory": "src/basic_function/inference/models/vision_language",
       "description": "Shared vision-language inference with a deployment-configured cloud binding"
+    },
+    "flowpilot": {
+      "directory": "src/basic_function/inference/models/flowpilot",
+      "description": "Depth-conditioned Bernstein trajectory inference"
     }
   }
 }

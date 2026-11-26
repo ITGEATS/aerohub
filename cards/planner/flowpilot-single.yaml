@@ -1,0 +1,51 @@
+schema_version: '1.0'
+id: planner.flowpilot-single
+version: 0.1.0
+type: tool
+name: FlowPilot single-vehicle navigation
+description: COMPLETE point navigation through FlowPilot and FollowTimedPath; rolling
+  target updates and terminal orientation constraints are unsupported.
+implementation:
+  component_id: aerohub.planner.flowpilot-single
+  manifest: deployment/airsim/demos/flowpilot_single/component.yaml
+  shared_runtime: flowpilot-component
+  coupled_capabilities: []
+inputs:
+- id: self_pose
+  capability_type: state/self/pose/3d
+- id: self_twist
+  capability_type: state/self/twist/3d
+- id: axial_depth
+  capability_type: sensor/camera/depth/axial-image
+- id: depth_camera_calibration
+  capability_type: sensor/camera/depth/camera-info
+- id: controller_status
+  capability_type: control/controller/status
+outputs: []
+interfaces:
+- id: navigate
+  role: functional_operation
+  interaction: managed_task
+  protocol: ros2_action
+  schema: uav_planner_interfaces/action/NavigateToPose
+  parameter_schema: src/tool/navigation/interfaces/action/NavigateToPose.action
+lifecycle:
+  management: system_managed
+  operations:
+    start: null
+    status: null
+    stop: null
+hardware_requirements:
+- hardware_type: compute/cpu/x86-64
+- hardware_type: compute/gpu/cuda
+- hardware_type: sensor/camera/depth
+- hardware_type: flight-controller/px4
+resource_access:
+  reads:
+  - sensor/depth-camera
+  - vehicle/self-state
+  - vehicle/controller-status
+  shared_writes:
+  - compute/gpu
+  exclusive_writes:
+  - vehicle/motion

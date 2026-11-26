@@ -203,3 +203,7 @@ Cloud worker 复用公共 runtime 的 busy/health/关闭规则。取消 ROS 请�
 
 本地协议、ROS 与真实云端/平台/飞行验证分开报告：见
 [Cloud 验证](../../../deployment/airsim/demos/spf_language_nav/cloud_inference_validation.md)。
+
+## FlowPilot
+
+[FlowPilot](models/flowpilot/README.md) provides a typed depth/state inference service. Its separate [navigation Tool](../../../deployment/airsim/demos/flowpilot_single/README.md) consumes the controls through FollowTimedPath and the shared NavigateToPose Action. New-baseline build, GPU and platform validation are pending; historical server runs are listed separately.
