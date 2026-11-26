@@ -9,14 +9,12 @@
     handoff_lead_s: 0.2
     inference_timeout_s: 0.1
     submission_reserve_s: 0.05
-    # TOLERANT build for depth bursty streaming (effective ~1 Hz during hover/static;
-    # observed gaps 0.55-1.0s during mission; pose droughts up to 1.2s).
-    # 2.0s tolerates observed env without changing any other gate.
-    max_observation_age_s: 4.0
+    max_observation_age_s: 0.3
     max_observation_skew_s: 0.05
     max_speed: 2.0
     command_speed_mps: 2.0
     arrival_brake_margin_m: 1.25
+    # Demo routes only (longer legs / tree line): the planner clips trajectories to this box.
     plan_world_box: [-20.0, 20.0, -10.0, 70.0, 0.5, 6.0]
     goal_altitude_tracking: true
     goal_altitude_rate_mps: 0.5

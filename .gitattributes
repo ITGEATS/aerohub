@@ -18,3 +18,10 @@ deployment/airsim/demos/racer_multi_ground/** -text whitespace=cr-at-eol
 deployment/airsim/demos/racer_multi_flight/** -text whitespace=cr-at-eol
 cards/planner/racer-single.yaml -text
 cards/planner/racer-dual.yaml -text
+# FlowPilot: preserve exact bytes for binary/text provenance
+src/tool/navigation/planner/flowpilot/** -text
+deployment/airsim/demos/flowpilot_single/** -text
+deployment/inference/flowpilot/** -text
+deployment/inference/tests/test_flowpilot_*.py -text
+src/basic_function/inference/models/flowpilot/** -text
+src/basic_function/inference/ros2_adapter/uav_inference/flowpilot_* -text
